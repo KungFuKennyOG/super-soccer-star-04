@@ -1,0 +1,125 @@
+// Your hands in the headset: chunky low-poly hands on the controller grips, open by default and
+// pointing while you squeeze the grip, a fist on the trigger. Skin tone matches your legs; a sweatband in your team colors.
+// buildHand() is also used to show hands on the trophy in the browser.
+import * as THREE from 'three';
+import { ps1 } from './ps1.js';
+import { SKINS } from './tex.js';
+
+// One vertex-colored geometry from boxes: [size [x,y,z], position [x,y,z], rotation [x,y,z], color]
+function boxes(parts) {
+  const pos = [], nor = [], col = [], m = new THREE.Matrix4(), nm = new THREE.Matrix3(), c = new THREE.Color(), v = new THREE.Vector3();
+  for (const [size, at, rot, color] of parts) {
+    const g = new THREE.BoxGeometry(...size).toNonIndexed();
+    m.compose(new THREE.Vector3(...at), new THREE.Quaternion().setFromEuler(new THREE.Euler(...rot)), new THREE.Vector3(1, 1, 1));
+    nm.getNormalMatrix(m); c.set(color);
+    const p = g.attributes.position, n = g.attributes.normal;
+    for (let i = 0; i < p.count; i++) {
+      v.fromBufferAttribute(p, i).applyMatrix4(m); pos.push(v.x, v.y, v.z);
+      v.fromBufferAttribute(n, i).applyMatrix3(nm).normalize(); nor.push(v.x, v.y, v.z);
+      const k = 0.82 + 0.18 * (0.5 + 0.5 * v.y);
+      col.push(c.r * k, c.g * k, c.b * k);
+    }
+  }
+  const out = new THREE.BufferGeometry();
+  out.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  out.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
+  out.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+  return out;
+}
+
+// A right hand, modelled with fingers along -Z, finger rows stacked up Y (index on top), the palm
+// facing -X and the wrist toward +Z. pose: 'open' | 'point' (index out, the rest curled) | 'fist'.
+// The model is shifted so the space inside the curled fingers sits at the origin (where the grip is).
+function handGeometry(pose, skin, band, bandTrim) {
+  const sk = new THREE.Color(skin), dark = '#' + sk.clone().multiplyScalar(0.85).getHexString(), s = skin;
+  const o = [0.016, 0, 0.032];                                                    // shift: curl centre → origin
+  const at = (x, y, z) => [x + o[0], y + o[1], z + o[2]];
+  const parts = [
+    [[0.028, 0.085, 0.09], at(0.004, 0, 0.015), [0, 0, 0], s],                    // palm
+    [[0.05, 0.06, 0.1], at(0.004, -0.004, 0.12), [0, 0, 0], s],                   // wrist and forearm
+    [[0.056, 0.066, 0.035], at(0.004, -0.004, 0.085), [0, 0, 0], band],           // sweatband
+    [[0.057, 0.067, 0.006], at(0.004, -0.004, 0.07), [0, 0, 0], bandTrim],
+  ];
+  const ys = [0.031, 0.011, -0.009, -0.029], lens = [0.075, 0.082, 0.077, 0.062];
+  ys.forEach((y, i) => {
+    const straight = pose === 'open' || (pose === 'point' && i === 0);
+    if (straight) parts.push([[0.022, 0.018, lens[i]], at(0.002, y, -0.03 - lens[i] / 2), [0, 0, 0], s]);
+    else {
+      parts.push([[0.024, 0.019, 0.032], at(-0.002, y, -0.044), [0, 0, 0], s]);     // first knuckle, forward
+      parts.push([[0.034, 0.018, 0.022], at(-0.026, y, -0.052), [0, 0, 0], dark]);  // curled into the palm
+    }
+  });
+  // thumb: out and forward when open, over the curled fingers otherwise
+  if (pose === 'open') parts.push([[0.02, 0.02, 0.06], at(-0.012, 0.05, -0.02), [0.5, 0.35, 0], s]);
+  else parts.push([[0.02, 0.02, 0.05], at(-0.024, 0.036, -0.03), [0.2, 0.9, 0], s]);
+  return boxes(parts);
+}
+
+// WebXR grip space: origin at the middle of the fist, -Z runs along the controller handle toward the
+// thumb, +X points out of the back of the right hand (the palm faces -X; mirrored for the left), and
+// +Y runs back toward the wrist. The model above is turned -90° about X to match: its rows up Y become
+// the handle (-Z), its fingers along -Z point forward (-Y), its wrist goes back (+Y).
+const cache = new Map();
+export function buildHand(side, pose, kit, skin = SKINS[1]) {
+  const key = `${pose}${kit.sleeve || kit.shirt}${kit.trim}${skin}`;
+  if (!cache.has(key)) cache.set(key, handGeometry(pose, skin, kit.sleeve || kit.shirt, kit.trim));
+  const mesh = new THREE.Mesh(cache.get(key), ps1({ vertexColors: true }));
+  mesh.rotation.x = -Math.PI / 2;
+  if (side === 'left') mesh.scale.x = -1;
+  const hand = new THREE.Group();   // this group is grip space
+  hand.add(mesh);
+  return hand;
+}
+
+// Hands that follow the controllers. Call setKit when your team changes, update every frame.
+export function createHands(renderer, rig) {
+  const slots = [0, 1].map(i => {
+    const grip = renderer.xr.getControllerGrip(i);
+    const slot = { grip, side: null, gamepad: null, poses: null, hidden: false };
+    grip.addEventListener('connected', e => { slot.side = e.data.handedness === 'left' ? 'left' : 'right'; slot.gamepad = e.data.gamepad; build(slot); });
+    grip.addEventListener('disconnected', () => { slot.gamepad = null; if (slot.poses) for (const h of Object.values(slot.poses)) h.visible = false; });
+    rig.add(grip);
+    return slot;
+  });
+  let kit = { shirt: '#f2f1ea', trim: '#2b2f6b' };
+  function build(slot) {
+    if (!slot.side) return;
+    if (slot.poses) for (const h of Object.values(slot.poses)) slot.grip.remove(h);
+    slot.poses = { open: buildHand(slot.side, 'open', kit), point: buildHand(slot.side, 'point', kit), fist: buildHand(slot.side, 'fist', kit) };
+    for (const h of Object.values(slot.poses)) slot.grip.add(h);
+  }
+  return {
+    // grip-space objects with their side, for things you hold (the trophy)
+    grips: () => slots.filter(s => s.side && s.gamepad).map(s => ({ side: s.side, obj: s.grip, gamepad: s.gamepad })),
+    // the higher of the two tracked hands relative to your eyes (rig space), for calling for the ball
+    highest(eyeY) {
+      let best = null;
+      for (const s of slots) {
+        if (!s.gamepad || !s.grip.visible) continue;
+        const dy = s.grip.position.y - eyeY;
+        if (!best || dy > best.dy) best = { side: s.side, dy };
+      }
+      return best;
+    },
+    // a hand ('left' | 'right') in world space (out), and whether its grip is squeezed; null when not tracked
+    hand(side, out) {
+      const s = slots.find(x => x.side === side && x.gamepad && x.grip.visible);
+      if (!s) return null;
+      s.grip.getWorldPosition(out);
+      const b = s.gamepad.buttons;
+      return { pos: out, grip: !!(b[1] && b[1].value > 0.45) };
+    },
+    setKit(k) { kit = k; slots.forEach(build); },
+    // hide one hand (e.g. while a posed copy of it holds the trophy)
+    hide(side, on) { for (const s of slots) if (s.side === side) s.hidden = on; },
+    // Grip points, trigger makes a fist, neither is an open hand.
+    update() {
+      for (const s of slots) {
+        if (!s.poses || !s.gamepad) continue;
+        const b = s.gamepad.buttons, trig = b[0] && b[0].value > 0.5, grip = b[1] && b[1].value > 0.45;
+        const pose = trig ? 'fist' : grip ? 'point' : 'open';
+        for (const [k, h] of Object.entries(s.poses)) h.visible = !s.hidden && k === pose;
+      }
+    },
+  };
+}
