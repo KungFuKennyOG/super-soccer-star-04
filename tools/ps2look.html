@@ -279,7 +279,7 @@ function pose(t, dt) {
   camera.position.set(...val(s.cam, t)); camera.lookAt(...val(s.at, t));
 }
 // poses ease in over time (speed, lean, the head's turn), so a still is run up to, not jumped to (a shot's `warm`: for how many seconds)
-function warm() { for (const pl of players) { pl.p.stride = null; pl.m.gait = pl.m.strike = pl.m.special = pl.m.trick = null; pl.m.sway = null; pl.m.kickK = pl.m.onBallK = pl.m.cheerK = pl.m.driveT = 0; } for (let k = Math.round((SHOTS[shot].warm || 1.5) * 60); k >= 0; k--) pose(time - k / 60, 1 / 60); }   // (the last step is the moment itself: a still of the frame a ball is struck on is that frame)
+function warm() { if (!SHOTS[shot]) { console.warn(`no shot '${shot}', showing duel`); shot = 'duel'; } for (const pl of players) { pl.p.stride = null; pl.m.gait = pl.m.strike = pl.m.special = pl.m.trick = null; pl.m.sway = null; pl.m.kickK = pl.m.onBallK = pl.m.cheerK = pl.m.driveT = 0; } for (let k = Math.round((SHOTS[shot].warm || 1.5) * 60); k >= 0; k--) pose(time - k / 60, 1 / 60); }   // (the last step is the moment itself: a still of the frame a ball is struck on is that frame)
 function frame(dt) {
   time += dt; pose(time, dt); renderer.render(scene, camera);
   document.getElementById('i').textContent = q.get('info') ? `${shot}  calls ${renderer.info.render.calls}  tris ${renderer.info.render.triangles}` : '';

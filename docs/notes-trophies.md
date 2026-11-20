@@ -37,10 +37,10 @@ trophy is two figures spiralling up to hold a globe; ours is a symmetric crown o
 The only shared idea is the one Kenny liked and we agreed to keep: solid gold with a green stone band at
 the base. Not a Jules Rimet (no winged figure, no cup on top, no lapis base), not a Ballon d'Or-type ball.
 
-### The Champions Cup (clubs), polished silver on black, 0.645 m
+### The Champions Cup (clubs), polished silver on black, 0.67 m
 
 A square stepped plinth in black lacquer with a thin silver band and an engraved silver plate ("CHAMPIONS
-CUP", "* SUPER SOCCER STAR *"). A silver foot and knop, then an amphora: sixteen sharp-ridged flutes
+CUP", "* SUPER SOCCER STAR *"). A silver foot and knop, then a tall slim amphora (0.21 m across at the belly): sixteen flutes
 (gadroons) round the lower body, a raised band at the shoulder studded with eight small stars, a narrow
 neck, a rolled rim, a stepped lid and a star finial on a short post. Two slim straight-sided bracket
 handles: a straight strut out from the body, a vertical fluted bar you hold, a strut back in to the neck,
@@ -72,12 +72,12 @@ nearest thing to a shared feature with the FA Cup; if Kenny feels it reads that 
 
 - Nations: 0.55 m tall, 0.19 m across the base. Hand-holds unchanged from trophy.js: (±0.07, 0.24, 0),
   hands either side of a round grip **6.6 cm across** (the PS1 cup's column there is the same).
-- Clubs: 0.645 m tall to the finial star's tip, 0.41 m across the handles. Each fist closes round a
+- Clubs: 0.67 m tall to the finial star's tip, 0.38 m across the handles. Each fist closes round a
   round vertical bar **3.2 cm across** (trophy.js's ear boxes were 3 cm; 3.2 is the thinnest the new hands'
   'hold' pose is tested on), centred on the hand-hold.
-  **Changed:** the hand-holds are at **(±0.19, 0.37, 0)**, 38 cm apart, where trophy.js has (±0.25, 0.39, 0),
-  50 cm apart round its big ears. Keeping 0.25 meant brackets sticking 12 cm out from the body (they read as
-  a frame, not handles); at 0.19 there are 4.1 cm between the bar and the body for the fingers (tested).
+  **Changed:** the hand-holds are at **(±0.175, 0.37, 0)**, 35 cm apart, where trophy.js has (±0.25, 0.39, 0),
+  50 cm apart round its big ears. Keeping 0.25 meant brackets sticking out from the body like a frame;
+  at 0.175 there are about 5 cm between the bar and the body for the fingers (tested: 4 cm or more).
   Anything that reads the holds should take them from `userData.holds` / `userData.grips`, not trophy.js's GRIPS.
 
 ### Hand-holds for the new hands (`buildHand(side, 'hold', kit, skin, { d, at })`)
@@ -89,8 +89,8 @@ metres, index 0 for your left hand (+x), 1 for your right (-x). Both axes vertic
 | --- | --- | --- | --- | --- |
 | Star Cup (world) | left | (0.07, 0.24, 0) | (0, 1, 0) | 0.066 m |
 | Star Cup (world) | right | (-0.07, 0.24, 0) | (0, 1, 0) | 0.066 m |
-| Champions Cup (club) | left | (0.19, 0.37, 0) | (0, 1, 0) | 0.032 m |
-| Champions Cup (club) | right | (-0.19, 0.37, 0) | (0, 1, 0) | 0.032 m |
+| Champions Cup (club) | left | (0.175, 0.37, 0) | (0, 1, 0) | 0.032 m |
+| Champions Cup (club) | right | (-0.175, 0.37, 0) | (0, 1, 0) | 0.032 m |
 
 On the Star Cup both hands close on the same 6.6 cm round grip from either side (the hold point is the
 middle of each fist, 7 cm off the axis, as in trophy.js), so the two fists sit side by side round one
@@ -101,14 +101,17 @@ job (the hold point is where trophy.js puts the hand's origin today).
 
 ## Numbers
 
-- Triangles: Star Cup 5,168 (gold 5,140, stone 16, plate 12); Champions Cup 6,428 (silver 6,360,
-  black plinth 56, plate 12). Pedestal 320 more.
+- Triangles (PS2-era budget, Kenny: "they really don't need to be that detailed"; tested 1,500 to 3,000): Star Cup
+  2,152 (gold 2,124, stone 16, plate 12); Champions Cup 2,940 (silver 2,872, black plinth 56, plate 12). Pedestal 320 more.
+  The first pass was 5,168 and 6,428; cut by fewer lathe steps (20 round the Star Cup's column, 20 / 64 / 24 for
+  the clubs' foot / fluted belly / shoulder-to-lid), coarser flame blades (10 x 8 and 6 x 6), lighter handle tubes.
 - Draw calls: 3 per cup (metal, stone or black plinth, plate), plus 2 for the pedestal (column, cloth).
-- Materials: MeshStandardMaterial, metalness 1 on the metals. The reflections are a 512 x 256 float
-  equirect painted in code (`stadiumEnv` in `metal.js`: sky with clouds, a dark roof edge, crowd speckle,
-  ad boards, a dark pitch, four floodlight banks and four more lamps pushed to 4 to 9x white, a lit roof
+- Materials: MeshStandardMaterial, metalness 1 on the metals. The reflections are a 512 x 256 half-float
+  equirect (half float because 32-bit float filtering is an extension the Quest may not have) painted in code (`stadiumEnv` in `metal.js`: sky with clouds, a dark roof edge, crowd speckle,
+  soft grey ad boards (hard black/white boards made zebra stripes on the flutes), a low green-grey pitch (black
+  made the silver read as dark metal, bright green made it green and the gold yellow plastic), touch and halfway lines, four floodlight banks and four more lamps pushed to 4 to 9x white, a lit roof
   underside), shared by all the trophy materials; three converts it to a PMREM once, on first use. No
-  network, no post-processing. Gold: colour #ffc25a, roughness 0.24, a faint amber emissive so the dark
+  network, no post-processing. Gold: colour #e6a646, roughness 0.16, env 1.5, a faint amber emissive so the dark
   reflections turn deep amber, not black. Silver: #f4f6fa, roughness 0.09. Textures: malachite 512 x 64,
   plates 192 x 128 and 384 x 108, painted once and cached.
 - Build time, headless Chrome (software GL): both cups and the pedestal well under the page's 2 to 3 s
@@ -120,7 +123,8 @@ job (the hold point is where trophy.js puts the hand's origin today).
 stand), `worldheld`, `clubheld` (35 cm from your eyes, held at chest height), `worldside`, `clubside`,
 `worldabove`, `clubabove`, `worldbelow`, `clubbelow` (lifted over your head, looking up), `pair`,
 `worldspin`, `clubspin` (turntable: `FILM=6 node tools/ps2shots.mjs out worldspin`), `worldsketch`,
-`clubsketch`. `&grips=1` draws the hand-holds as red wire balls the thickness of what the hand closes on.
+`clubsketch`. An unknown shot name now falls back to `duel` with a console warning (it used to throw on
+`warm`). `&grips=1` draws the hand-holds as red wire balls the thickness of what the hand closes on.
 
 ## Short of real / not checked
 
@@ -138,3 +142,10 @@ stand), `worldheld`, `clubheld` (35 cm from your eyes, held at chest height), `w
   smooth-shaded.
 - Not wired into the ceremony; the hand-hold change for the clubs' cup needs trophy.js to take holds from
   `userData.grips` when it is.
+
+## Renders (this pass)
+
+`node tools/ps2shots.mjs out pair worldheld clubheld clubside clubbelow worldsketch clubsketch` and
+`FILM=6 ... worldspin` / `clubspin` (frames, then ffmpeg to mp4). Read and judged: the silver reads as chrome
+(bright, dark streaks of the stands, the fluting catching the horizon); the gold is warm and reads as metal,
+though still on the light side of "deep" (more darks in the env would deepen it, at the cost of the silver).
