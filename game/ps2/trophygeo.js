@@ -1,152 +1,133 @@
 // The two cups' shapes for the '04 look (pure three: no DOM, unit tested in Node). Trophy-local: y up
-// from the underside of the base, the front (plate, the star's face) toward -z, which is the way the
+// from the underside of the base, the front (plaque, the star's face) toward -z, which is the way the
 // cup faces you on the ceremony plinth; +x is your left as you face it.
-//   world: THE STAR CUP, the nations' trophy. Solid gold. An octagonal foot with a band of green stone,
-//          a faceted taper, a round waisted grip, and a crown of upright flame-leaves cradling a big
-//          faceted five-pointed star.
-//   club:  THE CHAMPIONS CUP, the clubs' trophy. Polished silver on a black stepped plinth: a fluted
-//          amphora with a ring of small stars at the shoulder, a stepped lid with a star finial, and two
-//          slim straight-sided bracket handles.
-// Each part list is { metal: [geometries], stone, dark, plate: { w, h, y, z } } so trophies.js makes one
-// draw call per material. Sketches (variant): world 'flame' (chosen), 'spire', 'wreath'; club
-// 'amphora' (chosen), 'tulip', 'hex'.
+//   world: THE STAR CUP, the nations' trophy, gold, 0.60 m. A turned foot over a band of green stone,
+//          a slender waist (where the hands go), and one body that opens out of it like a lyre and is
+//          cut away front and back into two wings of unequal height, turned a little as they rise, a
+//          soft ridge running up each to its tip. A faceted star stands between them.
+//   club:  THE CHAMPIONS CUP, the clubs' trophy, silver, 0.72 m. A drum of black marble, a spreading
+//          foot, a stem with one knop, a deep bell of a bowl (an S from calyx to lip) with an engraved
+//          laurel band, a low domed cover with a star, and two handles that leave the bowl under the
+//          lip, rise above it and come down in one long tapering sweep to the bottom of the bowl.
+// Each part list is { metal, stone, engraved, plaque... } of geometries, so trophies.js makes one draw
+// call per material. The sketches that lost are in trophysketch.js.
 import * as THREE from 'three';
-import { revolve, tube, starGeo } from './metal.js';
+import { revolve, band, grid, tube, starGeo, smooth, curveFn, place } from './metal.js';
+import { PLATE_UV, FRIEZE_UV } from './trophyuv.js';
 
-// Where the hands go (trophy-local, the middle of the fist), index 0 on +x for your left hand. The same
-// on the nations' cup the hands close either side of a round grip 6.6 cm across (the same points and
-// thickness as game/trophy.js); on the clubs' cup each fist closes round a round vertical bar 3.2 cm
-// across (trophy.js: 3 cm boxes; 3.2 is the thinnest the new hands' grip pose is tested on), 35 cm apart (trophy.js: 50 cm, round its big ears; moved in so the
-// handles stay slim and close to the body: 5 cm of room for the fingers behind the bar).
-export const GRIPS2 = { world: [[0.07, 0.24, 0], [-0.07, 0.24, 0]], club: [[0.175, 0.37, 0], [-0.175, 0.37, 0]] };
-export const HOLD_D = { world: 0.066, club: 0.032 };
-// Per hand-hold, for the hands' grip pose (buildHand(side, 'hold', kit, skin, { d, at })): where the middle
-// of the fist goes, the handle's axis (both vertical) and the diameter of the round section it closes on.
+// Where the hands go (trophy-local, the middle of the fist), index 0 on +x for your left hand, the
+// axis of what they close round (vertical on both) and its diameter (round on both). The nations' cup
+// is held round its waist, a fist either side; the clubs' cup by the upright run of each handle.
+export const HOLD_D = { world: 0.06, club: 0.032 };
+export const GRIPS2 = { world: [[0.07, 0.245, 0], [-0.07, 0.245, 0]], club: [[0.168, 0.47, 0], [-0.168, 0.47, 0]] };
 export const HOLDS = Object.fromEntries(Object.entries(GRIPS2).map(([k, g]) => [k, g.map(at => ({ at, axis: [0, 1, 0], d: HOLD_D[k] }))]));
 
-const lerpKeys = (keys, s) => {
-  for (let i = 1; i < keys.length; i++) if (s <= keys[i][0]) { const [a, va] = keys[i - 1], [b, vb] = keys[i], t = (s - a) / (b - a), e = t * t * (3 - 2 * t); return va + (vb - va) * (0.5 * t + 0.5 * e); }
-  return keys[keys.length - 1][1];
-};
-
-// An octagonal prism with uvs round it (the stone band): n facets, a flat one facing front.
-function prism(r, y0, y1, n = 8) {
-  const pos = [], uv = [], a0 = Math.PI / n;
-  for (let k = 0; k < n; k++) {
-    const a = -a0 + k * 2 * a0, b = a + 2 * a0, p = [Math.sin(a) * r, -Math.cos(a) * r], q = [Math.sin(b) * r, -Math.cos(b) * r], u0 = k / n, u1 = (k + 1) / n;
-    pos.push(p[0], y0, p[1], q[0], y0, q[1], p[0], y1, p[1], q[0], y0, q[1], q[0], y1, q[1], p[0], y1, p[1]);
-    uv.push(u0, 0, u1, 0, u0, 1, u1, 0, u1, 1, u0, 1);
-  }
-  const g = new THREE.BufferGeometry();
-  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); g.computeVertexNormals();
-  return g;
-}
-
-// A leaf or tongue of flame standing up round the axis at angle a: its middle line keys (radius, height)
-// over s = 0..1, half-width w(s) round the turn, half-thickness t(s), the edges cupped outward.
-function blade(a, { R, Y, W, T, lean = 0 }, rows = 16, cols = 10) {
-  const pos = [], idx = [], c = new THREE.Vector3(), c2 = new THREE.Vector3(), tg = new THREE.Vector3(), side = new THREE.Vector3(), out = new THREE.Vector3();
-  const at = (s, v) => { const r = lerpKeys(R, s), aa = a + lean * s; return v.set(Math.sin(aa) * r, lerpKeys(Y, s), -Math.cos(aa) * r); };
-  for (let i = 0; i <= rows; i++) {
-    const s = i / rows, aa = a + lean * s;
-    at(s, c); at(Math.min(1, s + 0.01), c2); tg.subVectors(c2, c); if (s >= 1) { at(s - 0.01, c2); tg.subVectors(c, c2); }
-    tg.normalize(); side.set(Math.cos(aa), 0, Math.sin(aa)); side.addScaledVector(tg, -side.dot(tg)).normalize();
-    out.crossVectors(tg, side).normalize(); if (out.x * Math.sin(aa) - out.z * Math.cos(aa) < 0) out.negate();
-    const w = lerpKeys(W, s), t = lerpKeys(T, s);
-    for (let j = 0; j < cols; j++) {
-      const f = (j / cols) * Math.PI * 2, cs = Math.cos(f), sn = Math.sin(f);
-      const o = (sn > 0 ? t * 1.25 * Math.pow(sn, 0.6) : t * 0.55 * sn) + cs * cs * w * 0.3;   // a ridge down the outside, the edges turned out
-      pos.push(c.x + side.x * w * cs + out.x * o, c.y + side.y * w * cs + out.y * o, c.z + side.z * w * cs + out.z * o);
-    }
-  }
-  for (let i = 0; i < rows; i++) for (let j = 0; j < cols; j++) {
-    const p = i * cols + j, q = i * cols + (j + 1) % cols;
-    idx.push(p, q, p + cols, q, q + cols, p + cols);
-  }
-  const g = new THREE.BufferGeometry();
-  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setIndex(idx); g.computeVertexNormals();
-  return g;
-}
-
-const place = (g, x, y, z, ry = 0, rx = 0) => { g.rotateX(rx); g.rotateY(ry); g.translate(x, y, z); return g; };
+const sstep = (a, b, v) => { const t = Math.max(0, Math.min(1, (v - a) / (b - a))); return t * t * (3 - 2 * t); };
 
 // ---------- the nations' cup ----------
-export function worldParts(variant = 'flame') {
-  const metal = [], stone = [], O = Math.PI / 8;
-  // the octagonal foot, the stone band, the rim over it and the faceted taper to the round column
-  metal.push(revolve([[0, 0], [0.094, 0, 1], [0.097, 0.004, 1], [0.097, 0.012, 1], [0.09, 0.017, 1], [0, 0.017]], 8, { flat: true, a0: O }));
-  stone.push(prism(0.089, 0.017, 0.073));
-  metal.push(revolve([[0, 0.073], [0.092, 0.073, 1], [0.097, 0.077, 1], [0.097, 0.086, 1], [0.084, 0.092, 1], [0.074, 0.094, 1], [0.064, 0.118, 1], [0.054, 0.142, 1], [0.05, 0.15]], 8, { flat: true, a0: O }));
-  // round from here: bead, collar, the waisted grip (3.3 cm radius where the palms go), the upper collar
-  const col = [[0.05, 0.149], [0.058, 0.155], [0.053, 0.162, 1], [0.045, 0.17], [0.036, 0.185], [0.033, 0.215], [0.0335, 0.24], [0.033, 0.265],
-    [0.036, 0.29], [0.047, 0.297], [0.049, 0.302], [0.045, 0.306, 1], [0.038, 0.309]];
-  if (variant === 'flame') {
-    // a calyx the leaves grow from: a shallow bowl, open, its rim rolled
-    metal.push(revolve([...col, [0.04, 0.33], [0.05, 0.365], [0.057, 0.383], [0.05, 0.385], [0, 0.36]], 20));
-    // five broad tongues of flame, symmetric (they rise, swell and flick out at the tip, no spiral), a gap
-    // at the front for the star's face, and five short ones between them, the front one under the star
-    const big = { R: [[0, 0.036], [0.35, 0.058], [0.72, 0.064], [1, 0.092]], Y: [[0, 0.305], [0.35, 0.365], [0.72, 0.44], [1, 0.505]],
-      W: [[0, 0.012], [0.3, 0.027], [0.62, 0.026], [0.86, 0.013], [1, 0.0006]], T: [[0, 0.006], [0.5, 0.007], [1, 0.0014]] };
-    for (let k = 0; k < 5; k++) metal.push(blade(Math.PI / 5 + k * 2 * Math.PI / 5, big, 10, 8));
-    const small = { R: [[0, 0.04], [0.45, 0.06], [0.8, 0.064], [1, 0.08]], Y: [[0, 0.33], [0.45, 0.37], [0.8, 0.405], [1, 0.43]],
-      W: [[0, 0.01], [0.35, 0.02], [0.75, 0.013], [1, 0.0006]], T: [[0, 0.005], [1, 0.001]] };
-    for (let k = 0; k < 5; k++) metal.push(blade(k * 2 * Math.PI / 5, small, 6, 6));
-    metal.push(revolve([[0.009, 0.36], [0.008, 0.42], [0.012, 0.44], [0, 0.445]], 6));      // the post the star stands on
-    metal.push(place(starGeo(0.08, 0.034, 0.026, 0.0065), 0, 0.472, 0));
-  } else if (variant === 'spire') {
-    metal.push(revolve([...col, [0.05, 0.33], [0.06, 0.34, 1], [0.052, 0.36], [0.03, 0.44], [0.012, 0.47], [0, 0.48]], 6, { flat: true }));
-    metal.push(place(starGeo(0.05, 0.022, 0.016, 0.005), 0, 0.53, 0));
-  } else {
-    metal.push(revolve([...col, [0.03, 0.33], [0.02, 0.37], [0, 0.375]], 24));
-    const ring = []; for (let i = 0; i <= 48; i++) { const a = (i / 48) * Math.PI * 2; ring.push([Math.sin(a) * 0.085, 0.455 + Math.cos(a) * 0.085, 0]); }
-    metal.push(tube(ring, ring.map((_, i) => 0.009 + 0.004 * Math.abs(Math.sin(i * 1.3))), 8, { up: [0, 0, 1], caps: false }));
-    metal.push(place(starGeo(0.07, 0.03, 0.022, 0.006), 0, 0.455, 0));
-  }
-  return { metal, stone, dark: [], plate: { w: 0.058, h: 0.038, y: 0.045, z: -0.089 * Math.cos(O) - 0.0016, d: 0.003 } };
+// The flame, from the collar up. One surface of revolution R(y), its section drawn out to a soft ridge
+// down the middle of each tongue (more toward the top), turned round the axis as it rises, and its rim
+// cut to H: two tongues of flame, a tall one behind the star and a short one in front of it, the rim
+// dropping low at the sides between them. Outside up, over the rim, down the inside, the floor.
+export const FLAME = { y0: 0.192, split: 0.325, floor: 0.335, turn: Math.PI / 2, twist: 1.1, wall: 0.0055, tip: 0.63, tip2: 0.43, front: 0.37, back: 0.378, sharp: 1.8 };
+const BODY = curveFn([[0.192, 0.031], [0.21, 0.03], [0.245, 0.03], [0.275, 0.0305], [0.3, 0.036], [0.325, 0.048], [0.355, 0.065], [0.39, 0.08], [0.43, 0.09], [0.47, 0.092], [0.51, 0.087], [0.55, 0.077], [0.59, 0.064], [0.63, 0.05]]);
+export function flameBody({ seg = 44, peaks = 2, rows = 14, o = FLAME, R = BODY, lens = 0.2 } = {}) {
+  const top = Math.max(o.tip, o.tip2);
+  const H = a => {                                              // the rim's height round the turn (a before the twist)
+    const w = Math.pow(0.5 - 0.5 * Math.cos(peaks * a), o.sharp);
+    const tip = (o.tip + o.tip2) / 2 + (o.tip - o.tip2) / 2 * Math.sin(a), low = (o.front + o.back) / 2 - (o.back - o.front) / 2 * Math.cos(a);
+    return low + (tip - low) * w;
+  };
+  const pt = (a, y, inset) => {
+    const e = lens * sstep(0.27, 0.46, y), m = 1 + e * (1 - 1.55 * Math.sqrt(Math.cos(peaks * a / 2) ** 2 + 0.012));
+    const aa = a + o.turn + o.twist * (sstep(0.26, top, y) - 0.6), r = Math.max(0.001, R(y) * m - inset);
+    return [Math.sin(aa) * r, y, -Math.cos(aa) * r];
+  };
+  const ring = f => { const out = []; for (let i = 0; i < seg; i++) out.push(f((i / seg) * Math.PI * 2)); return out; };
+  const rings = [], low = [o.y0, 0.204, 0.245, 0.278, 0.293, 0.309, o.split];
+  for (const y of low) rings.push(ring(a => pt(a, y, 0)));
+  for (let k = 1; k <= rows; k++) rings.push(ring(a => pt(a, o.split + (H(a) - o.split) * k / rows, 0)));
+  rings.push(ring(a => pt(a, H(a) + 0.0022, o.wall * 0.5)));     // the rolled rim
+  const inner = 6;
+  for (let k = 0; k <= inner; k++) rings.push(ring(a => { const y = o.floor + (H(a) - o.floor) * (1 - k / inner); return pt(a, y, o.wall * (0.9 + 0.5 * k / inner)); }));
+  rings.push(ring(a => { const p = pt(a, o.floor, o.wall * 1.4); return [p[0] * 0.92, o.floor - 0.004, p[2] * 0.92]; }));
+  rings.push(ring(() => [0, o.floor - 0.004, 0]));
+  const outer = low.length + rows + 1, g = grid(rings);
+  // shade: the inside a little darker toward the floor (the grid's rings after the rim)
+  const shade = new Float32Array(rings.length * seg).fill(1);
+  for (let k = outer; k < rings.length; k++) for (let i = 0; i < seg; i++) shade[k * seg + i] = 0.92 - 0.4 * Math.min(1, (k - outer) / inner);
+  g.userData.ao = shade;
+  return g;
+}
+const STAR = { R: 0.068, y: 0.497, z: 0.04 };
+export function worldFoot() {
+  const metal = [], stone = [], engraved = [];
+  // the foot ring under the stone, the stone, and the moulding over it
+  metal.push(revolve(smooth([[0, 0], [0.093, 0, 1], [0.097, 0.004], [0.098, 0.0095], [0.095, 0.015, 1], [0.0905, 0.0165, 1], [0.0895, 0.02, 1], [0.08, 0.02]], 1), 40, { ao: (x, y) => (y < 0.001 ? 0.35 : 1) }));
+  stone.push(band([[0.0885, 0.0195], [0.0885, 0.0765]], 40, { u0: 0, u1: 1 }));
+  metal.push(revolve(smooth([[0.08, 0.076], [0.0895, 0.076, 1], [0.0915, 0.0785], [0.0895, 0.081, 1], [0.0868, 0.081, 1], [0.0868, 0.099, 1], [0.089, 0.099, 1], [0.0905, 0.1012], [0.089, 0.1035, 1],
+    // the spreading foot: one long hollow sweep up to the collar
+    [0.084, 0.1045, 1], [0.0835, 0.1075, 1], [0.07, 0.1115], [0.055, 0.1215], [0.0445, 0.136], [0.038, 0.153], [0.034, 0.17], [0.0325, 0.178, 1],
+    [0.036, 0.1795], [0.0395, 0.185], [0.036, 0.1905], [0.032, 0.192, 1], [0.028, 0.193]], 1), 40));
+  engraved.push(band([[0.0872, 0.0815], [0.0872, 0.0985]], 40, { u0: 0, u1: 2, ...FRIEZE_UV }));
+  // the plaque, let into the front of the stone
+  engraved.push(band([[0.0893, 0.03], [0.0893, 0.066]], 10, { a0: -0.44, a1: 0.44, ...PLATE_UV, u0: PLATE_UV.u1, u1: PLATE_UV.u0 }));
+  return { metal, stone, engraved };
+}
+export function worldParts() {
+  const { metal, stone, engraved } = worldFoot();
+  metal.push(flameBody());
+  // the star, set against the tall tongue on a short boss (hidden behind it), facing front
+  metal.push(place(revolve([[0.016, 0], [0.011, 0.03], [0.011, 0.07]], 8, { ao: 0.7 }), 0, STAR.y, STAR.z, 0, Math.PI / 2));
+  metal.push(place(starGeo(STAR.R, STAR.R * 0.4, 0.02, 0.0045), 0, STAR.y, STAR.z));
+  return { metal, stone, engraved };
 }
 
 // ---------- the clubs' cup ----------
-// One bracket handle on the +x side (side -1 mirrors it): a straight strut out from the body, the
-// vertical grip bar (3.2 cm, round, through the hand-hold), a strut back in to the neck, and a small spike on
-// the top corner. Corners are kept sharp by points either side of them.
-function bracket(side, top = 0.468, neck = 0.074, low = [0.118, 0.29]) {
-  const X = GRIPS2.club[0][0], b0 = 0.306, b1 = 0.44, e = 0.006;
-  const pts = [[low[0] - 0.01, low[1]], [X - e, b0 - e * 0.15], [X, b0 + e * 0.4], [X, b0 + e * 1.2], [X, GRIPS2.club[0][1]], [X, b1 - e * 1.2], [X, b1 - e * 0.4], [X - e, b1 + e * 0.1], [neck - 0.01, top + 0.004]];
-  const rad = [0.007, 0.0095, 0.012, 0.016, 0.016, 0.016, 0.012, 0.0095, 0.0065];
-  const g = tube(pts.map(([x, y]) => [side * x, y, 0]), rad, 10, { up: [0, 0, 1] });
-  const spike = revolve([[0.012, 0], [0.013, 0.005], [0.007, 0.011], [0, 0.022]], 6);
-  return [g, place(spike, side * X, b1 + 0.004, 0)];
+const BASE = 0.088;                                               // the top of the marble
+// the spreading foot (round a wide turn), then the stem and its knop (a narrow one)
+const FOOT = [[0, BASE - 0.001], [0.088, BASE - 0.001, 1], [0.0915, BASE + 0.001], [0.0925, BASE + 0.0045], [0.09, BASE + 0.008, 1], [0.085, BASE + 0.0085, 1],
+  [0.081, 0.101], [0.068, 0.111], [0.049, 0.123], [0.033, 0.14], [0.023, 0.16], [0.0185, 0.18, 1], [0.014, 0.181]];
+const STEM = [[0.014, 0.179], [0.024, 0.18, 1], [0.024, 0.1835, 1], [0.029, 0.186], [0.036, 0.198], [0.029, 0.21], [0.024, 0.2125, 1], [0.024, 0.216, 1], [0.0175, 0.2175, 1],
+  [0.016, 0.232], [0.0185, 0.248, 1], [0.027, 0.2495, 1], [0.0285, 0.2518], [0.027, 0.254, 1], [0.02, 0.2555]];
+export const BOWL = [[0.02, 0.254], [0.05, 0.266], [0.082, 0.289], [0.102, 0.32], [0.108, 0.354], [0.101, 0.395], [0.09, 0.435], [0.084, 0.475], [0.0865, 0.515], [0.095, 0.547], [0.106, 0.566, 1],
+  [0.1072, 0.5685], [0.106, 0.571, 1], [0.1, 0.5715]];
+const LID = [[0.103, 0.5705], [0.103, 0.5745, 1], [0.097, 0.576, 1], [0.0925, 0.5785], [0.089, 0.585], [0.081, 0.5945], [0.062, 0.608], [0.04, 0.618], [0.022, 0.6245], [0.014, 0.63, 1],
+  [0.0105, 0.6335], [0.012, 0.64], [0.0175, 0.647], [0.019, 0.654], [0.0145, 0.662], [0.0075, 0.668], [0.005, 0.676], [0, 0.6765]];
+export const bowlR = curveFn(BOWL.slice(0, 11).map(([r, y]) => [y, r]));
+// One handle on the +x side (side -1 mirrors it), an arm of a lyre: it grows out of the belly of the
+// bowl, sweeps out and up, stands upright through the hand-hold (3.2 cm, round), and thins as it rises
+// past the lip into a small scroll turned outward, a bead on its end. It never comes back to the bowl.
+// LOOP is the closed handle that lost (a squared loop from the lip to the belly: it read as a jug's).
+const HX = GRIPS2.club[0][0];
+export const LOOP = [[0.082, 0.546], [0.112, 0.561], [0.142, 0.57], [HX - 0.007, 0.562], [HX, 0.54], [HX, 0.47], [HX, 0.42], [HX - 0.003, 0.39], [HX - 0.014, 0.36], [0.135, 0.335], [0.113, 0.318], [0.094, 0.31]];
+const HANDLE = [[0.092, 0.318], [0.118, 0.333], [0.142, 0.357], [0.159, 0.39], [HX - 0.001, 0.425], [HX, 0.47], [HX, 0.515], [HX + 0.004, 0.548], [HX + 0.013, 0.575], [HX + 0.022, 0.587], [HX + 0.034, 0.594], [HX + 0.046, 0.593], [HX + 0.055, 0.585], [HX + 0.057, 0.574], [HX + 0.052, 0.565], [HX + 0.043, 0.562], [HX + 0.037, 0.566], [HX + 0.037, 0.573]];
+const TIP = HANDLE[HANDLE.length - 1];
+export function handle(side, keys = HANDLE, thick = HOLD_D.club / 2, lyre = keys === HANDLE) {
+  const pts = smooth(keys, 2), ease = v => 0.5 - 0.5 * Math.cos(Math.PI * Math.max(0, Math.min(1, v)));
+  // as thick as the hand needs only where the hand goes
+  const rad = lyre ? t => thick * (t < 0.3 ? 0.62 + 0.38 * ease(t / 0.3) : t < 0.52 ? 1 : 1 - 0.7 * ease((t - 0.52) / 0.48))
+    : t => thick * (t < 0.36 ? 0.5 + 0.5 * ease(t / 0.36) : t < 0.55 ? 1 : 1 - 0.64 * ease((t - 0.55) / 0.45));
+  return tube(pts.map(([x, y]) => [side * x, y, 0]), rad, 8, { caps: lyre });
 }
-const rAt = (prof, y) => { for (let i = 1; i < prof.length; i++) if (prof[i][1] >= y && prof[i - 1][1] <= y) { const [r0, y0] = prof[i - 1], [r1, y1] = prof[i]; return r0 + (r1 - r0) * (y - y0) / (y1 - y0 || 1); } return 0; };
-// the amphora, foot to finial post: (r, y, hard). Three runs: the foot and knop (smooth), the fluted belly
-// (64 round, four steps to a flute), the shoulder band, neck, rim and lid (smooth).
-const FOOT = [[0, 0.106], [0.07, 0.106, 1], [0.07, 0.113, 1], [0.05, 0.124], [0.026, 0.142], [0.018, 0.165], [0.026, 0.176], [0.03, 0.182], [0.024, 0.19], [0.018, 0.2], [0.024, 0.215]];
-const BELLY = [[0.024, 0.215], [0.05, 0.235], [0.08, 0.27], [0.1, 0.315], [0.106, 0.36], [0.102, 0.4], [0.093, 0.425], [0.085, 0.43]];
-const TOP = [[0.085, 0.428], [0.099, 0.43, 1], [0.099, 0.44, 1], [0.09, 0.445], [0.075, 0.47], [0.062, 0.5], [0.058, 0.52], [0.064, 0.535], [0.075, 0.545, 1], [0.075, 0.553, 1],
-  [0.062, 0.557], [0.045, 0.567], [0.026, 0.578], [0.014, 0.585, 1], [0.008, 0.598], [0.006, 0.636], [0, 0.638]];
-export function clubParts(variant = 'amphora') {
-  const metal = [], dark = [], Q = Math.PI / 4;
-  // the black stepped plinth (square) with a thin silver band
-  dark.push(revolve([[0, 0], [0.142, 0, 1], [0.142, 0.024, 1], [0.126, 0.028, 1], [0.126, 0.09, 1], [0.108, 0.094, 1], [0.108, 0.106, 1], [0, 0.106]], 4, { flat: true, a0: Q }));
-  metal.push(revolve([[0.131, 0.024], [0.131, 0.03, 1], [0.126, 0.03]], 4, { flat: true, a0: Q }));
-  const star = () => place(starGeo(0.03, 0.013, 0.01, 0.004), 0, 0.648, 0);
-  if (variant === 'tulip') {
-    // (a sketch, not used: an open tall vase; too near the real Champions League cup's proportions)
-    metal.push(revolve([[0, 0.106], [0.07, 0.106, 1], [0.07, 0.114, 1], [0.04, 0.13], [0.022, 0.16], [0.018, 0.21], [0.024, 0.23], [0.045, 0.26], [0.07, 0.32], [0.085, 0.4], [0.1, 0.48], [0.115, 0.54, 1], [0.108, 0.545, 1], [0.098, 0.5], [0.08, 0.42], [0, 0.4]], 32));
-    for (const s of [1, -1]) metal.push(...bracket(s, 0.52, 0.11, [0.06, 0.25]));
-    return { metal, stone: [], dark, plate: plateAt(Q) };
-  }
-  const hex = variant === 'hex';
-  metal.push(revolve(FOOT, hex ? 6 : 20, { flat: hex }));
-  // sixteen flutes, deepest round the middle of the belly, fading out at both ends (where the runs meet; the belly's top ends inside the shoulder band so no seam shows)
-  const fl = (a, y) => { const d = 0.09 * Math.max(0, Math.min(1, (y - 0.215) / 0.04)) * Math.max(0, Math.min(1, (0.425 - y) / 0.05)); return 1 - d * Math.abs(Math.sin(8 * a)); };
-  metal.push(revolve(BELLY, hex ? 6 : 64, { flat: hex, mod: hex ? null : fl }));   // 4 steps a flute: ridge, flank, channel, flank
-  metal.push(revolve(TOP, hex ? 6 : 24, { flat: hex }));
-  // a ring of eight small stars standing out from the band at the shoulder
-  if (!hex) for (let k = 0; k < 8; k++) { const a = (k / 8) * Math.PI * 2; metal.push(place(starGeo(0.011, 0.0048, 0.004, 0.0015), Math.sin(a) * 0.1, 0.435, -Math.cos(a) * 0.1, -a)); }
-  metal.push(star());
-  const all = [...FOOT, ...BELLY, ...TOP];
-  for (const s of [1, -1]) metal.push(...bracket(s, 0.505, rAt(all, 0.505), [rAt(all, 0.29), 0.29]));
-  return { metal, stone: [], dark, plate: plateAt(Q) };
+export function clubFoot() {
+  const metal = [], stone = [], engraved = [];
+  // the marble drum, a silver band round its step, the plaque
+  stone.push(revolve(smooth([[0, 0], [0.12, 0, 1], [0.12, 0.012, 1], [0.1125, 0.014, 1], [0.1125, 0.021, 1], [0.108, 0.023, 1], [0.105, 0.074, 1], [0.1, 0.0795], [0.096, 0.086], [0.094, BASE, 1], [0, BASE]], 1), 24, { uv: true }));
+  metal.push(revolve([[0.112, 0.0135], [0.1146, 0.0148], [0.1146, 0.0202], [0.112, 0.0215]], 24));
+  engraved.push(band([[0.1082, 0.031], [0.1062, 0.067]], 10, { a0: -0.42, a1: 0.42, ...PLATE_UV, u0: PLATE_UV.u1, u1: PLATE_UV.u0 }));
+  metal.push(revolve(smooth(FOOT, 2), 24), revolve(smooth(STEM, 2), 16));
+  return { metal, stone, engraved };
 }
-const plateAt = Q => ({ w: 0.15, h: 0.04, y: 0.059, z: -0.126 * Math.cos(Q) - 0.0016, d: 0.003 });
+export function clubParts() {
+  const { metal, stone, engraved } = clubFoot();
+  metal.push(revolve(smooth(BOWL, 2), 36));
+  // the laurel band round the waist of the bowl, a reed above and below it
+  const y0 = 0.46, y1 = 0.49;
+  engraved.push(band([[bowlR(y0) + 0.0006, y0], [bowlR((y0 + y1) / 2) + 0.0006, (y0 + y1) / 2], [bowlR(y1) + 0.0006, y1]], 36, { u0: 0, u1: 3, ...FRIEZE_UV }));
+  for (const y of [y0, y1]) { const r = bowlR(y); metal.push(revolve([[r - 0.001, y - 0.0024], [r + 0.0018, y], [r - 0.001, y + 0.0024]], 36)); }
+  metal.push(revolve(smooth(LID, 1), 24));
+  metal.push(place(starGeo(0.031, 0.0125, 0.0105, 0.0032), 0, 0.6765 + 0.031 * 0.78, 0));
+  for (const s of [1, -1]) metal.push(handle(s), place(new THREE.IcosahedronGeometry(0.0072, 1), s * TIP[0], TIP[1], 0));
+  return { metal, stone, engraved };
+}

@@ -1,26 +1,66 @@
-// Polished metal and stone for the '04 look, with no downloads and no post-processing: a small stadium
-// (sky, floodlights, stands, pitch) is painted in code into an equirect picture with the lights pushed
-// past white, and MeshStandardMaterial reflects it (three turns an equirect envMap into a PMREM itself,
-// once). Also the geometry helpers the trophies are built with: a lathe whose radius can vary round the
-// turn (flutes, facets), with hard edges where the profile says, a tube along a polyline, a faceted
-// star, and a merge so each material is one draw call.
+// Geometry helpers the '04-look trophies are built with (pure three, no DOM: unit tested in Node):
+// smooth turned profiles, a lathe (hard edges only where the profile says, optional uvs), a band with
+// uvs (stone, engraving, plaques), a grid of rings (lofts that aren't round), a tube along a curve, a
+// faceted star, and a merge so each material is one draw call. Metal has no texture to hide in, so every
+// part can carry a painted shade (userData.ao: a number, one per vertex, or f(x, y, z)) that merge bakes into vertex
+// colours: the inside of a bowl and the creases reflect darker, as they do on the real thing.
+// Profiles are [[r, y, hard?], ...], drawn anticlockwise in the (r, y) half-plane (out along the bottom,
+// up the outside, in over the top, down the inside of a bowl) so faces look outward. Angle a = 0 is the
+// trophy's front (-z); x = sin a.
 import * as THREE from 'three';
-import { canvas, fbm, hash, mix, clamp01 } from './paint.js';
 
-// ---------- geometry (pure three, no DOM: unit tested in Node) ----------
+const cr = (p0, p1, p2, p3, t) => 0.5 * ((2 * p1) + (-p0 + p2) * t + (2 * p0 - 5 * p1 + 4 * p2 - p3) * t * t + (-p0 + 3 * p1 - 3 * p2 + p3) * t * t * t);
+// A smooth curve through the keys (Catmull-Rom, `per` steps a span); a hard key is a corner: the curve
+// stops and starts again there. Works on [r, y] profiles and on [x, y] paths alike.
+export function smooth(keys, per = 5) {
+  const out = [], runs = [];
+  let run = [keys[0]];
+  for (let i = 1; i < keys.length; i++) { run.push(keys[i]); if (keys[i][2] && i < keys.length - 1) { runs.push(run); run = [keys[i]]; } }
+  runs.push(run);
+  for (const r of runs) {
+    const n = r.length, pts = [];
+    if (n === 2) pts.push([r[0][0], r[0][1]], [r[1][0], r[1][1]]);
+    else for (let i = 0; i < n - 1; i++) {
+      const a = r[Math.max(0, i - 1)], b = r[i], c = r[i + 1], d = r[Math.min(n - 1, i + 2)];
+      for (let k = 0; k < per; k++) pts.push([cr(a[0], b[0], c[0], d[0], k / per), cr(a[1], b[1], c[1], d[1], k / per)]);
+      if (i === n - 2) pts.push([c[0], c[1]]);
+    }
+    pts.forEach((p, i) => {
+      const hard = (i === 0 && r[0][2]) || (i === pts.length - 1 && r[n - 1][2]);
+      if (i === 0 && out.length) { out[out.length - 1][2] = 1; return; }
+      out.push([Math.max(0, p[0]), p[1], hard ? 1 : 0]);
+    });
+  }
+  return out;
+}
+// The keys as a function: value at x (Catmull-Rom over evenly treated keys [[x, v], ...], clamped at the ends).
+export function curveFn(keys) {
+  return x => {
+    const n = keys.length;
+    if (x <= keys[0][0]) return keys[0][1];
+    if (x >= keys[n - 1][0]) return keys[n - 1][1];
+    let i = 0; while (keys[i + 1][0] < x) i++;
+    const a = keys[Math.max(0, i - 1)], b = keys[i], c = keys[i + 1], d = keys[Math.min(n - 1, i + 2)], h = c[0] - b[0];
+    const m0 = i === 0 ? (c[1] - b[1]) / h : (c[1] - a[1]) / (c[0] - a[0]), m1 = i + 2 > n - 1 ? (c[1] - b[1]) / h : (d[1] - b[1]) / (d[0] - b[0]);
+    const t = (x - b[0]) / h, t2 = t * t, t3 = t2 * t;
+    return (2 * t3 - 3 * t2 + 1) * b[1] + (t3 - 2 * t2 + t) * h * m0 + (-2 * t3 + 3 * t2) * c[1] + (t3 - t2) * h * m1;
+  };
+}
 
-// Revolve a profile [[r, y, hard?], ...] round the y axis in seg steps. mod(a, y, k) scales the radius
-// at angle a (0 = toward -z, the trophy's front) and profile point k. A hard point is a crease: its ring
-// is doubled so the faces either side keep their own normals. flat: every face its own normal (facets).
-export function revolve(profile, seg, { mod, flat = false, a0 = 0 } = {}) {
-  const pos = [], idx = [], rings = [];
+// Revolve a profile round the y axis in seg steps. mod(a, y, k) scales the radius at angle a. A hard
+// point is a crease (its ring is doubled). flat: facets. uv: a seam at the back and uvs (u round, v up
+// the profile by length), for stone.
+export function revolve(profile, seg, { mod, flat = false, a0 = 0, uv = false, ao } = {}) {
+  const pos = [], idx = [], rings = [], uvs = [], cols = uv ? seg + 1 : seg;
+  let len = 0; const L = profile.map((p, k) => (k ? (len += Math.hypot(p[0] - profile[k - 1][0], p[1] - profile[k - 1][1])) : 0));
   profile.forEach(([r, y, hard], k) => {
     const n = hard && k > 0 && k < profile.length - 1 ? 2 : 1;
     for (let d = 0; d < n; d++) {
       const start = pos.length / 3;
-      for (let i = 0; i < seg; i++) {
-        const a = a0 + (i / seg) * Math.PI * 2, rr = r * (mod ? mod(a, y, k) : 1);
+      for (let i = 0; i < cols; i++) {
+        const a = a0 + (i / seg) * Math.PI * 2 + (uv ? Math.PI : 0), rr = r * (mod ? mod(a, y, k) : 1);
         pos.push(Math.sin(a) * rr, y, -Math.cos(a) * rr);
+        if (uv) uvs.push(i / seg, L[k] / len);
       }
       rings.push({ start, dup: d === 0 && n === 2 });
     }
@@ -28,30 +68,67 @@ export function revolve(profile, seg, { mod, flat = false, a0 = 0 } = {}) {
   for (let k = 0; k < rings.length - 1; k++) {
     if (rings[k].dup) continue;                                  // the doubled ring: no face between the pair
     const a = rings[k].start, b = rings[k + 1].start;
-    for (let i = 0; i < seg; i++) {
-      const j = (i + 1) % seg;
+    for (let i = 0; i < (uv ? seg : cols); i++) {
+      const j = uv ? i + 1 : (i + 1) % seg;
       idx.push(a + i, b + i, a + j, a + j, b + i, b + j);
     }
   }
   let g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setIndex(idx);
+  if (uv) g.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
   if (flat) g = g.toNonIndexed();
   g.computeVertexNormals();
+  if (uv && !flat) { const nm = g.attributes.normal; for (const r of rings) for (let c = 0; c < 3; c++) { const v = (nm.array[r.start * 3 + c] + nm.array[(r.start + seg) * 3 + c]) / 2; nm.array[r.start * 3 + c] = nm.array[(r.start + seg) * 3 + c] = v; } }
+  if (ao !== undefined) g.userData.ao = ao;
   return g;
 }
 
-// A tube of `sides` round a polyline [[x, y, z], ...]; r: its radius, r(t) along it (t 0..1) or one per point; squash: the
-// section is that much narrower across the plane the line lies in (an oval bar).
-export function tube(pts, r, sides = 10, { squash = 1, up = [0, 0, 1], caps = true } = {}) {
+// A strip of a turned surface with uvs: the profile [[r, y], ...] swept from angle a0 to a1 in seg
+// steps, u from u0 to u1 round it and v from v0 (first point) to v1. Normals are the lathe's own.
+export function band(profile, seg, { a0 = -Math.PI, a1 = Math.PI, u0 = 0, u1 = 1, v0 = 0, v1 = 1 } = {}) {
+  const pos = [], nor = [], uv = [], idx = [], n = profile.length;
+  let len = 0; const L = profile.map((p, k) => (k ? (len += Math.hypot(p[0] - profile[k - 1][0], p[1] - profile[k - 1][1])) : 0));
+  for (let k = 0; k < n; k++) {
+    const p = profile[k], q0 = profile[Math.max(0, k - 1)], q1 = profile[Math.min(n - 1, k + 1)], dr = q1[0] - q0[0], dy = q1[1] - q0[1], l = Math.hypot(dr, dy) || 1;
+    for (let i = 0; i <= seg; i++) {
+      const a = a0 + (a1 - a0) * i / seg, s = Math.sin(a), c = Math.cos(a);
+      pos.push(s * p[0], p[1], -c * p[0]); nor.push(s * dy / l, -dr / l, -c * dy / l);
+      uv.push(u0 + (u1 - u0) * i / seg, v0 + (v1 - v0) * L[k] / len);
+    }
+  }
+  for (let k = 0; k < n - 1; k++) for (let i = 0; i < seg; i++) { const a = k * (seg + 1) + i, b = a + seg + 1; idx.push(a, b, a + 1, a + 1, b, b + 1); }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
+  g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); g.setIndex(idx);
+  return g;
+}
+
+// Rings of points [[x, y, z] x seg] x rows, closed round, bottom ring first: a loft that needn't be round.
+export function grid(rings, { ao } = {}) {
+  const pos = [], idx = [], seg = rings[0].length;
+  for (const r of rings) for (const p of r) pos.push(p[0], p[1], p[2]);
+  for (let k = 0; k < rings.length - 1; k++) for (let i = 0; i < seg; i++) {
+    const a = k * seg, b = a + seg, j = (i + 1) % seg;
+    idx.push(a + i, b + i, a + j, a + j, b + i, b + j);
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setIndex(idx); g.computeVertexNormals();
+  if (ao !== undefined) g.userData.ao = ao;
+  return g;
+}
+
+// A tube of `sides` round a line [[x, y, z], ...]; r: its radius, r(t) along it (t 0..1 by length) or
+// one per point; squash: the section is that much narrower across `up` (an oval bar or a ribbon).
+export function tube(pts, r, sides = 10, { squash = 1, up = [0, 0, 1], caps = true, ao } = {}) {
   const P = pts.map(p => new THREE.Vector3(...p)), n = P.length, pos = [], idx = [];
   const U = new THREE.Vector3(...up), T = new THREE.Vector3(), N = new THREE.Vector3(), B = new THREE.Vector3();
   let len = 0; const L = [0]; for (let i = 1; i < n; i++) L.push(len += P[i].distanceTo(P[i - 1]));
   for (let i = 0; i < n; i++) {
     T.subVectors(P[Math.min(n - 1, i + 1)], P[Math.max(0, i - 1)]).normalize();
-    N.copy(U).sub(T.clone().multiplyScalar(U.dot(T))).normalize(); B.crossVectors(T, N);
+    N.copy(typeof up === 'function' ? U.set(...up(i / (n - 1))) : U).sub(T.clone().multiplyScalar(U.dot(T))).normalize(); B.crossVectors(T, N);
     const rr = typeof r === 'function' ? r(L[i] / len) : Array.isArray(r) ? r[i] : r;
     for (let s = 0; s < sides; s++) {
-      const a = (s / sides) * Math.PI * 2, c = Math.cos(a) * rr * squash, d = Math.sin(a) * rr;
+      const a = (s / sides) * Math.PI * 2, c = Math.cos(a) * rr, d = Math.sin(a) * rr * squash;
       pos.push(P[i].x + N.x * c + B.x * d, P[i].y + N.y * c + B.y * d, P[i].z + N.z * c + B.z * d);
     }
   }
@@ -65,11 +142,13 @@ export function tube(pts, r, sides = 10, { squash = 1, up = [0, 0, 1], caps = tr
   }
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setIndex(idx); g.computeVertexNormals();
+  if (ao !== undefined) g.userData.ao = ao;
   return g;
 }
 
 // A five-pointed star standing in the xy plane, facing -z: every point is two facets meeting in a
-// ridge, rising from the rim (half-thickness edge) to the middle (half-thickness depth). Flat shaded.
+// ridge, rising from the rim (half-thickness edge) to the middle (half-thickness depth). Flat shaded:
+// real edges, so each facet takes its own piece of the sky.
 export function starGeo(R, ri, depth, edge, points = 5) {
   const rim = [];
   for (let i = 0; i < points * 2; i++) {
@@ -88,120 +167,30 @@ export function starGeo(R, ri, depth, edge, points = 5) {
   return g;
 }
 
-// Many geometries into one (position, normal, and uv when all of them have it), indexed.
+export const place = (g, x, y, z, ry = 0, rx = 0) => { g.rotateX(rx); g.rotateY(ry); g.translate(x, y, z); return g; };
+
+// Many geometries into one: position, normal, a colour (each part's painted shade, white if it has
+// none) and uv when all of them have it. Indexed.
 export function merge(list) {
-  const out = new THREE.BufferGeometry(), pos = [], nor = [], uv = [], idx = [];
+  const out = new THREE.BufferGeometry(), pos = [], nor = [], uv = [], col = [], idx = [];
   const withUv = list.every(g => g.attributes.uv);
   let base = 0;
-  for (const g0 of list) {
-    const g = g0, p = g.attributes.position, n = g.attributes.normal;
-    for (let i = 0; i < p.count; i++) { pos.push(p.getX(i), p.getY(i), p.getZ(i)); nor.push(n.getX(i), n.getY(i), n.getZ(i)); if (withUv) uv.push(g.attributes.uv.getX(i), g.attributes.uv.getY(i)); }
+  for (const g of list) {
+    const p = g.attributes.position, n = g.attributes.normal, ao = g.userData.ao;
+    for (let i = 0; i < p.count; i++) {
+      const x = p.getX(i), y = p.getY(i), z = p.getZ(i), k = typeof ao === 'function' ? ao(x, y, z) : ao === undefined ? 1 : ao.length ? ao[i] : ao;
+      pos.push(x, y, z); nor.push(n.getX(i), n.getY(i), n.getZ(i)); col.push(k, k, k);
+      if (withUv) uv.push(g.attributes.uv.getX(i), g.attributes.uv.getY(i));
+    }
     if (g.index) for (let i = 0; i < g.index.count; i++) idx.push(base + g.index.getX(i));
     else for (let i = 0; i < p.count; i++) idx.push(base + i);
     base += p.count;
   }
   out.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
   out.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
+  out.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
   if (withUv) out.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
   out.setIndex(idx);
   return out;
 }
 export const tris = g => (g.index ? g.index.count : g.attributes.position.count) / 3;
-
-// ---------- the painted stadium the metal reflects ----------
-
-let ENV = null;
-// 512 x 256 equirect, lit values: sky 0.5..1, floodlight cores up to 9 (past white, so they glint),
-// dark stands, pitch green below the horizon. v = 0 is straight up.
-export function stadiumEnv() {
-  if (ENV) return ENV;
-  const W = 512, H = 256, c = canvas(W, H), x = c.getContext('2d');
-  const sky = x.createLinearGradient(0, 0, 0, H * 0.3);
-  sky.addColorStop(0, '#3c4c6c'); sky.addColorStop(0.7, '#9fb2c8'); sky.addColorStop(1, '#dfe7ee');
-  x.fillStyle = sky; x.fillRect(0, 0, W, H * 0.3);
-  // soft cloud banks
-  for (let i = 0; i < 26; i++) { const cx = hash(i, 1) * W, cy = H * (0.08 + hash(i, 2) * 0.17), r = 18 + hash(i, 3) * 40; const gr = x.createRadialGradient(cx, cy, 0, cx, cy, r); gr.addColorStop(0, 'rgba(240,244,250,.55)'); gr.addColorStop(1, 'rgba(240,244,250,0)'); x.fillStyle = gr; x.fillRect(cx - r, cy - r, r * 2, r * 2); }
-  // the stands: a dark roof edge, tiers of crowd, a lit ad band, then the pitch
-  const yRoof = H * 0.29, yAds = H * 0.475, yPitch = H * 0.5;
-  x.fillStyle = '#15171d'; x.fillRect(0, yRoof, W, yAds - yRoof);
-  for (let py = yRoof + 3; py < yAds - 1; py += 2) for (let px = 0; px < W; px += 2) {
-    const h = hash(px, py, 5); if (h < 0.45) continue;
-    const k = 40 + 90 * h; x.fillStyle = h > 0.93 ? `rgb(${k * 1.4},${k * 0.6},${k * 0.55})` : h > 0.8 ? `rgb(${k},${k},${k * 1.2})` : `rgb(${k * 0.6},${k * 0.6},${k * 0.7})`; x.fillRect(px, py, 1, 1);
-  }
-  x.fillStyle = '#0b0c10'; x.fillRect(0, yRoof, W, 4);
-  for (let i = 0; i < 40; i++) { const k = 70 + 90 * hash(i, 7); x.fillStyle = `rgb(${k},${k},${k + 12})`; x.fillRect(i * W / 40, yAds, W / 40, yPitch - yAds); }   // ad boards, soft
-  const pitch = x.createLinearGradient(0, yPitch, 0, H);
-  pitch.addColorStop(0, '#4c5644'); pitch.addColorStop(0.3, '#2c3428'); pitch.addColorStop(1, '#161a14');   // the pitch, greyed: a low green-grey, so a cup's lower half is dark but not black or bright green
-  x.fillStyle = pitch; x.fillRect(0, yPitch, W, H - yPitch);
-  for (let i = 0; i < 24; i += 2) { x.fillStyle = 'rgba(255,255,255,.08)'; x.fillRect(i * W / 24, yPitch, W / 24, H - yPitch); }
-  x.fillStyle = 'rgba(240,240,235,.8)'; x.fillRect(0, yPitch + 9, W, 2); x.fillRect(0, yPitch + 40, W, 3);   // touchline and halfway line
-  // read it back as lit values, then the floodlights: four banks over the stands, hot cores and a halo
-  const d = x.getImageData(0, 0, W, H).data, f = new Float32Array(W * H * 4);
-  for (let i = 0; i < W * H; i++) { const j = ((H - 1 - Math.floor(i / W)) * W + (i % W)) * 4; f[j] = d[i * 4] / 255; f[j + 1] = d[i * 4 + 1] / 255; f[j + 2] = d[i * 4 + 2] / 255; f[j + 3] = 1; }   // (a data texture's first row is the bottom)
-  const lamp = (u, v, s, k) => {
-    for (let py = Math.max(0, Math.floor((v - s * 3) * H)); py < Math.min(H, (v + s * 3) * H); py++) for (let px = Math.floor((u - s * 6) * W); px < (u + s * 6) * W; px++) {
-      const du = (px / W - u) / 2, dv = py / H - v, e = Math.exp(-(du * du + dv * dv) / (s * s)), i = ((H - 1 - py) * W + ((px % W) + W) % W) * 4;
-      f[i] += e * k; f[i + 1] += e * k * 0.97; f[i + 2] += e * k * 0.9;
-    }
-  };
-  for (let py = Math.round(yRoof) + 5; py < yRoof + 7; py++) for (let px = 0; px < W; px++) { const j = ((H - 1 - py) * W + px) * 4; f[j] += 0.9; f[j + 1] += 0.9; f[j + 2] += 0.85; }   // the lit underside of the roof
-  for (let k = 0; k < 4; k++) { const u = 0.125 + k * 0.25; lamp(u, 0.22, 0.012, 9); lamp(u - 0.012, 0.23, 0.007, 4); lamp(u + 0.012, 0.23, 0.007, 4); lamp(u, 0.22, 0.05, 0.45); lamp(u + 0.125, 0.25, 0.008, 5); }
-  lamp(0.62, 0.08, 0.06, 0.9);                                    // a bright patch of sky (the sun behind cloud)
-  // half floats: filterable on every WebGL2 device (32-bit float filtering is an extension the Quest may lack)
-  const h16 = new Uint16Array(f.length); for (let i = 0; i < f.length; i++) h16[i] = THREE.DataUtils.toHalfFloat(Math.min(f[i], 60000));
-  const t = new THREE.DataTexture(h16, W, H, THREE.RGBAFormat, THREE.HalfFloatType);
-  t.mapping = THREE.EquirectangularReflectionMapping; t.magFilter = t.minFilter = THREE.LinearFilter; t.needsUpdate = true;
-  ENV = t;
-  return t;
-}
-
-// ---------- materials ----------
-
-// gold: warm and deep, reflections tinted, the dark of the stands turning it bronze-brown
-export const goldMat = (o = {}) => new THREE.MeshStandardMaterial({ color: '#e6a646', metalness: 1, roughness: 0.16, emissive: '#2a1604', envMap: stadiumEnv(), envMapIntensity: 1.5, ...o });
-// silver: near white, sharp, so the stands read as dark streaks in it
-export const silverMat = (o = {}) => new THREE.MeshStandardMaterial({ color: '#f4f6fa', metalness: 1, roughness: 0.09, envMap: stadiumEnv(), envMapIntensity: 1.1, ...o });
-// black lacquered stone for the club cup's plinth
-export const ebonyMat = () => new THREE.MeshStandardMaterial({ color: '#0d0e12', metalness: 0.2, roughness: 0.16, envMap: stadiumEnv(), envMapIntensity: 0.9 });
-
-// Malachite: concentric bands warped round a few eyes, dark lines between them, polished.
-export function malachiteMat() {
-  const W = 512, H = 64, c = canvas(W, H), x = c.getContext('2d'), img = x.createImageData(W, H);
-  const eyes = [[0.1, 0.9], [0.37, -0.3], [0.62, 1.2], [0.86, 0.1]];
-  for (let py = 0; py < H; py++) for (let px = 0; px < W; px++) {
-    const u = px / W, v = py / H;
-    let dmin = 9; for (const [eu, ev] of eyes) { let du = Math.abs(u - eu); du = Math.min(du, 1 - du); dmin = Math.min(dmin, Math.hypot(du * 4, (v - ev) * 0.5)); }
-    const w = dmin * 26 + fbm(u * 24, v * 3, 4, 24) * 3.2, b = w - Math.floor(w), line = Math.exp(-((b - 0.08) ** 2) / 0.0012);
-    const tone = mix(0.35, 1, 0.5 + 0.5 * Math.sin(w * 1.7)) * (1 - 0.65 * line) * (0.85 + 0.3 * fbm(u * 60, v * 8, 9, 60));
-    const i = (py * W + px) * 4, k = clamp01(tone);
-    img.data[i] = 10 + 40 * k; img.data[i + 1] = 40 + 150 * k; img.data[i + 2] = 26 + 82 * k; img.data[i + 3] = 255;
-  }
-  x.putImageData(img, 0, 0);
-  const t = new THREE.CanvasTexture(c); t.wrapS = THREE.RepeatWrapping; t.anisotropy = 4;
-  return new THREE.MeshStandardMaterial({ map: t, metalness: 0, roughness: 0.12, envMap: stadiumEnv(), envMapIntensity: 0.55 });
-}
-
-// An engraved plate: the words cut in (dark, with a bright lower lip where the cut catches the light)
-// on brushed metal; lines: [[text, px], ...]. tint: gold or silver.
-export function plateMat(lines, tint, { w = 256, h = 128 } = {}) {
-  const c = canvas(w, h), x = c.getContext('2d');
-  x.fillStyle = '#d8d8d8'; x.fillRect(0, 0, w, h);
-  for (let py = 0; py < h; py++) { x.fillStyle = `rgba(255,255,255,${0.25 * hash(1, py, 3)})`; x.fillRect(0, py, w, 1); }   // brushed
-  x.strokeStyle = '#3a3a3a'; x.lineWidth = 3; x.strokeRect(7, 7, w - 14, h - 14);
-  x.strokeStyle = '#ffffff'; x.lineWidth = 1; x.strokeRect(10, 10, w - 20, h - 20);
-  x.textAlign = 'center'; x.textBaseline = 'middle';
-  const n = lines.length;
-  lines.forEach(([text, px], i) => {
-    const y = h * (i + 1) / (n + 1);
-    x.font = `bold ${px}px Georgia, 'Times New Roman', serif`;
-    if (text === '*') { star2d(x, w / 2, y, px * 0.55); return; }
-    x.fillStyle = '#ffffff'; x.fillText(text, w / 2 + 1, y + 1.5);
-    x.fillStyle = '#262422'; x.fillText(text, w / 2, y);
-  });
-  const t = new THREE.CanvasTexture(c); t.anisotropy = 4;
-  return (tint === 'gold' ? goldMat : silverMat)({ map: t, roughness: 0.28 });
-}
-function star2d(x, cx, cy, r) {
-  const path = off => { x.beginPath(); for (let i = 0; i < 10; i++) { const a = (i / 10) * Math.PI * 2, rr = i % 2 ? r * 0.42 : r; x[i ? 'lineTo' : 'moveTo'](cx + off + Math.sin(a) * rr, cy + off - Math.cos(a) * rr); } x.closePath(); };
-  path(1.2); x.fillStyle = '#ffffff'; x.fill(); path(0); x.fillStyle = '#262422'; x.fill();
-}
