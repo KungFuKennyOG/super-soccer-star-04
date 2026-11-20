@@ -23,9 +23,9 @@ function skin(pose) {
 }
 const axisDist = (p, c) => { const d = p.clone().sub(c); return d.addScaledVector(HANDLE_DIR, -d.dot(HANDLE_DIR)).length(); };
 
-test('one hand is well under half of 3,000 triangles, and a real man\'s size', () => {
+test('one hand is under 800 triangles, and a real man\'s size', () => {
   const tris = geo.index.count / 3;
-  assert.ok(tris < 1350, `${tris} triangles`);
+  assert.ok(tris < 800, `${tris} triangles`);
   const v = skin({ f: FINGERS.map(() => [0, 0, 0, 0]), t: [0, 0, 0, 0, 0] }).filter(q => q.bone[0] !== 't').map(q => q.p);
   const tip = Math.max(...v.map(q => q.y)), wide = Math.max(...v.filter(q => q.y > 0.06 && q.y < 0.085).map(q => q.x)) - Math.min(...v.filter(q => q.y > 0.06 && q.y < 0.085).map(q => q.x));
   assert.ok(tip > 0.18 && tip < 0.2, `wrist to middle fingertip ${tip}`);
@@ -67,7 +67,8 @@ test('a fist: the fingertips come back to the palm, the thumb lies across the fi
   }
   const thumb = v.filter(q => q.bone === 't3').map(q => q.p), fingers = v.filter(q => /^[imrl]2/.test(q.bone)).map(q => q.p);
   const gap = Math.min(...thumb.map(a => Math.min(...fingers.map(b => a.distanceTo(b)))));
-  assert.ok(gap < 0.01, `thumb ${(gap * 1000).toFixed(1)} mm from the fingers`);
+  // (nearest vertices: with a PS2-era mesh the middle bones have vertices only at their joints, so 2 cm, not 1)
+  assert.ok(gap < 0.02, `thumb ${(gap * 1000).toFixed(1)} mm from the fingers`);
 });
 
 test('grip space: thumb up the handle (-Z), wrist toward +Y, palm toward -X', () => {

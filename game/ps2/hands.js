@@ -8,7 +8,7 @@ import * as THREE from 'three';
 import { SKINS } from '../tex.js';
 import { handSkeleton, handGeometry, SHEET } from './handgeo.js';
 import { POSES, seatThumbs, holdPose, handleAt, HANDLE_DIR, CONTROLLER_D, newPose, copyPose, mixPoses, easePose, applyPose } from './handpose.js';
-import { paintHand } from './handskin.js';
+import { paintHand, paintSteps } from './handskin.js';
 import { canvas, hex, smoothTex } from './paint.js';
 
 // WebXR grip space (right hand): origin in the middle of the fist, -Z along the handle toward the thumb, +X out of
@@ -23,24 +23,26 @@ export const HtoGrip = (() => {
 export const YOU_SKIN = SKINS[1];
 const skinRGB = h => hex(h).map((v, k) => v * [0.95, 0.9, 0.87][k]);
 
-const mats = new Map();
-function material(kit, skin) {
+const mats = new Map(), jobs = [];
+// later: paint it a piece a frame (paintTick) and show the last sheet until it is done, so a kit change doesn't stall
+function material(kit, skin, later = null) {
   const band = kit.sleeve || kit.shirt, key = `${band}${kit.trim}${skin}`;
   if (mats.has(key)) return mats.get(key);
-  const c = canvas(SHEET.w, SHEET.h), t0 = performance.now();
-  paintHand(c.getContext('2d'), { skin: skinRGB(skin), band: hex(band), trim: hex(kit.trim || '#ffffff') });
-  const m = new THREE.MeshPhongMaterial({ map: smoothTex(c), vertexColors: true, specular: 0x302b26, shininess: 14 });
-  // the forearm's end fades out (vertex alpha, handgeo.js) as a screen-door dither: no sorting, no blending, and
-  // the game runs without MSAA so alpha to coverage wouldn't do it
-  m.onBeforeCompile = sh => {
-    sh.fragmentShader = sh.fragmentShader.replace('#include <alphatest_fragment>', `
-      { int x = int(mod(gl_FragCoord.x, 4.0)), y = int(mod(gl_FragCoord.y, 4.0));
-        const float B[16] = float[16](0.,8.,2.,10.,12.,4.,14.,6.,3.,11.,1.,9.,15.,7.,13.,5.);
-        if (diffuseColor.a < (B[x + y * 4] + 0.5) / 16.0) discard; diffuseColor.a = 1.0; }`);
-  };
+  const c = canvas(SHEET.w, SHEET.h), t0 = performance.now(), ctx = c.getContext('2d'), o = { skin: skinRGB(skin), band: hex(band), trim: hex(kit.trim || '#ffffff') };
+  const m = new THREE.MeshPhongMaterial({ map: smoothTex(c), vertexColors: true, specular: 0x2b2a27, shininess: 12 });
+  if (later && later.map) { m.map = later.map; jobs.push({ steps: paintSteps(ctx, o), m, c }); }
+  else paintHand(ctx, o);
+  // the forearm fades out past the band (vertex alpha, handgeo.js): blended, drawn after the pitch and players
+  m.transparent = true; m.depthWrite = true;
   m.userData.paintMs = performance.now() - t0;
   mats.set(key, m);
   return m;
+}
+
+// one piece of any sheet still being painted; call once a frame
+export function paintTick() {
+  const j = jobs[0];
+  if (j && j.steps.next().done) { jobs.shift(); j.m.map = smoothTex(j.c); j.m.needsUpdate = true; }
 }
 
 // One hand: a group in grip space holding the mesh. .hand drives it: setPose('open' | 'point' | 'fist' |
@@ -50,7 +52,7 @@ function material(kit, skin) {
 export function buildHand(side, pose = 'open', kit = { shirt: '#f2f1ea', trim: '#2b2f6b' }, skin = YOU_SKIN, opts = {}) {
   const t0 = performance.now();
   seatThumbs();
-  const sk = handSkeleton(), mesh = new THREE.SkinnedMesh(handGeometry(), material(kit, skin));
+  const sk = handSkeleton(), mesh = new THREE.SkinnedMesh(handGeometry(), material(kit, skin, opts.after));
   mesh.add(sk.root); mesh.updateMatrixWorld(true);
   mesh.bind(new THREE.Skeleton(sk.bones));
   mesh.frustumCulled = false;                               // (the bind box doesn't follow the fingers)
@@ -96,7 +98,8 @@ export function createHands(renderer, rig) {
   function build(slot) {
     if (!slot.side) return;
     if (slot.hand) slot.grip.remove(slot.hand);
-    slot.hand = buildHand(slot.side, 'open', kit);
+    const old = slot.hand && slot.hand.hand.mesh.material;
+    slot.hand = buildHand(slot.side, 'open', kit, undefined, { after: old });
     slot.grip.add(slot.hand);
   }
   return {
@@ -124,6 +127,7 @@ export function createHands(renderer, rig) {
       const now = performance.now();
       if (dt === undefined) dt = last ? Math.min(0.1, (now - last) / 1000) : 1 / 72;
       last = now;
+      paintTick();
       for (const s of slots) {
         if (!s.hand || !s.gamepad) continue;
         const b = s.gamepad.buttons, h = s.hand.hand;

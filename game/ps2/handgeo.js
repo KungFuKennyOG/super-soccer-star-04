@@ -23,12 +23,12 @@ export const THUMB = { at: [-0.0265, 0.021, -0.007], len: [0.046, 0.031, 0.0285]
 export const FOREARM = new THREE.Vector3(-0.1, -0.95, 0.27).normalize();
 export const BAND = [0.016, 0.072];          // the sweatband: from and to, along the forearm from the wrist (m)
 
-// Sheet regions (512 x 512): the arm and palm in one loft, the thumb, then the four fingers.
-export const SHEET = { w: 512, h: 512 };
+// Sheet regions (256 x 256: a PS2-era hand, Kenny): the arm and palm in one loft, the thumb, then the four fingers.
+export const SHEET = { w: 256, h: 256 };
 export const REG = {
-  arm: { x: 0, y: 0, w: 512, h: 224, s0: -0.135, s1: 0.097 },    // s: along the forearm (negative) and up the hand (y)
-  thumb: { x: 0, y: 224, w: 128, h: 288, s0: -0.012, s1: 0.1055 },
-  ...Object.fromEntries(FINGERS.map((f, i) => [f.name, { x: 128 + 96 * i, y: 224, w: 96, h: 288, s0: -0.014, s1: f.len[0] + f.len[1] + f.len[2] }])),
+  arm: { x: 0, y: 0, w: 256, h: 112, s0: -0.135, s1: 0.097 },    // s: along the forearm (negative) and up the hand (y)
+  thumb: { x: 0, y: 112, w: 64, h: 144, s0: -0.012, s1: 0.1055 },
+  ...Object.fromEntries(FINGERS.map((f, i) => [f.name, { x: 64 + 48 * i, y: 112, w: 48, h: 144, s0: -0.014, s1: f.len[0] + f.len[1] + f.len[2] }])),
 };
 // Round each ring the angle a runs from the seam: 0 = dorsal (+z), a quarter turn = ulnar (+x), half = palmar.
 export const A0 = { arm: Math.PI * 0.75, thumb: Math.PI * 0.5, finger: Math.PI * 0.5 };
@@ -138,10 +138,19 @@ function armPalm(m, sk) {
     seg.closestPointToPoint(p, true, cp);
     const kt = 0.45 * sstep(0.026, 0.01, cp.distanceTo(p)) * sstep(0.0, 0.03, p.y) * sstep(-0.018, -0.034, p.x) * sstep(0.085, 0.06, p.y);
     if (kt > 0) { w.t1 = kt; w.root -= kt; }
-    for (const f of FINGERS) {
-      const ky = knuckleY(f.at[0]), k = 0.5 * sstep(ky - 0.011, ky + 0.002, p.y) * sstep(0.0115, 0.004, Math.abs(p.x - f.at[0]));
-      if (k > 0) { w[f.name + '1h'] = k; w.root -= k; }
+    // the knuckles on the back are the heads of the hand's own bones and stay with it; on the palm side the skin from
+    // the last crease to the fingers' roots is over the fingers' first bones and folds with them
+    const palmar = sstep(0.002, -0.006, p.z), xc = Math.max(FINGERS[0].at[0], Math.min(FINGERS[3].at[0], p.x));
+    for (let i = 0; i < 4; i++) {
+      const f = FINGERS[i], gap = Math.abs((FINGERS[i === 3 ? 2 : i + 1].at[0] - FINGERS[i === 3 ? 3 : i].at[0]));
+      const near = Math.max(0, 1 - Math.abs(xc - f.at[0]) / gap), ky = knuckleY(f.at[0]);
+      if (near <= 0) continue;
+      const kd = sstep(ky - 0.004, ky + 0.0015, p.y) * near * (1 - palmar);   // past the knuckle it is inside the finger's root
+      const kp = sstep(0.062, 0.082, p.y) * near * palmar, full = sstep(0.074, 0.087, p.y);
+      if (kd > 0) { w[f.name + '1h'] = kd; w.root -= kd; }
+      if (kp > 0) { w[f.name + '1h'] = (w[f.name + '1h'] || 0) + kp * (1 - full); w[f.name + '1'] = kp * full; w.root -= kp; }
     }
+    w.root = Math.max(0, w.root);
     return w;
   };
   const rings = [
@@ -165,8 +174,8 @@ function armPalm(m, sk) {
     p.y += (knuckleY(x) - 0.0905) * k;                     // the knuckle line arcs
     if (Math.cos(a) > 0) {                                 // the back: knuckles stand up, the tendons' valleys between them
       let bump = 0;
-      for (const f of FINGERS) bump += Math.exp(-(((x - f.at[0]) / 0.0068) ** 2));
-      p.z += Math.cos(a) * (0.0034 * bump - 0.0012) * sstep(0.074, 0.088, y);
+      for (const f of FINGERS) bump += Math.exp(-(((x - f.at[0]) / 0.006) ** 2));
+      p.z += Math.cos(a) * (0.0046 * bump - 0.0016) * sstep(0.07, 0.086, y);
       p.z -= 0.0016 * Math.cos(a) * sstep(0.02, 0.05, y) * sstep(0.075, 0.06, y) * Math.exp(-(((x + 0.004) / 0.03) ** 2)) * 0.6;   // the back of the hand is gently domed, a little hollow in from the wrist
     } else {
       const cp = -Math.cos(a);
@@ -176,18 +185,18 @@ function armPalm(m, sk) {
       p.z -= cp * 0.0095 * Math.exp(-(((y - 0.036) / 0.022) ** 2) - ((x + 0.022) / 0.015) ** 2);                   // the ball of the thumb (thenar)
     }
   };
-  m.loft(rings, REG.arm, { seg: 12, a0: A0.arm, shape, capStart: true });
+  m.loft(rings, REG.arm, { seg: 10, a0: A0.arm, shape });   // open at the elbow end: it has faded out by there
 }
 
 // A finger as a straight chain along local +y from its MCP joint. [s, width, back, palm side, squareness] as shares of w
 function finger(m, sk, f, k) {
   const [l1, l2, l3] = f.len, tip = l1 + l2 + l3, w = f.w, names = [f.name + '1', f.name + '2', f.name + '3'], joints = [l1, l1 + l2];
-  const R = [[-0.014, 1.15, 1.25, 1.0, 2.4], [-0.001, 1.12, 1.3, 0.97, 2.5], [l1 - 0.0045, 0.95, 0.9, 0.96, 2.3], [l1, 1.0, 1.0, 0.9, 2.4], [l1 + 0.0045, 0.93, 0.88, 0.9, 2.3],
-    [l1 + l2 - 0.0035, 0.86, 0.8, 0.88, 2.3], [l1 + l2, 0.88, 0.84, 0.8, 2.4], [tip - 0.0098, 0.83, 0.72, 0.9, 2.7], [tip - 0.0042, 0.74, 0.58, 0.72, 2.5], [tip - 0.0013, 0.48, 0.36, 0.44, 2.2]];
+  // a PS2-era finger: a ring at the root, the knuckle, each joint and two for the tip (Kenny: no more detail than that)
+  const R = [[-0.014, 1.1, 1.15, 1.0, 2.2], [-0.002, 1.12, 1.28, 1.0, 2.2], [l1, 1.0, 1.0, 0.94, 2.15], [l1 + l2, 0.9, 0.86, 0.86, 2.15], [tip - 0.007, 0.82, 0.66, 0.92, 2.1], [tip - 0.0012, 0.45, 0.34, 0.46, 2.0]];
   const rings = R.map(([s, rx, dd, dp, n]) => ({ c: [0, s, (s < 0.005 ? 0.0015 : 0) + (s > tip - 0.012 ? -0.0006 : 0)], rx: [rx * w, rx * w], rz: [dd * w * 0.92, dp * w * 0.98], n, s,
     w: chainW(names, [0, ...joints], s, 'root') }));
     const shape = (a, r, p) => { if (r.s < 0.004 && Math.cos(a) < 0) p.y += 0.006 * -Math.cos(a) * sstep(0.004, -0.012, r.s); };   // the palm side starts further up: the web
-  m.loft(rings, REG[f.name], { seg: 8, a0: A0.finger, xf: sk.by[names[0]].matrixWorld, shape, capEnd: true });
+  m.loft(rings, REG[f.name], { seg: 6, a0: A0.finger, xf: sk.by[names[0]].matrixWorld, shape, capEnd: true });
 }
 
 // The thumb with its base: the ball of the thumb (thenar) is the fat first part, on the palm side of the metacarpal.
@@ -195,13 +204,11 @@ function thumb(m, sk) {
   const [lm, lp, ld] = THUMB.len, tip = lm + lp + ld, names = ['t1', 't2', 't3'], joints = [lm, lm + lp];
   // [s, toward x, toward -x, nail side, pad side, palm-ward shift of the centre, squareness]
   const R = [[-0.012, 0.0125, 0.012, 0.0105, 0.0125, 0.001, 2.2], [0.004, 0.0148, 0.0142, 0.0105, 0.0158, 0.002, 2.2], [0.035, 0.0128, 0.0124, 0.0102, 0.0128, 0.0012, 2.3],
-    [lm - 0.005, 0.0118, 0.0116, 0.0106, 0.0106, 0.0004, 2.3], [lm, 0.0122, 0.0122, 0.0114, 0.0102, 0, 2.4], [lm + 0.005, 0.0112, 0.0112, 0.0102, 0.0104, 0, 2.3],
-    [lm + lp - 0.0045, 0.0104, 0.0104, 0.0094, 0.0098, 0, 2.3], [lm + lp, 0.011, 0.011, 0.0098, 0.0092, 0, 2.4],
-    [tip - 0.0105, 0.0104, 0.0104, 0.0082, 0.0104, -0.0004, 2.6], [tip - 0.0045, 0.009, 0.009, 0.0067, 0.0084, -0.0006, 2.5], [tip - 0.0014, 0.006, 0.006, 0.0042, 0.0052, -0.0008, 2.2]];
+    [lm, 0.0122, 0.0122, 0.0114, 0.0102, 0, 2.3], [lm + lp, 0.011, 0.011, 0.0098, 0.0092, 0, 2.3], [tip - 0.008, 0.0098, 0.0098, 0.0075, 0.0096, -0.0005, 2.4], [tip - 0.0014, 0.006, 0.006, 0.0042, 0.0052, -0.0008, 2.2]];
   // the base goes with the heel of the hand, the ball of the thumb partly; from its middle it's all thumb
   const rings = R.map(([s, ra, rb, dd, dp, sh, n]) => ({ c: [0.0, s, -sh], rx: [ra, rb], rz: [dd, dp], n, s,
     w: s < 0.03 ? { root: 1 - sstep(-0.012, 0.03, s) * 0.85, t1h: sstep(-0.012, 0.03, s) * 0.35, t1: sstep(-0.012, 0.03, s) * 0.5 } : chainW(names, [-1, ...joints], s, 'root') }));
-  m.loft(rings, REG.thumb, { seg: 8, a0: A0.thumb, xf: sk.by.t1.matrixWorld, capEnd: true });
+  m.loft(rings, REG.thumb, { seg: 6, a0: A0.thumb, xf: sk.by.t1.matrixWorld, capEnd: true });
 }
 
 let GEO;
@@ -254,7 +261,7 @@ function occlusion(g) {
     col[i * 4] = col[i * 4 + 1] = col[i * 4 + 2] = Math.max(0.6, ao);
     // the forearm fades out over its last few cm, so you never see where it's cut (alpha to coverage, no sorting)
     const back = x * FOREARM.x + y * FOREARM.y + z * FOREARM.z;
-    col[i * 4 + 3] = sstep(0.13, 0.085, back);
+    col[i * 4 + 3] = sstep(0.124, 0.076, back);
   }
   g.setAttribute('color', new THREE.BufferAttribute(col, 4));
 }

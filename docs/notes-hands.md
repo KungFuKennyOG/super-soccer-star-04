@@ -74,3 +74,14 @@ Today trophy.js asks for `'fist'`. With the new hands that's a tight fist (no ho
 - fps with two 1,124-triangle skinned hands (cheap on paper).
 - How long the paint takes on the Quest at kit change.
 - How the analog blend feels.
+
+## Redone by the orchestrator, 20 Nov 2026 (Kenny: "they really don't need to be that detailed", "just a normal PS2 era hands is fine")
+
+Supersedes the numbers above where they differ.
+- 622 triangles a hand (1,244 both), one draw call each: six-sided fingers with a ring per joint, the palm ten-sided.
+- A 256 sheet (was 512), painted like the players' limbs: shaded round, soft knuckles, nails, the palm's creases, paler palm. No veins, hairs or wrinkle rings. About 75 ms in headless Chrome; `createHands` paints a kit change a piece a frame (`paintTick`) and shows the old sheet until it is done.
+- The skeleton, the poses, analog blending, the trophy grip (`'hold'`, `{ d, at }`) and the grip-space fit are the first helper's and unchanged.
+- The forearm now fades out by alpha blending past the band (the material is transparent with depth write), not a dither; open at the elbow end.
+- Skin on the palm side from the last crease to the finger roots folds with the fingers; past each knuckle the palm's end goes with its finger (it stuck out as a plate in a fist).
+- Tests: under 800 triangles; the thumb-on-fingers check is 2 cm between nearest vertices (the mesh has fewer).
+- Not seen in a headset: where the hand sits on the real controller, the fade against the HUD's own transparent panels, fps.
