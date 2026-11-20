@@ -7,6 +7,7 @@ import { P } from '../body.js';
 import { R, SPAN } from './kit.js';
 import { vOf, bumps, out } from './build.js';
 import { sstep } from './paint.js';
+import { glove } from './gloves.js';
 
 export function leg(b, s, n) {
   const up = 'upperLeg' + n, lo = 'lowerLeg' + n, ft = 'foot' + n, toe = 'toe' + n, lx = s * P.hipX, mirror = s < 0;
@@ -45,9 +46,9 @@ export function leg(b, s, n) {
 const SL = [[0.15, 1.522, 0.15, 1.38, 0.06, 0.064], [0.19, 1.505, 0.163, 1.356, 0.065, 0.069], [0.221, 1.484, 0.165, 1.336, 0.068, 0.071], [0.244, 1.45, 0.162, 1.313, 0.069, 0.073],
   [0.259, 1.4, 0.157, 1.286, 0.071, 0.074], [0.27, 1.33, 0.152, 1.253, 0.072, 0.075], [0.279, 1.255, 0.147, 1.214, 0.073, 0.076], [0.287, 1.185, 0.143, 1.176, 0.074, 0.078],
   [0.264, 1.212, 0.156, 1.208, 0.064, 0.064]];                                                             // the hem, turned up inside to the arm
-const TURN = 0.4;                                        // how far the hanging hand is turned, its back coming round to the front (radians)
+export const TURN = 0.4;                                        // how far the hanging hand is turned, its back coming round to the front (radians)
 
-export function arm(b, s, n) {
+export function arm(b, s, n, gloves = false) {   // gloves: a keeper's (gloves.js) in place of the bare hand
   const ua = 'upperArm' + n, fa = 'foreArm' + n, hd = 'hand' + n, cl = 'clavicle' + n, ax = s * P.shoulderX, ay = P.shoulderY, mirror = s < 0;
   const io = (o, i) => (s > 0 ? [o, i] : [i, o]);
   // The cap stays with the shoulder, the tube goes with the arm, the armpit is shared between them.
@@ -81,8 +82,9 @@ export function arm(b, s, n) {
   const HS = 1.12, hy = d => ay + P.wristDY + d * HS;
   const PALM = [[-0.018, 0.019, 0.037, 0.035, 2.5, 0], [-0.045, 0.021, 0.047, 0.044, 2.6, 0.001], [-0.075, 0.019, 0.048, 0.045, 2.5, 0.004], [-0.093, 0.0125, 0.044, 0.042, 2.2, 0.008]];
   const rings = [...AR.map(([dy, o, i, f, bk, z]) => ({ ...turned(TURN * sstep(-0.34, P.wristDY, dy), [ax, ay + dy, z]), rx: io(o, i), rz: [f, bk], v: vOf(SPAN.arm, dy), w: armW(dy) })),
-    ...PALM.map(([d, t, f, bk, sq, inx]) => ({ ...turned(TURN, [ax - s * inx, hy(d), 0.01], 0.25 * d / -0.093), rx: t, rz: [f, bk], n: sq, v: vOf(SPAN.arm, P.wristDY + d), w: armW(P.wristDY + d) }))];
+    ...(gloves ? [] : PALM).map(([d, t, f, bk, sq, inx]) => ({ ...turned(TURN, [ax - s * inx, hy(d), 0.01], 0.25 * d / -0.093), rx: t, rz: [f, bk], n: sq, v: vOf(SPAN.arm, P.wristDY + d), w: armW(P.wristDY + d) }))];
   b.loft(rings, R.arm, { seg: 12, a0: Math.PI, mirror, capEnd: true, shape: (a, r) => out(a, muscle(a, r), r) });
+  if (gloves) { glove(b, s, n); return; }
   // Fingers: four, lying side by side, each bent at its three joints: a hand half closed, as it hangs or
   // as he runs, the little finger closed most. [across the palm, length, how far it is closed]
   const f0 = b.pos.length / 3, H = { [hd]: 1 }, FG = [[0.0435, 0.074, 0.82], [0.0215, 0.084, 1], [-0.0005, 0.078, 1.14], [-0.022, 0.063, 1.26]];
