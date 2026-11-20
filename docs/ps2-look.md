@@ -49,8 +49,10 @@ Status, 20 Nov 2026. This repo began as a copy of `KungFuKennyOG/super-soccer-st
 
 ## Decisions
 
-- Decided 20 Nov: the new look lives only in this repo. The '96 repo stays the PS1 game; its `ps2-look` branch and PR #3 are superseded by this repo.
-- Should the '96 repo get the new animation (capture, gait, springs) without the look? It drives the PS1 bodies too.
+- Decided 20 Nov: the new look and the new animation live only in this repo. The '96 repo stays exactly as it is; its PR #3 was closed unmerged (the `ps2-look` branch is still there).
+
+Still open:
+
 - The name on the title screen and logo still says '96.
 - Hosting: GitHub Pages isn't set up for this repo.
 - Keep or drop the cloth movement.
