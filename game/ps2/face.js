@@ -58,18 +58,20 @@ function each(a0, a1, t0, t1, fn) {
 const EYES = [[64, 40, 22], [48, 31, 19], [78, 98, 118], [84, 96, 62], [40, 27, 19], [98, 76, 40], [66, 88, 112]];
 
 // skin, hair: [r, g, b]. st: a style from HAIR2. look: an integer that varies the face.
-export function paintHead(ctx, { skin, hair, st, stubble = false, look = 0 }) {
+// feat (rules/looks.js GROUPS, all optional): crease, open, arch scale the lid's fold, the eye's opening and the brows' arch;
+// tilt lifts the eye's outer corner; eyes: 'light' | 'any' | 'dark' narrows the iris colors.
+export function paintHead(ctx, { skin, hair, st, stubble = false, look = 0, feat = {} }) {
   const img = ctx.createImageData(HEAD_SHEET.w, HEAD_SHEET.h), d = img.data;
   const rnd = k => hash(look, k, 5), dk = sstep(0.45, 0.78, 1 - (skin[0] + skin[1] + skin[2]) / 765);     // dk: 0 for fair skin, 1 for the darkest
   // what a look changes. The head's shape is the same for everyone, so these are all paint: how heavy and
   // how arched the brows are, the eyes' size, opening, slant and spacing, how wide the nose spreads, the
   // lips, how gaunt the cheeks are, the lines of age, freckles, a cleft chin
   const noseW = 0.86 + 0.4 * rnd(1) + 0.1 * dk, lipFull = 0.66 + 0.6 * rnd(2) + 0.2 * dk, mouthW = 0.9 + 0.2 * rnd(12);
-  const browH = 0.016 + 0.012 * rnd(3), browArch = 0.2 + 0.9 * rnd(4), browTilt = 0.018 * (rnd(5) - 0.5), browUp = 0.008 * (rnd(14) - 0.4), browIn = 0.09 + 0.06 * rnd(15);
-  const eyeOpen = 0.82 + 0.38 * rnd(6), eyeTilt = -0.002 + 0.01 * rnd(7), eyeW = 0.92 + 0.16 * rnd(8), ec = 0.345 + 0.025 * rnd(16);
+  const browH = 0.016 + 0.012 * rnd(3), browArch = (0.2 + 0.9 * rnd(4)) * (feat.arch ?? 1), browTilt = 0.018 * (rnd(5) - 0.5), browUp = 0.008 * (rnd(14) - 0.4), browIn = 0.09 + 0.06 * rnd(15);
+  const eyeOpen = (0.82 + 0.38 * rnd(6)) * (feat.open ?? 1), eyeTilt = -0.002 + 0.01 * rnd(7) + (feat.tilt || 0), eyeW = 0.92 + 0.16 * rnd(8), ec = 0.345 + 0.025 * rnd(16);
   const gaunt = 0.3 + 1.3 * rnd(9), fold = 0.04 + 0.16 * rnd(10), lined = rnd(11), tired = rnd(17), cleft = rnd(18) < 0.3, freckled = dk < 0.2 && rnd(19) < 0.4;
   const beard = stubble ? 1 + Math.floor(rnd(13) * 4) : 0;                    // 0 shaved this morning, 1 a day's growth, 2 heavy, 3 a goatee and moustache, 4 a moustache
-  const eyeCol = dk > 0.35 ? EYES[[0, 1, 4][look % 3]] : EYES[look % EYES.length];
+  const eyeCol = dk > 0.35 || feat.eyes === 'dark' ? EYES[[0, 1, 4][look % 3]] : feat.eyes === 'light' ? EYES[[2, 6, 3, 2, 5, 0][look % 6]] : EYES[look % EYES.length], crease = feat.crease ?? 1;
   const dim = (i, k) => { const m = 1 - k; d[i] *= m; d[i + 1] *= m; d[i + 2] *= m; };
   const tint = (i, r, gg, b, k) => { d[i] += (r - d[i]) * k; d[i + 1] += (gg - d[i + 1]) * k; d[i + 2] += (b - d[i + 2]) * k; };
   const at = (px, py) => ((R.head.y + py) * SW + R.head.x + px) * 4;
@@ -144,7 +146,7 @@ export function paintHead(ctx, { skin, hair, st, stubble = false, look = 0 }) {
   each(ec - 1.45 * ew, ec + 1.45 * ew, F.eye - 0.055, F.eye + 0.05, (ap, t, s, px, py) => {
     const i = at(px, py), ex = (ap - ec) / ew, a = Math.max(0, 1 - ex * ex), dy = t - (F.eye + 0.001 - eyeTilt * ex);
     const up = eh * a ** 0.55 * (1 - 0.18 * ex), lo = 0.62 * eh * a ** 0.75 * (1 + 0.22 * ex), wide = sstep(1.3, 0.9, Math.abs(ex));
-    dim(i, 0.34 * g(dy + up + 0.011 * (0.45 + 0.55 * a ** 0.4), 0, 0.003) * wide);                            // the lid's crease
+    dim(i, 0.34 * crease * g(dy + up + 0.011 * (0.45 + 0.55 * a ** 0.4) * (0.6 + 0.4 * crease), 0, 0.003) * wide);                            // the lid's crease
     dim(i, -0.07 * g(dy + up + 0.005, 0, 0.003) * a);                                                        // the lid itself catches a little light
     dim(i, 0.12 * g(dy - lo - 0.015 - 0.004 * ex * ex, 0, 0.0035) * sstep(1.1, 0.3, Math.abs(ex + 0.15)));     // the bag under the eye
     if (a <= 0) return;

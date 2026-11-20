@@ -5,6 +5,7 @@ import * as THREE from 'three';
 import { ps1, pixelTex, canvasTex } from './ps1.js';
 import { drawText, textWidth } from './tex.js';
 import { buildPlayer } from './actors.js';
+import { pickSquad } from '../rules/looks.js';
 import { byId, nationToward } from '../rules/teams.js';
 import { drawWorldMap } from './worldmap.js';
 import { table, userGroup, currentFixture, STAGE_NAMES, KO } from '../rules/cup.js';
@@ -75,7 +76,7 @@ export function createMenus(scene, camera) {
   function showModel(team) {
     if (modelFor === team.id) return;
     if (model) table3d.remove(model.root);
-    model = buildPlayer(team.kit, 10, 3 + team.id.charCodeAt(0));
+    model = buildPlayer(team.kit, 10, 3 + team.id.charCodeAt(0), { ap: pickSquad(team.id, [10], 0)[10] });   // one of that team's looks (rules/looks.js)
     model.root.position.y = 0.18;
     table3d.add(model.root);
     modelFor = team.id;

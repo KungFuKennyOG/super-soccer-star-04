@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>SSS04 squad looks</title>
+<!-- Dev page: several teams' players side by side as rules/looks.js draws them, so the difference between
+     sides can be seen. One row per team, n players each, in the team's home kit, standing, under the look
+     page's light (hemisphere 0.62 + sun 0.68).
+       /tools/looks.html?teams=JPN,NGA,SWE&n=8           whole bodies ('04 look)
+       &heads=1                                           heads and shoulders, for tones: face, ears, neck
+       &hands=1                                           hips to knees, for hands, forearms and legs against the face's tone
+       &body=ps1                                          the PS1 bodies (game/actors.js) instead
+       &seed=N                                            another draw (each row is one match's draw for that team: n players)
+     node tools/lookshots.mjs out/dir JPN NGA ...        renders sheets (TEAMS_PER=8 per picture). -->
+<style>html,body{margin:0;background:#2a3140;overflow:hidden}canvas{display:block}.l{position:fixed;left:6px;font:bold 15px monospace;color:#fff;text-shadow:0 0 3px #000,0 0 3px #000}</style>
+<script type="importmap">
+{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.149.0/build/three.module.js" } }
+</script>
+</head>
+<body>
+<script type="module">
+import * as THREE from 'three';
+import { animate, placeModel, buildPlayer } from '../game/actors.js';
+import { byId } from '../rules/teams.js';
+import { pickSquad } from '../rules/looks.js';
+import { buildPlayer2, LIGHT_DIR } from '../game/ps2/player.js';
+import { buildPitch } from '../game/ps2/pitch.js';
+
+const q = new URLSearchParams(location.search);
+const teams = (q.get('teams') || 'JPN,KOR,NGA,CMR,SEN,BRA,FRA,ENG').split(',').map(byId).filter(Boolean);
+const n = +(q.get('n') || 8), heads = !!q.get('heads'), hands = !!q.get('hands'), ps1 = q.get('body') === 'ps1', seed = +(q.get('seed') || 0);
+const W = +(q.get('w') || innerWidth), H = +(q.get('h') || innerHeight), rowH = Math.floor(H / teams.length);
+const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+renderer.setPixelRatio(1); renderer.setSize(W, H); renderer.setScissorTest(true); renderer.autoClear = false;
+document.body.appendChild(renderer.domElement);
+const scene = new THREE.Scene();
+scene.background = new THREE.Color('#b9c8d4');
+scene.add(new THREE.HemisphereLight('#dfe6f0', '#38372c', 0.62));
+const sun = new THREE.DirectionalLight('#fff0d6', 0.68); sun.position.copy(LIGHT_DIR).multiplyScalar(50); scene.add(sun);
+scene.add(buildPitch());
+const gap = heads ? 0.5 : 0.75, span = gap * n;
+// framing (an orthographic camera, so every man in the row is seen square on): whole bodies, heads and shoulders, or hips and hands
+const [cy, ch] = heads ? [1.62, 0.5] : hands ? [0.85, 0.5] : [0.97, 2.1];
+const cw = Math.max(span, ch * W / rowH), chh = cw * rowH / W;
+const camera = new THREE.OrthographicCamera(-cw / 2, cw / 2, chh / 2, -chh / 2, 0.05, 200);
+const dist = 12;
+camera.position.set(0, cy + 0.25, dist); camera.lookAt(0, cy, 0);
+
+const t0 = performance.now();
+let built = 0;
+teams.forEach((team, row) => {
+  const nums = Array.from({ length: n }, (_, i) => [7, 10, 9, 3, 5, 4, 8, 11, 2, 6, 14, 15][i % 12]);
+  const sq = pickSquad(team.id, nums, seed + row * 0);
+  const ms = nums.map((num, i) => {
+    const ap = sq[num], m = ps1 ? buildPlayer(team.kit, num, i, { ap }) : buildPlayer2(team.kit, num, i, { ap });
+    const p = { x: (i - (n - 1) / 2) * gap, z: 0, fx: 0, fz: 1, vx: 0, vz: 0, role: 'def', stride: 0 };
+    scene.add(m.root, m.shadow); built++;
+    return { m, p };
+  });
+  const bp = { x: 0, y: 0.11, z: 30 };
+  for (let k = 0; k < 40; k++) for (const { m, p } of ms) { placeModel(m, p); animate(m, p, 1 / 30, k / 30, false, null, bp, false); }
+  for (const { m } of ms) m.root.rotation.y = 0;            // square on to the camera
+  const y = H - (row + 1) * rowH;
+  renderer.setViewport(0, y, W, rowH); renderer.setScissor(0, y, W, rowH);
+  renderer.render(scene, camera);
+  for (const { m } of ms) scene.remove(m.root, m.shadow);
+  const l = document.createElement('div'); l.className = 'l'; l.style.top = (row * rowH + 4) + 'px';
+  l.textContent = `${team.id}  ` + nums.map(k => sq[k].group[0] + sq[k].group.slice(1, 3)).join(' ');
+  document.body.appendChild(l);
+});
+window.__looks = { ready: true, ms: Math.round(performance.now() - t0), players: built };
+</script>
+</body>
+</html>

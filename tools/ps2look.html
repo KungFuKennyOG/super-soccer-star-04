@@ -19,6 +19,7 @@
      strikeyou, passfront ...); &wind=0 strikes with no
      wind-up, &power=0..1 sets how hard; kickraw / kickrawfront with &raw=kickShot|kickPass play a
      recorded kick alone, as baked.
+     squad (&team=ID, &seed=N): six players of that team as rules/looks.js picks a side.
      tools/ps2shots.mjs renders them all to files. -->
 <style>html,body{margin:0;background:#101830;overflow:hidden}canvas{display:block}#i{position:fixed;left:8px;top:8px;font:12px monospace;color:#fff;text-shadow:0 0 3px #000}
 .bar{position:fixed;bottom:6%;width:27%;display:none;font:600 2.3vw 'Trebuchet MS',Arial,sans-serif;color:#fff}.bar b{display:block;padding:.25em .9em;border-radius:.6em;background:linear-gradient(#3a4250e6,#151a22e6);box-shadow:0 0 0 2px #0006}.bar i{display:block;height:.5vw;margin:.5vw .4em 0;background:repeating-linear-gradient(90deg,#f2f2f2 0 1.5vw,#0000 1.5vw 1.9vw)}</style>
@@ -43,6 +44,7 @@ import { buildStand, buildSky } from '../game/ps2/stand.js';
 import { CLIPS, sampleStride, applyPose, newPose } from '../game/mocap.js';
 import { createWorld, stepSim } from '../rules/sim.js';
 import { sampleKick } from '../game/kickcap.js';
+import { pickSquad } from '../rules/looks.js';
 
 const q = new URLSearchParams(location.search);
 let shot = q.get('shot') || 'duel';
@@ -81,6 +83,11 @@ if (TEAM.length) {
   const other = TEAM[1] ? TEAM[1].kit : awayFor(TEAM[0]);
   [[0, TEAM[0].kit, 10], [2, TEAM[0].kit, 10], [1, other, 7], [3, other, 7], [4, keeperKit(TEAM[0].kit), 1]].forEach(([i, kit, num]) => { cast[i].kit = kit; cast[i].num = num; });
 }
+// ?shot=squad&team=NGA (&seed=3): six of that team's players as rules/looks.js draws a match's side, in the home kit
+if (shot === 'squad' && TEAM.length) {
+  const nums = [10, 7, 9, 3, 5, 4], sq = pickSquad(TEAM[0].id, nums, +(q.get('seed') || 0));
+  nums.forEach((n, i) => { cast[i].kit = TEAM[0].kit; cast[i].num = n; cast[i].o = { ap: sq[n] }; });
+}
 const players = cast.map((c, i) => {
   const m = buildPlayer2(c.kit, c.num, c.look, c.o);
   if (q.get('foot') === 'L') m.foot = 'L';                     // ?foot=L: everyone left-footed
@@ -104,6 +111,7 @@ const SHOTS = {
   face: { fov: 22, cam: [0, 1.74, 1.25], at: [0, 1.7, 0], ball: [3, 3], set: t => [[-0.2, 0, 0.3, 0, 0], [0.2, 0, -0.3, 0, 0], off, off, off, off] },
   face2: { fov: 22, cam: [0, 1.74, 1.25], at: [0, 1.7, 0], ball: [3, 3], set: t => [off, off, [-0.2, 0, 0.5, 0, 0], [0.2, 0, -0.5, 0, 0], off, off] },
   kitcard: { fov: 30, cam: [0.2, 1.08, 6.6], at: [0.2, 0.93, 0], ball: [60, 60], set: () => [[-2.2, 0, 0.12, 0, 0, 0, 'def'], [0.2, 0, 0.12, 0, 0, 0, 'def'], [-1.0, 0, Math.PI - 0.12, 0, 0, 0, 'def'], [1.4, 0, Math.PI + 0.12, 0, 0, 0, 'def'], [2.6, 0, -0.12, 0, 0, 0, 'def'], off] },   // a kit looked over: home front and back, change kit front and back, the keeper (use with ?team=)
+  squad: { fov: 30, cam: [0, 1.15, 10.5], at: [0, 0.98, 0], ball: [60, 60], set: () => [-2.75, -1.65, -0.55, 0.55, 1.65, 2.75].map((x, i) => [x, 0, (i - 2.5) * -0.05, 0, 0, 0, 'def']) },   // one side's looks (?team=, rules/looks.js)
   kit: { fov: 28, cam: [0, 1.15, 3.6], at: [0, 1.0, 0], ball: [0, 0.6], set: t => [[-0.5, 0, 0.1, 0, 0], [0.5, 0, -0.1, 0, 0], off, off, off, off] },
   side: { fov: 28, cam: [3.7, 1.15, 0.3], at: [0, 1.0, 0], ball: [3, 3], set: t => [[0, -0.55, 0, 0, 0], [0, 0.55, 0, 0, 0], off, off, off, off] },
   // one player from the side, the camera going with him: [speed, which way he travels off his facing]

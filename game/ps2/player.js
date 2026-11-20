@@ -9,12 +9,14 @@ import { ATLAS, HEAD_SHEET, R, paintKit } from './kit.js';
 import { paintHead } from './face.js';
 import { HAIR2 } from './headgeo.js';
 import { figureGeometry } from './figure.js';
+import { TONES, HAIRS as LHAIRS, STYLE_PS2 } from '../../rules/looks.js';
 import { canvas, hex, smoothTex } from './paint.js';
 
 export const LIGHT_DIR = new THREE.Vector3(-0.45, 1, 0.35).normalize();   // toward the sun
 const sheets = new Map();
 // the game's skin tones, a little deeper and warmer for this look
-const skinOf = i => hex(SKINS[i % SKINS.length]).map((v, k) => v * [0.95, 0.9, 0.87][k]);
+// (i: an index into SKINS, or a tone's own hex from rules/looks.js)
+const skinOf = i => hex(typeof i === 'string' ? i : SKINS[i % SKINS.length]).map((v, k) => v * [0.95, 0.9, 0.87][k]);
 
 // The kit sheet: one per kit, number, skin tone and boots.
 export function kitSheet({ kit, num, skinI = 0, boots = 0 }) {
@@ -42,11 +44,11 @@ export function kitSheet({ kit, num, skinI = 0, boots = 0 }) {
   return m;
 }
 // The head sheet: one per look (skin, hair color, hairstyle, face), shared by every player who has it.
-export function headSheet({ look = 0, style = 0, skinI = look, hairI = look * 3 + 1 }) {
-  const key = 'h' + JSON.stringify([look, style, skinI, hairI]);
+export function headSheet({ look = 0, style = 0, skinI = look, hairI = look * 3 + 1, stubble = look % 3 !== 0, feat = {} }) {
+  const key = 'h' + JSON.stringify([look, style, skinI, hairI, stubble, feat]);
   if (sheets.has(key)) return sheets.get(key);
   const c = canvas(HEAD_SHEET.w, HEAD_SHEET.h), ctx = c.getContext('2d', { willReadFrequently: true });
-  paintHead(ctx, { skin: skinOf(skinI), hair: hex(HAIRS[hairI % HAIRS.length]), st: HAIR2[style % HAIR2.length], stubble: look % 3 !== 0, look });
+  paintHead(ctx, { skin: skinOf(skinI), hair: hex(typeof hairI === 'string' ? hairI : HAIRS[hairI % HAIRS.length]), st: HAIR2[style % HAIR2.length], stubble, look, feat });
   const m = new THREE.MeshPhongMaterial({ map: smoothTex(c), vertexColors: true, specular: 0x24221e, shininess: 16, alphaTest: 0.5 });   // alpha test: the hair's ragged tips
   sheets.set(key, m);
   return m;
@@ -99,8 +101,11 @@ function looseness(geo) {
 }
 
 // kit: a kit spec from rules/teams.js. look picks skin, hair color and (unless given) the hairstyle.
-export function buildPlayer2(kit, num, look = 0, { style = [0, 2, 1, 0, 4, 0, 3, 2][look % 8], boots = 0, skinI = look, hairI = look * 3 + 1 } = {}) {
-  const mats = [kitSheet({ kit, num, skinI, boots }), headSheet({ look, style, skinI, hairI })];
+// ap: a look from rules/looks.js (pickSquad) in place of all that: its tone, hair, style, stubble, face paint.
+export function buildPlayer2(kit, num, look = 0, { ap = null, style = [0, 2, 1, 0, 4, 0, 3, 2][look % 8], boots = 0, skinI = look, hairI = look * 3 + 1 } = {}) {
+  let head = { look, style, skinI, hairI };
+  if (ap) { head = { look: ap.face, style: STYLE_PS2[ap.style], skinI: TONES[ap.tone], hairI: LHAIRS[ap.hair], stubble: ap.stubble, feat: { ...ap.feat, eyes: ap.eyes } }; style = head.style; skinI = head.skinI; }
+  const mats = [kitSheet({ kit, num, skinI, boots }), headSheet(head)];
   const { bones, by } = buildSkeleton(), geo = figureGeometry(style);
   if (!geo.attributes.aLoose) geo.setAttribute('aLoose', looseness(geo));
   const mesh = new THREE.SkinnedMesh(geo, mats);
