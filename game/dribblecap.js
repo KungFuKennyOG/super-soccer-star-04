@@ -31,7 +31,8 @@ const CADENCE = { step: 0.66, at: 4.45, slow: 0.55, fast: 1.7 };
 // ankle at the origin), which way the boot's surface faces there, and how the foot is turned (toes in / down)
 const LACES = { spot: [-0.012, -0.019, 0.17], face: [0, 0.936, 0.351], yaw: 0.22, pitch: 1.0 };
 const INSIDE = { spot: [0.052, -0.035, 0.05], face: [1, 0, 0], yaw: -1.05, pitch: 0.1 };
-// before, after: how much of a turn of the legs the boot is steered onto the ball over, and let go over;
+// before, after: how much of a turn of the legs the boot is steered onto the ball over (gently at first, so it
+// arrives with the swing's own pace), and let go over;
 // follow: how far it goes with the ball before the ball leaves it (m); clear: how near the ball's middle a
 // boot on the ground may come (m, in plan)
 const TOUCH = { before: 0.24, after: 0.085, follow: 0.05, clear: BALL.r + 0.075 };
@@ -105,7 +106,7 @@ export function touchBoot(m, bn, p, ball, k, dt = 0) {
   D.u = u;
   // (the sim's touch frame is the first one past the touch: the boot is still fully on the ball for that one)
   const hold = strideRate(speed) * Math.max(dt, 1 / 72) * 1.1 / TAU;
-  let w = u > 1 - before ? smooth((u - (1 - before)) / before) : u < hold + after ? 1 - smooth((u - hold) / after) : 0;
+  let w = u > 1 - before ? smooth(((u - (1 - before)) / before) ** 2) : u < hold + after ? 1 - smooth((u - hold) / after) : 0;
   w *= k * smooth((speed - 0.35) / 0.5);
   D.w = w;
   if (w <= 0) { D.in = D.n > 1 ? 1 : 0; return 0; }                // (which part of the boot is chosen between touches)

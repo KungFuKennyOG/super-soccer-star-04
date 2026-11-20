@@ -18,9 +18,9 @@ Status, 20 Nov 2026. This repo began as a copy of `KungFuKennyOG/super-soccer-st
 - **Animation** (drives the PS1 bodies too):
   - walking, jogging and running forward off the ball are motion capture (CMU mocap library), stretched to the game's ground speed, with the ball of a planted foot pinned to the pitch;
   - a sprint drive on hard acceleration (body pitched forward, straight push leg, knee drive, pumping arms). Kenny's reference was a photo of a player taking off; his verdict: "that is actually really good";
-  - a rebuilt procedural gait for everything else: standing, side-steps, backing off, turns, braking steps, defenders jockeying, legs on the ball, first-person boots;
+  - a rebuilt procedural gait for everything else: standing, side-steps, backing off, turns, braking steps, defenders jockeying, first-person boots;
   - springs on trunk, arms and shoulders for weight; shorts and sleeves that move slightly.
-- 169 unit tests and the 3 smoke tests pass. The boot is still on the ball to the centimetre on strikes and touches.
+- 178 unit tests and the 3 smoke tests pass. The boot is still on the ball to the centimetre on strikes and touches.
 
 ## Kenny's feedback, in order
 
@@ -38,7 +38,7 @@ Status, 20 Nov 2026. This repo began as a copy of `KungFuKennyOG/super-soccer-st
 ## Still short (told to Kenny)
 
 - Cuts have no plant-and-push on the outside foot; a stop ends with the feet easing into place.
-- **Legs on the ball are the earlier hand-built ones**: dribbling, the kicking leg and every trick. Capture and the sprint drive switch off for anyone on the ball. This is the next big animation job.
+- **Running with the ball is on the captured strides now** (`game/dribblecap.js`: quick short steps when slow, the boot steered onto the ball for every touch, laces at pace and the inside at a walk; details and what is still short in CLAUDE.md, "Running with the ball"). The kicking leg and every trick are still the earlier hand-built poses, laid over that stride.
 - Side-steps are procedural, not captured. Each player uses one foot for everything (no weak-foot strikes); you are right-footed.
 - Sprint sleeves wing out when the arm swings far back.
 - Faces are painted and clean where FIFA's are photo-derived; everyone shares one skull shape.
