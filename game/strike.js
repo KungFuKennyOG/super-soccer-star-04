@@ -6,12 +6,13 @@
 //             (STRIKE in rules/tuning.js, the 'windup' event) so the swing has time to get there; anyone
 //             else's starts on the contact frame (boot on the ball, then the follow-through). Replays
 //             know what's coming, so there everyone gets the full swing.
-//             Knock-ons and nutmegs are toe-pokes, the standing flick-up a scoop, a volley the laces
-//             wherever the ball is in the air; the rainbow's heel rolls it up behind you and flicks it over.
+//             A knock-on is a push with the laces in stride, a nutmeg a toe-poke, the standing flick-up a
+//             scoop, a volley the laces wherever the ball is in the air; the rainbow's heel flicks it over
+//             from behind you. What the rest of the body does in a trick is game/tricks.js.
 //   touches   dribbling: once a stride of the sim's (rules/dribble.js) the right boot's own swing is steered
 //             onto the ball and taps it on (game/dribblecap.js).
 //   holds     the sole on top of the ball, pulling it in (drag-back, roulette: the sim moves the ball,
-//             HOLD in rules/tuning.js), and the step-over's boot circling round the front of it.
+//             HOLD in rules/tuning.js), and the step-over's boot going over the front of it.
 //
 // m.strike = { kind: a STYLE, wind, t, dir (world), power, hit, hold, c (ball at contact, model space) }
 import * as THREE from 'three';
@@ -27,13 +28,15 @@ const FOLLOW = 0.14, RECOVER = 0.2;      // seconds of follow-through, then back
 const STYLE = {
   shot: { spot: [0, -0.019, 0.17], face: [0, 0.936, 0.351], yaw: 0, pitch: 0.9, back: [0.6, 0.25], up: [0.26, 0.14], thru: [0.3, 0.3], lift: [0.18, 0.4] },   // the laces, toes pointed down
   pass: { spot: [0.052, -0.035, 0.05], face: [1, 0, 0], yaw: -1.25, pitch: 0, back: [0.45, 0], up: [0.12, 0], thru: [0.3, 0], lift: [0.1, 0] },                // the inside of the foot, turned out
-  poke: { spot: [0, -0.05, 0.2], face: [0, 0, 1], yaw: 0, pitch: 0.15, back: [0, 0], up: [0, 0], thru: [0.25, 0], lift: [0.04, 0] },                           // the toe: a knock-on, a nutmeg
-  scoop: { spot: [0, -0.05, 0.2], face: [0, 0, 1], yaw: 0, pitch: -0.15, back: [0, 0], up: [0, 0], thru: [0.05, 0], lift: [0.25, 0] },                     // the toe under it, lifting: the flick-up
+  poke: { spot: [0, -0.05, 0.2], face: [0, 0, 1], yaw: 0, pitch: 0.15, back: [0, 0], up: [0, 0], thru: [0.06, 0], lift: [0.1, 0] },                            // the toe: a nutmeg
+  push: { spot: [0, -0.019, 0.17], face: [0, 0.936, 0.351], yaw: 0, pitch: 0.9, back: [0, 0], up: [0, 0], thru: [0.2, 0], lift: [0.04, 0] },                   // the laces, toes down, in stride: a knock-on (game/tricks.js)
+  scoop: { spot: [0, -0.05, 0.2], face: [0, 0, 1], yaw: 0, pitch: -0.2, back: [0, 0], up: [0, 0], thru: [0.06, 0], lift: [0.3, 0] },                       // the toes under it, the leg lifting from knee and hip: the flick-up
   volley: { spot: [0, -0.019, 0.17], face: [0, 0.936, 0.351], yaw: 0, pitch: 0.4, back: [0, 0], up: [0, 0], thru: [0.3, 0.2], lift: [0.1, 0.15] },             // the laces, in the air
-  rainbow: { spot: [0, -0.035, -0.1], face: [0, 0, -1], yaw: 0, pitch: 1.35, back: [0, 0], up: [0, 0], thru: [0, 0], lift: [0.35, 0] },                        // the heel under it behind you, toes down, kicking up
+  rainbow: { spot: [0, -0.035, -0.1], face: [0, 0, -1], yaw: 0, pitch: 1.0, back: [0, 0], up: [0, 0], thru: [-0.22, 0], lift: [0.3, 0] },                      // the heel under it behind you, toes down (and clear of the grass), kicking up and back from the knee
 };
 const SOLE = { spot: [0, -0.085, 0.06], face: [0, -1, 0] };          // the studs on top of the ball
-const OVER = { r: 0.29, y: 0.14, rise: 0.22, time: 0.4 };              // a step-over: the boot's circle round the ball (m), and how long it takes
+const OVER = { r: 0.21, y: 0.14, rise: 0.12, time: 0.15 };             // a step-over: the boot's arc round the front of the ball (m), and how long it takes
+const UP = new THREE.Vector3(0, 1, 0);
 const WIDE = 0.1;                                        // dribbling on hand-built legs: how far apart the feet run (rad at the hip)
 const PLANT = new THREE.Vector3(0.11, 0.085, 0.12);    // where the standing foot plants for a strike: a step forward, beside the ball
 const MAX_TURN = 1.3;                                    // the swing follows the ball's direction this far round (rad)
@@ -115,31 +118,37 @@ export function poseTouch(m, bn, p, ball, onBall, dt) {
   return touchBoot(m, bn, p, ball, k, dt);
 }
 
-// Holds. sp: the model's special { kind: 'drag' | 'roulette' | 'stepover', t, side }. A drag-back or a
-// roulette puts the studs on the ball while the sim pulls it in; a step-over swings the boot round the
-// front of it, outside to inside, without touching.
+// Holds. sp: the model's special { kind: 'drag' | 'roulette' | 'stepover', t, dir, yaw, c, rot }. A drag-back
+// or a roulette puts the studs on the ball while the sim pulls it in (the roulette's foot turned sp.yaw, with
+// the body: game/tricks.js, which then gives the ball to the other sole). A step-over swings the boot over
+// the front of the ball without touching, from behind it out to the side of the fake: to his right (sp.dir 1,
+// a scissors, inside to outside) or across to his left (-1, outside to inside). The sim bursts him and the
+// ball off the other way as the move begins, so the arc is round where the ball was when it began (sp.c, in
+// the model's space now; sp.rot: how far the model has turned since) and it is quick; game/tricks.js then
+// brings the boot down as his next step.
 export function poseHold(m, bn, sp, ball) {
   toModel(m, ball.x, ball.y ?? BALL.r, ball.z, B);
-  if (B.z < -0.2 || B.z > 1.1 || Math.abs(B.x) > 0.5) return 0;
   let w = 0;
   if (sp.kind === 'stepover') {
-    const k = sp.t / OVER.time, a = Math.PI * k;
+    const k = sp.t / OVER.time, a = Math.PI * (0.3 + 0.7 * k), dir = sp.dir || 1, rot = sp.rot || 0, c = sp.c || B;
     if (k >= 1) return 0;
-    qf.setFromEuler(eul.set(0.1, 1.2 * k, 0));
-    A.set(B.x - OVER.r * Math.cos(a), OVER.y + OVER.rise * Math.sin(a), B.z + OVER.r * Math.sin(a)).sub(spot.set(0, -0.04, 0.08).applyQuaternion(qf));
-    w = smooth(k / 0.2) * (1 - smooth((k - 0.75) / 0.25));
+    qf.setFromEuler(eul.set(0.1, rot + (dir > 0 ? -0.6 : 0.9) * k, 0));
+    K.set(dir * OVER.r * Math.cos(a), 0, OVER.r * Math.sin(a)).applyAxisAngle(UP, rot);
+    A.set(c.x + K.x, OVER.y + OVER.rise * Math.sin(a), c.z + K.z).sub(spot.set(0, -0.04, 0.08).applyQuaternion(qf));
+    w = smooth(k / 0.3) * (1 - smooth((k - 0.8) / 0.2));
   } else {
-    const k = sp.t / HOLD[sp.kind];
-    if (k >= 1) return 0;
-    qf.identity();
+    const k = sp.t / HOLD[sp.kind], spin = sp.kind === 'roulette';
+    if (k >= 1 || B.z < -0.2 || B.z > 1.1 || Math.abs(B.x) > 0.5) return 0;
+    qf.setFromEuler(eul.set(0, spin ? sp.yaw || 0 : 0, 0));
     ankleFor(SOLE, B, qf, A);
-    w = smooth(k / 0.15) * (1 - smooth((k - 0.55) / 0.25));
+    w = smooth(k / 0.15) * (1 - smooth((k - (spin ? 0.5 : 0.55)) / (spin ? 0.16 : 0.25)));
   }
   if (w <= 0) return 0;
   ankleOf(bn, 'R', nR); footOf(bn, 'R', qn);
   nR.lerp(A, w);
   // on its way to and from the circle the step-over's boot goes over the ball, not through it
-  if (sp.kind === 'stepover') { const near = 1 - smooth((Math.hypot(nR.x - B.x, nR.z + 0.08 - B.z) - 0.2) / 0.15); nR.y = Math.max(nR.y, (OVER.y + OVER.rise) * near); }
+  if (sp.kind === 'stepover') { const near = 1 - smooth((Math.hypot(nR.x - B.x, nR.z + 0.08 - B.z) - 0.2) / 0.15); nR.y = Math.max(nR.y, 0.36 * near); }
+  else nR.y = Math.max(nR.y, A.y * (1 - smooth((Math.hypot(nR.x - B.x, nR.z + 0.06 - B.z) - 0.16) / 0.12)));     // and the sole comes down onto it from above
   reachLeg(bn, 'R', nR); aimFoot(bn, 'R', qn.slerp(qf, w));
   return w;
 }

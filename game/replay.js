@@ -8,6 +8,7 @@ import { drawText } from './tex.js';
 import { buildBall, animate, placeModel } from './actors.js';
 import { startStrike, struck } from './strike.js';
 import { buildSet } from './squad.js';
+import { STRIKE } from '../rules/tuning.js';
 
 const FPS = 72, KEEP = 8;                          // record rate and seconds kept
 const SLOTS = FPS * KEEP;
@@ -15,6 +16,19 @@ const BEFORE = 4.2, AFTER = 0.9, SLOW_FROM = 1.3, SLOW = 0.45;   // seconds arou
 const KINDS = ['', 'header', 'volley', 'bicycle'];
 const PER = 8;                                     // numbers kept per player: x, z, vx, vz, fx, fz, flags, stride
 const SWING = 0.085;                               // a replay knows a strike is coming: everyone's swing starts this long before it
+// Your tricks and skill moves are recorded too (x 32 in your flags), so the replay's whole-body you plays them
+// (game/tricks.js): 1 knock-on, 2 flick-up, 3 nutmeg, 4 drag-back, 5 step-over, 6 roulette, 7 rainbow begun, 8 its flick
+const TRICKS = [null, null, null, 'nutmeg', 'drag', 'stepover', 'roulette', 'rainbow'];
+const trickOf = e => (e.type === 'knock' ? 1 : e.type === 'flick' ? 2 : e.type === 'drag' ? 4 : e.type === 'launched' ? 8 : e.type === 'skill' ? TRICKS.indexOf(e.move) : 0);
+// what game/main.js does with those events, done to the replay's you. f: the frame; o: where your numbers are in it
+function playTrick(m, code, f, o) {
+  const sp = Math.hypot(f[4], f[6]), face = { x: f[o + 4], z: f[o + 5] }, way = sp > 0.5 ? { x: f[4] / sp, z: f[6] / sp } : face;
+  if (code === 1 || code === 3) struck(m, 'poke', way, 0.4);
+  if (code === 2) struck(m, 'scoop', way, 0.4);
+  if (code === 7) startStrike(m, { kind: 'rainbow', wind: STRIKE.rainbow, dir: face, power: 0.4 });
+  if (code === 8) struck(m, 'rainbow', face, 0.5);
+  if (TRICKS[code]) m.special = { kind: TRICKS[code], t: 0, side: 1 };
+}
 
 export function createReplay(scene, renderer) {
   let ids = [], stride = 0, buf = null, head = 0, count = 0, simT = 0;
@@ -78,6 +92,7 @@ export function createReplay(scene, renderer) {
         let flags = 0;
         for (const e of ev) if ((e.type === 'kick' || e.type === 'pass') && e.by === p.id) { flags |= e.type === 'pass' ? 17 : 1; if (e.kind) f[7] += KINDS.indexOf(e.kind); }
         if (p.dive < 0) flags |= 2; if (p.dive > 0) flags |= 4; if (p.holding) flags |= 8;
+        if (p.id === 'you') for (const e of ev) if (trickOf(e) > 0) flags |= 32 * trickOf(e);
         f[o] = p.x; f[o + 1] = p.z; f[o + 2] = p.vx; f[o + 3] = p.vz; f[o + 4] = p.fx; f[o + 5] = p.fz; f[o + 6] = flags; f[o + 7] = p.stride;
       });
       head = (head + 1) % SLOTS; count = Math.min(SLOTS, count + 1);
@@ -94,7 +109,7 @@ export function createReplay(scene, renderer) {
       }
       if (frames.length < 10) return;
       clip = frames; cursor = frames[0][0]; active = true; tvYaw = null;
-      for (const m of Object.values(ghosts)) { m.strike = null; m.dive = null; m.special = null; m.gait = null; m.kickK = m.cheerK = 0; }   // (the gait starts afresh: nobody turns round from where the last replay left him)
+      for (const m of Object.values(ghosts)) { m.strike = null; m.dive = null; m.special = null; m.trick = null; m.gait = null; m.kickK = m.cheerK = 0; }   // (the gait starts afresh: nobody turns round from where the last replay left him)
     },
     stop() {
       active = false; pendingT = -1; tv.visible = jumbo.visible = false;
@@ -119,6 +134,7 @@ export function createReplay(scene, renderer) {
         // strikes (game/strike.js): the swing starts a moment before the frame the ball was struck on,
         // so the boot gets there as it leaves; on that frame the boot is on the ball
         for (const f of clip) {
+          if (f[o + 6] >= 32 && f[0] > prev && f[0] <= cursor) playTrick(m, (f[o + 6] >> 5) & 15, f, o);
           if (!(f[o + 6] & 1)) continue;
           const kind = KINDS[f[7] % 8], foot = kind !== 'header' && kind !== 'bicycle', sp = Math.hypot(f[4], f[6]) || 1;
           const how = { kind: f[o + 6] & 16 ? 'pass' : 'shot', wind: SWING, dir: { x: f[4] / sp, z: f[6] / sp }, power: Math.min(1, sp / 30) };
