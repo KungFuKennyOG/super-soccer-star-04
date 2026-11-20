@@ -1,151 +1,151 @@
 # Notes: the '04-look trophies (branch `trophies`)
 
-Two original cups to replace the deliberately-PS1 ones in `game/trophy.js`. Built and looked at on the test
-page; **not wired into the ceremony** (`game/trophy.js` and `game/main.js` are untouched).
+Second design. Kenny on the first pair (a crown of flame tongues with a star; a fluted urn with bracket
+handles on a black box, on a red drum): "they look cheap". Both were thrown away and redrawn, with new
+metal, bases and plinth. Built and looked at on the test page; **not wired into the ceremony**
+(`game/trophy.js` and `game/main.js` are untouched). Nothing seen in a headset.
 
 ## What exists
 
 | File | What |
 | --- | --- |
-| `game/ps2/trophygeo.js` | The shapes (pure three, no DOM): `worldParts(variant)`, `clubParts(variant)`, hand-holds `GRIPS2`, hold thickness `HOLD_D` |
-| `game/ps2/metal.js` | Geometry helpers (`revolve` with hard edges and per-angle radius, `tube`, faceted `starGeo`, `merge`), the painted stadium the metal reflects, gold / silver / black lacquer / malachite / engraved-plate materials |
-| `game/ps2/trophies.js` | `buildTrophy2(kind)` ('world' / 'club') and `buildPlinth2()` (the ceremony pedestal, top at `REST_Y` 1.02 m) |
-| `tools/trophylook.js` | The look-page shots (listed at its top), loaded by `tools/ps2look.html` |
-| `tests/unit/trophies.test.js` | Triangle budget, heights, grip thickness and roundness, finger room behind the bars, every hold inside 3.2 to 6.6 cm |
+| `game/ps2/trophygeo.js` | The shapes (pure three, no DOM): `worldParts()`, `clubParts()`, hand-holds `GRIPS2` / `HOLDS`, thickness `HOLD_D` |
+| `game/ps2/trophysketch.js` | The silhouettes that lost (`worldSketch('wings' \| 'comet')`, `clubSketch('tulip' \| 'amphora')`) |
+| `game/ps2/metal.js` | Geometry helpers, no DOM: `smooth` (curves through profile keys, corners kept), `curveFn`, `revolve` (lathe, optional uvs), `band` (a strip with uvs), `grid` (a loft that isn't round), `tube`, `starGeo`, `merge` (bakes each part's painted shade into vertex colours) |
+| `game/ps2/trophymat.js` | The painted stadium the metal reflects, gold, silver, malachite, black marble, the engraved sheet (plaque + laurel band), lacquer and velvet for the plinth |
+| `game/ps2/trophyuv.js` | Where the plaque and the laurel band sit on the engraved sheet |
+| `game/ps2/trophies.js` | `buildTrophy2(kind)` ('world' / 'club') and `buildPlinth2()` (top at `REST_Y` 1.02 m) |
+| `tools/trophylook.js` | The look-page shots, loaded by `tools/ps2look.html` |
+| `tests/unit/trophies.test.js` | Budget, heights, the hand-holds (where, thickness, roundness, finger room), sketches build, helpers |
 
-Interface, matching `trophy.js`: `buildTrophy2(kind)` returns a Group with the cup's front toward -z (the way
-the PS1 cups face you on the plinth). `userData = { kind, grips, holds, holdD, height, width, tris, calls }`;
-`grips[0]` is on +x for your left hand, `grips[1]` on -x for your right, in trophy-local metres, exactly
-what `GRIPS[kind]` is in trophy.js. To swap in: `buildTrophy(kind)` → `buildTrophy2(kind)`,
-`GRIPS[kind]` → `trophy.userData.grips`, the plinth + cloth meshes → `buildPlinth2()` (same 1.0 m pedestal,
-cloth on top). The hand-hold quaternion `HOLD` in trophy.js stays right: both cups are held round a
-vertical axis as before.
+Interface unchanged: `buildTrophy2(kind)` returns a Group, front toward -z;
+`userData = { kind, grips, holds, holdD, height, width, tris, calls }`; `grips[0]` is on +x for your left
+hand. To swap in: `buildTrophy(kind)` → `buildTrophy2(kind)`, `GRIPS[kind]` → `trophy.userData.grips`,
+the plinth + cloth meshes → `buildPlinth2()`. `HOLD` in trophy.js stays right (both holds are round a
+vertical axis). Mesh names changed: `metal`, `stone`, `engraved` (was metal / stone or dark / plate).
 
 ## The designs
 
-### The Star Cup (nations), solid gold, 0.55 m
+### The Star Cup (nations): gold, 0.63 m, 0.20 m across the base
 
-An octagonal gold foot, a band of polished green stone (malachite banding painted in code) with an
-engraved gold plate set into its front facet ("WORLD CHAMPIONS" and a star), a faceted octagonal taper,
-a round waisted grip, then a shallow calyx from which five broad tongues of flame rise, swell and flick
-outward at the tips, with five short ones between them. They cradle a large faceted five-pointed star
-(each point two facets meeting in a ridge) standing upright, facing you. The star ties it to the game's
-name (Super Soccer STAR) and its invented shield-with-a-star badge.
+One body from collar to tip. A slim gold ring under a band of malachite (5.7 cm, a curved engraved
+plaque let into its front: WORLD ★ CHAMPIONS), a gold moulding with an engraved laurel band, a long hollow
+trumpet foot to a single bead collar, a slender round waist (6 cm, where the hands go), and then the body
+opens in one S-curve and is cut into two tongues of flame of unequal height: a tall one (to 0.63 m)
+behind and a short one in front, the rim dropping low at the sides, the whole thing turned about 60°
+round the axis as it rises, a soft ridge running up each tongue to its tip. A faceted five-pointed star
+is set against the inside of the tall tongue, facing you. Big calm polished surfaces; the only fine
+detail is at the base.
 
-How it differs from real cups: there are no figures, no spiral, no globe or ball at all (the real World Cup
-trophy is two figures spiralling up to hold a globe; ours is a symmetric crown of flames holding a star).
-The only shared idea is the one Kenny liked and we agreed to keep: solid gold with a green stone band at
-the base. Not a Jules Rimet (no winged figure, no cup on top, no lapis base), not a Ballon d'Or-type ball.
+Not a real cup: no figures, no globe or ball, no spiral of bodies (the World Cup trophy), no winged
+figure holding a bowl (Jules Rimet), no ball (Ballon d'Or), no ribbon winding round a ball (Women's World
+Cup). What it keeps is only what Kenny liked and we agreed: solid gold over a band of green stone. One
+band, not two.
 
-### The Champions Cup (clubs), polished silver on black, 0.67 m
+### The Champions Cup (clubs): silver, 0.72 m, 0.45 m across the arms
 
-A square stepped plinth in black lacquer with a thin silver band and an engraved silver plate ("CHAMPIONS
-CUP", "* SUPER SOCCER STAR *"). A silver foot and knop, then a tall slim amphora (0.21 m across at the belly): sixteen flutes
-(gadroons) round the lower body, a raised band at the shoulder studded with eight small stars, a narrow
-neck, a rolled rim, a stepped lid and a star finial on a short post. Two slim straight-sided bracket
-handles: a straight strut out from the body, a vertical fluted bar you hold, a strut back in to the neck,
-a small spike on the top corner.
+A drum of black marble (thin pale veins) on a step, a slim silver band, a curved engraved plaque
+(CHAMPIONS CUP ★ SUPER SOCCER STAR). A spreading foot, a slender stem with one knop, a deep bell of a bowl
+(an S from calyx to lip, 21.6 cm across the belly) with an engraved laurel-and-star band between two
+reeds at its waist, a low domed cover, a small baluster finial and a faceted star. The handles are the
+arms of a lyre: each grows out of the belly, sweeps out and up, stands upright through the hand-hold,
+and thins as it rises past the lip into a small scroll turned outward with a bead on its end. They
+never come back to the bowl.
 
-How it differs from real cups: the big rounded "ear" handles of the Champions League cup are what make it
-recognisable; ours are short, angular, straight-barred brackets well inside the cup's silhouette, and the
-body is a lidded fluted urn, not a tall open vase. Things I checked it against so it isn't mistaken for
-them: the FA Cup (lidded too, but a plain goblet with curved handles and a figure on the lid; ours is
-fluted, angular-handled and star-topped), the Copa Libertadores (a figure on top, wooden base covered in
-plaques), the Henri Delaunay (an open silver vase with no real handles), the Copa America. The lid is the
-nearest thing to a shared feature with the FA Cup; if Kenny feels it reads that way, the 'tulip' sketch
-(open rim) is the fallback.
+Not a real cup: the Champions League cup is a lidless vase with two huge closed loops from rim to body
+and no stem; this is covered, stemmed, on stone, and its handles are open arms, not loops. The FA Cup
+and the Webb Ellis are covered cups with closed scroll handles and are squatter; the Henri Delaunay has
+no stem and tiny handles; the Libertadores has a figure on top. A covered two-handled cup is the generic
+form of hundreds of trophies; the open lyre arms are what make this one its own.
 
-### Sketches and the choice
+### Sketches and the choice (`?shot=worldsketch`, `clubsketch`: black on white, chosen in the middle)
 
-`?shot=worldsketch` and `?shot=clubsketch` show three each side by side (chosen one in the middle).
-
-- Nations: **spire** (a faceted obelisk with a small star on top: clean but dull, reads as an award
-  pillar), **flame** (chosen: the richest silhouette, holds up close, and the star reads from across the
-  pitch), **wreath** (a ring of laurel round a star on a stem: iconic but reads as a medal on a stick, and
-  a laurel ring is close to many real awards).
-- Clubs: **tulip** (an open tall vase with full-height bracket handles: the most like the real Champions
-  League cup in proportion, so out), **amphora** (chosen: the most clearly its own, and the flutes and
-  shoulder stars give it detail at 30 cm), **hex** (the same urn faceted in six: reads as low-poly PS1,
-  wrong for the '04 look).
+- Nations: **wings** (the body cut into two wings left and right with the star between: built first, and
+  from the front it is a crescent with a star in it, which is a religious and national emblem: out),
+  **flame** (chosen: a flame is the same shape from nowhere else, it has one tip you'd know as a shadow,
+  and the star sits against polished gold instead of sky), **comet** (a ribbon winding up a spire to a
+  star: thin, busy, and a ribbon spiralling up to a thing on top is the nearest of the three to real
+  trophies). A single tongue (one scoop with the star in it) was also built: it read as a shell niche.
+- Clubs: **tulip** (an open flaring vase with loop handles: the Champions League cup's proportions,
+  out), **lyre** (chosen), **amphora** (a shouldered jar with small neck handles: dumpy, and the Henri
+  Delaunay's family). Before the lyre arms the chosen bowl had closed handles, twice: a tall loop from
+  lip to calyx (big ears) and a squared loop from lip to belly (a jug's handle; kept as `LOOP`).
 
 ## Sizes and the hands
 
-- Nations: 0.55 m tall, 0.19 m across the base. Hand-holds unchanged from trophy.js: (±0.07, 0.24, 0),
-  hands either side of a round grip **6.6 cm across** (the PS1 cup's column there is the same).
-- Clubs: 0.67 m tall to the finial star's tip, 0.38 m across the handles. Each fist closes round a
-  round vertical bar **3.2 cm across** (trophy.js's ear boxes were 3 cm; 3.2 is the thinnest the new hands'
-  'hold' pose is tested on), centred on the hand-hold.
-  **Changed:** the hand-holds are at **(±0.175, 0.37, 0)**, 35 cm apart, where trophy.js has (±0.25, 0.39, 0),
-  50 cm apart round its big ears. Keeping 0.25 meant brackets sticking out from the body like a frame;
-  at 0.175 there are about 5 cm between the bar and the body for the fingers (tested: 4 cm or more).
-  Anything that reads the holds should take them from `userData.holds` / `userData.grips`, not trophy.js's GRIPS.
-
-### Hand-holds for the new hands (`buildHand(side, 'hold', kit, skin, { d, at })`)
-
-`HOLDS` in `trophygeo.js`, also `userData.holds` on each built cup: per hold `{ at, axis, d }`, trophy-local
-metres, index 0 for your left hand (+x), 1 for your right (-x). Both axes vertical, both sections round.
+`HOLDS` in `trophygeo.js`, also `userData.holds`: per hold `{ at, axis, d }`, trophy-local metres, index 0
+your left hand (+x). Both axes vertical, both sections round.
 
 | Cup | Hand | at (x, y, z) | axis | d |
 | --- | --- | --- | --- | --- |
-| Star Cup (world) | left | (0.07, 0.24, 0) | (0, 1, 0) | 0.066 m |
-| Star Cup (world) | right | (-0.07, 0.24, 0) | (0, 1, 0) | 0.066 m |
-| Champions Cup (club) | left | (0.175, 0.37, 0) | (0, 1, 0) | 0.032 m |
-| Champions Cup (club) | right | (-0.175, 0.37, 0) | (0, 1, 0) | 0.032 m |
+| Star Cup (world) | left | (0.07, 0.245, 0) | (0, 1, 0) | 0.060 m |
+| Star Cup (world) | right | (-0.07, 0.245, 0) | (0, 1, 0) | 0.060 m |
+| Champions Cup (club) | left | (0.168, 0.47, 0) | (0, 1, 0) | 0.032 m |
+| Champions Cup (club) | right | (-0.168, 0.47, 0) | (0, 1, 0) | 0.032 m |
 
-On the Star Cup both hands close on the same 6.6 cm round grip from either side (the hold point is the
-middle of each fist, 7 cm off the axis, as in trophy.js), so the two fists sit side by side round one
-column; the collars above and below are 5.3 and 8 cm from the middle of the fist. Whether two hands on a
-6.6 cm column look right, or one wants to be above the other, is a headset call; the grip is 9 cm tall
-between collars, room for one fist height, not two stacked. `at` in grip space for the hand is the swap-in's
-job (the hold point is where trophy.js puts the hand's origin today).
+**Changed from the first design:** the Star Cup's waist is 6.0 cm (was 6.6) and the hold is 5 mm higher;
+the Champions Cup's holds are at (±0.168, 0.47) (were ±0.175, 0.37). Read them from `userData`.
+
+- Star Cup: a fist either side of the waist, as in trophy.js (the hold point is the middle of the fist,
+  7 cm off the axis). The waist is round and within 1.5 mm of 6 cm for 6 cm of height and swells under
+  6 mm over the 9 cm a fist covers (tested); the collar is 5.5 cm below the hold, the body opens above.
+- Champions Cup: each fist round the upright run of an arm, 3.2 cm round (the thinnest the hands are
+  tested on) for about 9 cm, 5.3 cm or more clear of the bowl (tested: 4 cm or more). The arm is thinner
+  everywhere else (down to 1.1 cm at the scroll), so a hand placed much higher or lower than the hold
+  would not be closed on it.
 
 ## Numbers
 
-- Triangles (PS2-era budget, Kenny: "they really don't need to be that detailed"; tested 1,500 to 3,000): Star Cup
-  2,152 (gold 2,124, stone 16, plate 12); Champions Cup 2,940 (silver 2,872, black plinth 56, plate 12). Pedestal 320 more.
-  The first pass was 5,168 and 6,428; cut by fewer lathe steps (20 round the Star Cup's column, 20 / 64 / 24 for
-  the clubs' foot / fluted belly / shoulder-to-lid), coarser flame blades (10 x 8 and 6 x 6), lighter handle tubes.
-- Draw calls: 3 per cup (metal, stone or black plinth, plate), plus 2 for the pedestal (column, cloth).
-- Materials: MeshStandardMaterial, metalness 1 on the metals. The reflections are a 512 x 256 half-float
-  equirect (half float because 32-bit float filtering is an extension the Quest may not have) painted in code (`stadiumEnv` in `metal.js`: sky with clouds, a dark roof edge, crowd speckle,
-  soft grey ad boards (hard black/white boards made zebra stripes on the flutes), a low green-grey pitch (black
-  made the silver read as dark metal, bright green made it green and the gold yellow plastic), touch and halfway lines, four floodlight banks and four more lamps pushed to 4 to 9x white, a lit roof
-  underside), shared by all the trophy materials; three converts it to a PMREM once, on first use. No
-  network, no post-processing. Gold: colour #e6a646, roughness 0.16, env 1.5, a faint amber emissive so the dark
-  reflections turn deep amber, not black. Silver: #f4f6fa, roughness 0.09. Textures: malachite 512 x 64,
-  plates 192 x 128 and 384 x 108, painted once and cached.
-- Build time, headless Chrome (software GL): both cups and the pedestal well under the page's 2 to 3 s
-  build (which is mostly the six players). Not measured on a Quest.
+- Triangles: Star Cup **5,132** (gold 4,952, malachite 80, engraved 100); Champions Cup **6,724** (silver
+  6,080, marble 480, engraved 164): over the "about 6,000" asked for, spent on the bowl (36 round) and
+  the arms; a player is about 6,400. Plinth 2,300 (the folds of the cloth are 112 round; could be halved).
+- Draw calls: 3 per cup (polished metal, stone, engraved metal), 3 for the plinth (lacquer, gold, velvet).
+- Materials: MeshStandardMaterial, metalness 1 on the metals, vertex colours as a painted shade (the
+  inside of the flame, the underside). Gold has four lines added to its shader (`onBeforeCompile`): where
+  what it reflects is dark it goes deeper and redder, so shadows are umber instead of khaki. Gold
+  `#ffcf7a` roughness 0.10; silver `#f7f8fb` roughness 0.055.
+- Reflections: a 1024 x 512 half-float equirect painted in code as lit values (`stadiumAt` in
+  `trophymat.js`: a sky that pales to the roofs, cloud, the sun at 26x white behind it, black stands with
+  a lit roof edge and one line of ad boards, four floodlight banks at 20x, a pitch that is dark under the
+  stands and pale grey-green nearer you), turned into a PMREM by three once, on first use. No float
+  textures that need an extension, no post-processing, no network.
+- Textures, painted once: malachite 1024 x 128, marble 512 x 128, one engraved sheet per cup 1024 x 256.
+- Not measured: build time for the env (about half a million pixels of arithmetic; a fraction of a second
+  on a desktop) and anything at all on a Quest.
+
+## What was learned about the metal (so nobody redoes it)
+
+- Polished metal is only a picture of its surroundings. The first pass reflected a mid-grey-green pitch
+  and a mid sky: no darks, no lights, so it read as plastic. Contrast in the painted stadium is the fix.
+- Held at chest height you look down on the cup, so most of what it reflects is below the horizon. A
+  green ground made the silver green and the gold olive; a dark one made the silver pewter. It is now
+  near-black under the stands (one clean horizon line) and pale further down.
+- Anything fine in the picture (a string of roof lamps, a floodlight grid, crowd speckle, mown stripes
+  toward the horizon) comes out as a comb or zebra fringe round the reflections. All removed.
+- Tight fluting does the same from the other side. There is none: the detail is engraved (a texture on
+  slightly rougher metal) and in thin reeds.
 
 ## Look-page shots
 
-`tools/ps2look.html?shot=` `worldwide`, `clubwide` (on the pedestal on the pitch, turned to the main
-stand), `worldheld`, `clubheld` (35 cm from your eyes, held at chest height), `worldside`, `clubside`,
-`worldabove`, `clubabove`, `worldbelow`, `clubbelow` (lifted over your head, looking up), `pair`,
-`worldspin`, `clubspin` (turntable: `FILM=6 node tools/ps2shots.mjs out worldspin`), `worldsketch`,
-`clubsketch`. An unknown shot name now falls back to `duel` with a console warning (it used to throw on
-`warm`). `&grips=1` draws the hand-holds as red wire balls the thickness of what the hand closes on.
+`tools/ps2look.html?shot=` `pair`, `worldheld`, `clubheld` (35 cm from your eyes), `worldside`,
+`clubside`, `worldabove`, `clubabove`, `worldbelow`, `clubbelow` (lifted, looking up), `worldwide`,
+`clubwide` (on the plinth, 3 m), `worldspin`, `clubspin` (`FILM=6 node tools/ps2shots.mjs out worldspin`),
+`worldsketch`, `clubsketch`. `&grips=1` draws the hand-holds as red wire balls.
 
 ## Short of real / not checked
 
-- Nothing seen in a headset. In particular: whether the gold reads as gold (not orange) through the Quest's
-  display, whether the silver's dark lower half looks like reflection or dirt, and the frame cost of a
-  full-screen metal object with an env map at 30 cm (two of the materials are per-pixel PBR with PMREM
-  lookups; at framebuffer scale 0.7 I expect it to be fine, but it's unmeasured).
-- The reflections are of a painted generic stadium, not the real ground around you (no live cube camera:
-  too costly on a Quest). They don't move with the club's ground or time of day; a night ground would want
-  a darker env.
-- The flame tongues are the same five, symmetric; no chased or engraved surface detail on them (a ridge
-  only). The column's lines are reflections, not grooves.
-- The engraved plates are canvas text (serif) on a box; their thin edges show the texture squashed.
-- The finial star and the shoulder stars are flat-faceted (deliberately, to sparkle); everything else is
-  smooth-shaded.
-- Not wired into the ceremony; the hand-hold change for the clubs' cup needs trophy.js to take holds from
-  `userData.grips` when it is.
-
-## Renders (this pass)
-
-`node tools/ps2shots.mjs out pair worldheld clubheld clubside clubbelow worldsketch clubsketch` and
-`FILM=6 ... worldspin` / `clubspin` (frames, then ffmpeg to mp4). Read and judged: the silver reads as chrome
-(bright, dark streaks of the stands, the fluting catching the horizon); the gold is warm and reads as metal,
-though still on the light side of "deep" (more darks in the env would deepen it, at the cost of the silver).
+- Nothing seen in a headset: whether the gold holds its colour on the Quest's display, how the reflections
+  swim as you turn the cup in your hands (they will, which is what sells metal), and the frame cost of a
+  metal object filling the view (per-pixel PBR with a PMREM lookup; unmeasured).
+- The reflections are a painted generic daytime ground, not the one you're standing in, and the cups don't
+  reflect each other, your hands or their own handles. At a night ground they'd want a darker picture.
+- From the side at 40 cm the silver bowl shows the black stands as a dark oval with a pale rim: true to
+  chrome, but it is the least pretty view of it, and its edge is slightly angular (the PMREM is 256 a face).
+- The Star Cup straight from the side is a curved blade with the star edge-on beside it; the 'wings'
+  sketch was dropped for reading as a crescent and star, and this view is the nearest the chosen one
+  comes to that. From the front, back and three-quarters it is a flame.
+- The star is flat-faceted on a short boss you can see from the side; the scrolls on the arms are coarse
+  (8-sided) at 30 cm; the silver cup's knop is 16-sided from below.
+- The plaques' small second lines wash out when they reflect bright sky.
+- The plinth is a clean dark column with a velvet cloth and a gold cord: tidy, not lavish.
+- Not wired into the ceremony; trophy.js must take the holds from `userData` when it is.

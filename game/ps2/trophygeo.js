@@ -78,7 +78,7 @@ export function worldParts() {
   const { metal, stone, engraved } = worldFoot();
   metal.push(flameBody());
   // the star, set against the tall tongue on a short boss (hidden behind it), facing front
-  metal.push(place(revolve([[0.016, 0], [0.011, 0.03], [0.011, 0.07]], 8, { ao: 0.7 }), 0, STAR.y, STAR.z, 0, Math.PI / 2));
+  metal.push(place(revolve([[0.016, 0], [0.011, 0.025], [0.011, 0.046]], 8, { ao: 0.7 }), 0, STAR.y, STAR.z, 0, Math.PI / 2));
   metal.push(place(starGeo(STAR.R, STAR.R * 0.4, 0.02, 0.0045), 0, STAR.y, STAR.z));
   return { metal, stone, engraved };
 }
