@@ -15,8 +15,8 @@ export function buildSet(world, home, away, { fullYou = false, look: lk = {} } =
       : p.team === 'home' ? buildPlayer(home.kit, p.num, look)
       : buildPlayer(p.role === 'gk' ? gkK : awayK, p.num, look);
     models[p.id].bigHead = !!lk.heads;
-    // about three outfield players in ten are left-footed (always the same ones: game/actors.js poses them); you are right-footed
-    if (p.role !== 'you' && p.role !== 'gk' && (Math.imul(look + 11, 2654435761) >>> 0) % 100 < 30) models[p.id].foot = 'L';
+    // 27% of outfield players are left-footed, the share counted among elite professionals (always the same ones: game/actors.js poses them); you are right-footed
+    if (p.role !== 'you' && p.role !== 'gk' && (Math.imul(look + 11, 2654435761) >>> 0) % 100 < 27) models[p.id].foot = 'L';
   }
   return models;
 }
