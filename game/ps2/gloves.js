@@ -8,7 +8,7 @@
 // half-closed hanging hand of an outfield player. Marks are invented (a star on the strap).
 import * as THREE from 'three';
 import { P } from '../body.js';
-import { sstep, gauss, hex, fbm, eachPixel, lum } from './paint.js';
+import { sstep, hex, fbm, eachPixel, mix } from './paint.js';
 import { TURN } from './limbs.js';
 
 // sheet rectangles (on the kit sheet): cuff and palm share one, the four fingers another, the thumb its own
@@ -52,33 +52,31 @@ export function glove(b, s, n) {
   const fa = 'foreArm' + n, hd = 'hand' + n, F = frame(s), H = { [hd]: 1 };
   const wrist = p => { const k = sstep(-0.035, 0.012, -(p[1] - (P.shoulderY + P.wristDY))); return { [fa]: 1 - k, [hd]: k }; };   // above the wrist with the forearm
   const f0 = b.pos.length / 3;
-  // the cuff: [d, back, palm, thumb side, little-finger side]. Open at the top (turned in), the strap's band
-  // standing proud of it from 1 to 4.5 cm up the wrist.
-  const CF = [[-0.086, 0.03, 0.03, 0.036, 0.036], [-0.083, 0.038, 0.037, 0.045, 0.044], [-0.07, 0.04, 0.039, 0.047, 0.046], [-0.047, 0.041, 0.04, 0.048, 0.047],
-    [-0.044, 0.045, 0.043, 0.051, 0.05], [-0.012, 0.043, 0.042, 0.05, 0.049], [-0.009, 0.039, 0.039, 0.047, 0.046], [0.012, 0.031, 0.034, 0.05, 0.047]];
-  tube(b, s, F, CF.map(([d, bk, pm, th, lt], i) => ({ p: [0, d, 0.002], back: bk, palm: pm, th, lit: lt, n: 2.3, v: CUFF_V * i / (CF.length - 1), w: wrist })), GL.hand, { seg: 16 });
-  // the hand: flat and broad, padded thick on the palm side, the back's panel raised over the knuckles
-  const PM = [[0.006, 0.03, 0.033, 0.05, 0.047, 0], [0.03, 0.027, 0.036, 0.057, 0.05, -0.002], [0.058, 0.026, 0.035, 0.061, 0.052, -0.004],
-    [0.084, 0.025, 0.031, 0.062, 0.052, -0.006], [0.104, 0.02, 0.024, 0.06, 0.05, -0.008], [0.113, 0.011, 0.013, 0.05, 0.042, -0.009]];
-  const knuckles = (a, r) => { const back = Math.max(0, s * Math.sin(a)); return back ? Object.values(F.dir([0.0055 * back * back * gauss(r.q.p[1], 0.088, 0.022), 0, 0])) : null; };
-  tube(b, s, F, PM.map(([d, bk, pm, th, lt, bend], i) => ({ p: [bend, d, 0.002], back: bk, palm: pm, th, lit: lt, n: 2.6, v: CUFF_V + 0.03 + (1 - CUFF_V - 0.04) * i / (PM.length - 1), w: H })), GL.hand, { seg: 16, capEnd: true, shape: knuckles });
+  // the cuff: [d, back, palm, thumb side, little-finger side]. Open at the top (turned in), wider than the
+  // wrist, the strap's band a little proud of it.
+  const CF = [[-0.086, 0.03, 0.03, 0.036, 0.036], [-0.08, 0.04, 0.039, 0.047, 0.046], [-0.045, 0.044, 0.042, 0.05, 0.049],
+    [-0.01, 0.041, 0.04, 0.049, 0.048], [0.012, 0.031, 0.034, 0.05, 0.047]];
+  tube(b, s, F, CF.map(([d, bk, pm, th, lt], i) => ({ p: [0, d, 0.002], back: bk, palm: pm, th, lit: lt, n: 2.3, v: CUFF_V * i / (CF.length - 1), w: wrist })), GL.hand, { seg: 12 });
+  // the hand: flat and broad, padded thick on the palm side
+  const PM = [[0.006, 0.03, 0.033, 0.05, 0.047, 0], [0.035, 0.028, 0.036, 0.059, 0.051, -0.002],
+    [0.08, 0.027, 0.032, 0.062, 0.052, -0.006], [0.104, 0.02, 0.024, 0.06, 0.05, -0.008], [0.113, 0.011, 0.013, 0.05, 0.042, -0.009]];
+  tube(b, s, F, PM.map(([d, bk, pm, th, lt, bend], i) => ({ p: [bend, d, 0.002], back: bk, palm: pm, th, lit: lt, n: 2.6, v: CUFF_V + 0.03 + (1 - CUFF_V - 0.04) * i / (PM.length - 1), w: H })), GL.hand, { seg: 12, capEnd: true });
   // fingers: each from inside the palm, three joints, only a little bent, fanned apart; a glove finger is a
   // finger in a padded sleeve, about 3 cm across
   for (const [t, len, fan, k] of FINGERS) {
     const r = len < 0.08 ? 0.0138 : 0.0152, pts = [];
     let p = [-0.006, KNUCK - 0.016, t], curl = 0.05;
     pts.push({ p, back: r * 0.95, palm: r * 1.1, th: r * 1.05, lit: r * 1.05, v: 0.02, w: H });
-    p = step(p, curl, fan * 0.5, 0.016); pts.push({ p, back: r, palm: r * 1.1, th: r * 1.08, lit: r * 1.08, v: 0.14, w: H });
     [[0.17, 0.46], [0.24, 0.3], [0.16, 0.2]].forEach(([bend, part], j) => {
-      curl += bend * k; p = step(p, curl, fan, len * part * (j === 2 ? 0.8 : 1));
+      curl += bend * k; p = step(p, curl, fan, len * part * (j === 0 ? 1.15 : j === 2 ? 0.8 : 1));
       const e = 1 - 0.06 * (j + 1);
       pts.push({ p, back: r * e, palm: r * 1.08 * e, th: r * 1.04 * e, lit: r * 1.04 * e, v: 0.14 + 0.62 * (j + 1) / 3, w: H });
     });
     p = step(p, curl + 0.3, fan, len * 0.07); pts.push({ p, back: r * 0.62, palm: r * 0.72, th: r * 0.7, lit: r * 0.7, v: 0.94, w: H });
-    tube(b, s, F, pts, GL.finger, { seg: 10, capEnd: true });
+    tube(b, s, F, pts, GL.finger, { seg: 8, capEnd: true });
   }
   // the thumb: off the front of the palm low down, well open from the hand (abducted) and turned to face the fingers
-  const tp = [[[-0.012, 0.012, 0.042], 0.016, 0.0], [[-0.018, 0.034, 0.06], 0.0175, 0.18], [[-0.026, 0.058, 0.077], 0.0165, 0.45], [[-0.032, 0.08, 0.087], 0.0155, 0.72], [[-0.036, 0.094, 0.09], 0.0105, 0.95]];
+  const tp = [[[-0.012, 0.012, 0.042], 0.016, 0.0], [[-0.022, 0.046, 0.069], 0.017, 0.3], [[-0.032, 0.08, 0.087], 0.0155, 0.72], [[-0.036, 0.094, 0.09], 0.0105, 0.95]];
   tube(b, s, F, tp.map(([p, r, v]) => ({ p, back: r * 0.92, palm: r * 1.05, th: r, lit: r, v, w: H })), GL.thumb, { seg: 8, capEnd: true });
   b.soft.push([f0, b.pos.length / 3, 0.45]);            // the fingers would shade each other black
 }
@@ -124,72 +122,35 @@ export function gripPoint(m, out, tmp, r = 0.12) {
 
 /* ---------- paint ---------- */
 
-const LATEX = [214, 213, 204];
-// kit: the keeper's kit (rules/teams.js keeperKit). The back is the kit's dark trim with a panel in the shirt's
-// color; the strap in the shirt's color with an invented star; the palm pale grey latex.
+const LATEX = [222, 220, 210];
+// kit: the keeper's kit (rules/teams.js keeperKit). Kept as plain as the kit and skin round it: a pale latex palm,
+// the back in the kit's dark trim with one panel in the shirt's color, the strap in the shirt's color. Soft
+// blotches and the light painted round the hand as the arm's skin has it; no seams, ribs or marks.
 export function paintGloves(ctx, kit, seed = 0) {
-  const base = hex(kit.trim), panel = hex(kit.shirt), accent = hex(kit.trim2 || kit.shirt);
-  const dark = lum(base) < 0.35, seam = base.map(v => (dark ? v + 70 : v * 0.6));
+  const base = hex(kit.trim), panel = hex(kit.shirt);
   const put = (c, col, m) => { c[0] = col[0] * m; c[1] = col[1] * m; c[2] = col[2] * m; };
   const round = (u, c) => { const d = Math.abs(u - c) % 1; return Math.min(d, 1 - d); };
-  // latex: matte, a fine stipple, a little darker and dirtier in the middle of the palm where it takes the ball
-  const latex = (c, u, v, px, py, wear) => { const g = 0.94 + 0.06 * fbm(px * 0.9, py * 0.9, seed + 3) - 0.035 * fbm(px * 0.11, py * 0.11, seed + 9) * wear; put(c, LATEX, g); c[1] *= 0.995; c[2] *= 0.985; };
+  const lit = u => 0.86 + 0.14 * Math.cos((u - 0.56) * 2 * Math.PI);          // as limbs() lights the arm
+  const blend = (c, col, m, k) => { for (let i = 0; i < 3; i++) c[i] = mix(c[i], col[i] * m, k); };
   eachPixel(ctx, GL.hand, (u, v, c, px, py) => {
-    const blot = 0.93 + 0.1 * fbm(px * 0.08, py * 0.08, seed, 8), back = gauss(round(u, 0.75), 0, 0.2);
-    if (v < CUFF_V) {                                   // the cuff: ribbed elastic, the strap wrapped round it, a star on its tab
-      const k = v / CUFF_V, rib = 0.95 + 0.05 * Math.sin(py * 2.6);
-      put(c, base, (0.85 + 0.12 * back) * rib * blot);
-      if (k < 0.08) put(c, base, 0.6);                   // the turned-in top
-      const strap = k > 0.47 && k < 0.92;
-      if (strap) {
-        put(c, panel, (0.86 + 0.14 * back) * blot);
-        if (Math.abs(k - 0.49) < 0.02 || Math.abs(k - 0.9) < 0.02) put(c, panel, 0.62);                       // its edges, stitched
-        if ((Math.abs(k - 0.53) < 0.012 || Math.abs(k - 0.86) < 0.012) && (px & 3) < 2) put(c, accent, 0.9);
-        // the tab: the strap's end lying over itself on the back of the wrist, with the mark
-        const tu = round(u, 0.68), ty = (k - 0.695) / 0.17;
-        if (tu < 0.13 && Math.abs(ty) < 1) {
-          put(c, panel, 1.02 * blot); if (tu > 0.115) put(c, panel, 0.55);
-          const x = (u - 0.68) * 29, y = (k - 0.695) * 9.8, a = Math.atan2(y, x), r = Math.hypot(x, y), star = 0.55 + 0.3 * Math.cos(5 * (a + Math.PI / 2));   // (cm round the wrist and along it)
-          if (r < star) put(c, accent, 1.05);
-          else if (r < star + 0.22) put(c, base, dark ? 1.2 : 0.9);
-        }
-      }
+    const m = lit(u) * (0.94 + 0.08 * fbm(px * 0.06, py * 0.06, seed, 6));
+    if (v < CUFF_V) {                                   // the cuff, the strap round it
+      const k = v / CUFF_V;
+      put(c, base, m * (k < 0.08 ? 0.7 : 1));
+      blend(c, panel, m * 0.9, sstep(0.42, 0.5, k) * sstep(0.95, 0.87, k));
       return;
     }
     const k = (v - CUFF_V) / (1 - CUFF_V), pr = round(u, 0.25);
-    if (pr < 0.235 + 0.03 * k) {                        // the latex palm, rolling round the edges, its join with the back a raised seam
-      latex(c, u, v, px, py, gauss(pr, 0, 0.12) * sstep(0.2, 0.6, k));
-      c.forEach((_, i) => { c[i] *= 1 - 0.13 * gauss(pr, 0.225 + 0.03 * k, 0.012); });
-      if (k < 0.08) put(c, base, 0.8);                   // a band where it is stitched to the cuff
-      c.forEach((_, i) => { c[i] *= 1 - 0.12 * gauss(k, 0.62, 0.025) * gauss(pr, 0, 0.13); });   // the palm's flex line
-      return;
-    }
-    put(c, base, (0.88 + 0.12 * back) * blot);          // the back: padded, with a moulded panel over the knuckles
-    const bu = (u - 0.75) / 0.2, top = 0.3 + 0.22 * bu * bu, side = 0.88 - 0.3 * sstep(0.6, 0.2, k);   // the panel: a shield over the knuckles, its point toward the wrist
-    if (k > top && Math.abs(bu) < side && k < 0.97) {
-      put(c, panel, (0.84 + 0.16 * back) * blot);
-      const e = Math.min(k - top, side - Math.abs(bu)) * 1.6;
-      if (e < 0.05) c.forEach((_, i) => { c[i] *= 0.62 + 0.38 * e / 0.05; });
-      for (const j of [-0.45, 0, 0.45]) if (Math.abs(bu - j) < 0.03 && k > 0.6) c.forEach((_, i) => { c[i] *= 0.7; });   // the panel's flex grooves
-    }
-    if (Math.abs(round(u, 0.75) - 0.2) < 0.01 && (py & 3) < 2) put(c, seam, 1);
+    put(c, base, m);                                    // the back, and over it the panel
+    const bu = (u - 0.75) / 0.2;
+    blend(c, panel, m * 0.92, sstep(0.25 + 0.2 * bu * bu, 0.4 + 0.2 * bu * bu, k) * sstep(0.95, 0.75, Math.abs(bu)));
+    blend(c, LATEX, m, sstep(0.27, 0.22, pr));          // the latex palm, round the edges
   });
-  // a finger (and the thumb): latex on the palm half and round over the tip, the back padded with a rib
-  // in the panel's color; a gusset seam where they meet
   const finger = r => eachPixel(ctx, r, (u, v, c, px, py) => {
-    const pr = round(u, 0.25), blot = 0.93 + 0.09 * fbm(px * 0.2, py * 0.1, seed + r.x, 4), back = gauss(round(u, 0.75), 0, 0.22);
-    if (pr < 0.25 || v > 0.9) {
-      latex(c, u, v, px, py, 0.5);
-      c.forEach((_, i) => { c[i] *= 1 - 0.12 * (gauss(v, 0.47, 0.025) + gauss(v, 0.71, 0.022)) * gauss(pr, 0, 0.15) - 0.15 * gauss(pr, 0.25, 0.015) * (v < 0.9); });
-      if (v < 0.06) put(c, LATEX, 0.8);
-      return;
-    }
-    put(c, base, (0.86 + 0.14 * back) * blot);
-    if (round(u, 0.75) < 0.085 && v > 0.12 && v < 0.86) {
-      put(c, panel, (0.85 + 0.15 * back) * blot * (1 - 0.15 * (gauss(v, 0.47, 0.03) + gauss(v, 0.71, 0.03))));
-      if (round(u, 0.75) > 0.072) c.forEach((_, i) => { c[i] *= 0.65; });
-    }
-    c.forEach((_, i) => { c[i] *= 1 - 0.18 * (gauss(v, 0.47, 0.018) + gauss(v, 0.71, 0.016)) * back; });   // the knuckle creases
+    const m = lit(u) * (0.94 + 0.08 * fbm(px * 0.12, py * 0.06, seed + r.x, 4));
+    put(c, base, m);
+    blend(c, LATEX, m, Math.max(sstep(0.28, 0.23, round(u, 0.25)), sstep(0.86, 0.92, v)));   // latex on the palm side and over the tip
+    c.forEach((_, i) => { c[i] *= 1 - 0.08 * sstep(0.12, 0, v); });
   });
   finger(GL.finger); finger(GL.thumb);
 }
