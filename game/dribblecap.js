@@ -153,6 +153,6 @@ export function layerDribble(bn, g, k, drive = 0) {
   for (const n of 'LR') {
     const sd = n === 'L' ? 1 : -1;
     bn['upperArm' + n].quaternion.premultiply(q1.setFromAxisAngle(Z, sd * (0.1 + 0.14 * g.run) * a));   // elbows away from the body
-    bn['foreArm' + n].quaternion.multiply(q1.setFromAxisAngle(X, (0.25 * g.run - 0.45 * (1 - g.run)) * a));   // bent and ready at a walk, a little straighter running
+    bn['foreArm' + n].quaternion.multiply(q1.setFromAxisAngle(X, (0.25 * g.run - 0.3 * (1 - g.run)) * a));   // bent and ready at a walk, a little straighter running
   }
 }
