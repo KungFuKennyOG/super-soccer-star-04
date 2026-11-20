@@ -14,6 +14,11 @@
      &fp=1 poses the carrier as your own first-person legs are posed.
      skill moves and tricks, played by the real sim (the move begins at 1.2 s; name + "front" is the same from in front):
      knock | flickup | drag | stepover | stepoverin (the fake to his left) | roulette | nutmeg | rainbow.
+     kicks (the ball is struck at t = 1.5 in all of them): strike, pass, chip, volley, standpass (he stands; no wind-up, like a
+     teammate's), each also from in front, from behind and through his own eyes as first-person legs (strikefront, strikeback,
+     strikeyou, passfront ...); &wind=0 strikes with no
+     wind-up, &power=0..1 sets how hard; kickraw / kickrawfront with &raw=kickShot|kickPass play a
+     recorded kick alone, as baked.
      tools/ps2shots.mjs renders them all to files. -->
 <style>html,body{margin:0;background:#101830;overflow:hidden}canvas{display:block}#i{position:fixed;left:8px;top:8px;font:12px monospace;color:#fff;text-shadow:0 0 3px #000}
 .bar{position:fixed;bottom:6%;width:27%;display:none;font:600 2.3vw 'Trebuchet MS',Arial,sans-serif;color:#fff}.bar b{display:block;padding:.25em .9em;border-radius:.6em;background:linear-gradient(#3a4250e6,#151a22e6);box-shadow:0 0 0 2px #0006}.bar i{display:block;height:.5vw;margin:.5vw .4em 0;background:repeating-linear-gradient(90deg,#f2f2f2 0 1.5vw,#0000 1.5vw 1.9vw)}</style>
@@ -37,6 +42,7 @@ import { buildPitch, buildLines, buildBall2 } from '../game/ps2/pitch.js';
 import { buildStand, buildSky } from '../game/ps2/stand.js';
 import { CLIPS, sampleStride, applyPose, newPose } from '../game/mocap.js';
 import { createWorld, stepSim } from '../rules/sim.js';
+import { sampleKick } from '../game/kickcap.js';
 
 const q = new URLSearchParams(location.search);
 let shot = q.get('shot') || 'duel';
@@ -112,9 +118,18 @@ const GO = [[0, 0], [1, 0], [1.35, 7.2], [9, 7.2]], HALT = [[0, 7.2], [1.2, 7.2]
 // a sharp cut: he comes in along +x and leaves 115 degrees round to his right
 const cutAt = t => { const d = dist(t, CUT), d0 = dist(1.33, CUT), a = Math.PI / 2 + (t < 1.33 ? 0 : 2); return [-d0 + Math.min(d, d0) + Math.sin(a) * Math.max(0, d - d0) * (t < 1.33 ? 0 : 1), Math.cos(a) * Math.max(0, d - d0), a, ramp(t, CUT)]; };
 // a strike on the run: he brings the ball along +x and hits it at `at`; before that it is at his feet, after it flies
-const hitAt = 1.5, hitBall = (t, sp, up, dz) => (t < hitAt ? [-9 + DRIB * t + 0.56, 0] : [-9 + DRIB * hitAt + 0.56 + sp * (t - hitAt), dz * (t - hitAt), 0.11 + Math.max(0, up * (t - hitAt) - 4.9 * (t - hitAt) ** 2)]);
-const hit = (kind, sp, up, dz) => ({ fov: 30, cam: t => [-9 + DRIB * t + 2.6, 1.0, 4.6], at: t => [-9 + DRIB * t + 0.5, 0.95, 0], ball: t => hitBall(t, sp, up, dz), strike: { who: 0, at: hitAt, kind, wind: kind === 'pass' ? 0.042 : 0.083, dir: [sp, dz], power: 0.8 },
-  set: t => one([-9 + DRIB * t, 0, Math.PI / 2, DRIB, 0, 0, 'mate', t < hitAt]) });
+const hitAt = 1.5, hitX = (t, v) => (v ? -9 + v * t : 0), QW = q.get('wind'), QP = q.get('power');
+// sp, up, dz: the ball's speed along his run, upward and across it; o: { v: his speed, drop: how high a dropping ball is met (a volley), wind, power, view }
+const hitBall = (t, sp, up, dz, o) => (t < hitAt ? [hitX(t, o.v) + 0.56, 0, o.drop ? o.drop + 0.11 + 5 * (hitAt - t) : 0.11] : [hitX(hitAt, o.v) + 0.56 + sp * (t - hitAt), dz * (t - hitAt), Math.max(0.11, 0.11 + (o.drop || 0) + up * (t - hitAt) - 4.9 * (t - hitAt) ** 2)]);
+const VIEW = { side: [[2.6, 1.0, 4.6], [0.5, 0.95, 0]], front: [[5.6, 1.15, 0.7], [0.3, 0.95, 0]], back: [[-4.4, 1.5, -0.8], [0.6, 0.85, 0]], you: [[-0.12, 1.66, 0], [1.25, 0, 0]] };   // you: his own eyes, looking down at the ball, drawn as your first-person legs are
+const hit = (kind, sp, up, dz, o = {}) => { o = { v: DRIB, view: 'side', ...o }; const [c, a] = VIEW[o.view]; return { fov: o.view === 'you' ? 80 : 30, you: o.view === 'you', cam: t => [hitX(t, o.v) + c[0], c[1], c[2]], at: t => [hitX(t, o.v) + a[0], a[1], a[2]], ball: t => hitBall(t, sp, up, dz, o),
+  strike: { who: 0, at: hitAt, kind, wind: +(QW ?? o.wind ?? (kind === 'pass' ? 0.042 : kind === 'volley' ? 0 : 0.083)), dir: [sp, dz], power: +(QP ?? o.power ?? 0.8) },
+  set: t => one([hitX(t, o.v), 0, Math.PI / 2, o.v, 0, 0, 'mate', t < hitAt && !o.drop]) }; };
+// every kick from the side, from in front, from behind and through his own eyes
+const KICKSHOTS = { strike: ['shot', 24, 4.5, 3], pass: ['pass', 15, 0, -6], chip: ['shot', 9, 9, 0, { power: 0.1 }], volley: ['volley', 24, 3, 2, { v: 3, drop: 0.55 }], standpass: ['pass', 14, 0, -3, { v: 0, wind: 0 }] };
+for (const [k, [kind, sp, up, dz, o]] of Object.entries(KICKSHOTS)) for (const view of ['side', 'front', 'back', 'you']) SHOTS[k + (view === 'side' ? '' : view)] = hit(kind, sp, up, dz, { ...o, view });
+// a recorded kick alone (?raw=kickShot ...): he stands where its kicking ankle is at the contact
+for (const view of ['side', 'front']) SHOTS['kickraw' + (view === 'side' ? '' : view)] = { fov: 30, cam: VIEW[view][0], at: VIEW[view][1], ball: t => (t < hitAt ? [0.2, -0.02] : [0.2 + 18 * (t - hitAt), -0.02, 0.11 + Math.max(0, 3 * (t - hitAt) - 4.9 * (t - hitAt) ** 2)]), set: () => one([0, 0, Math.PI / 2, 0, 0]) };
 Object.assign(SHOTS, {
   jogfront: { fov: 24, cam: t => [0.5, 1.0, 3.6 * t + 5.4], at: t => [0, 0.95, 3.6 * t], ball: [30, 30], set: t => one([0, 3.6 * t, 0, 3.6, 0]) },
   sprintfront: { fov: 24, cam: t => [0.5, 1.0, 7.4 * t + 5.4], at: t => [0, 0.95, 7.4 * t], ball: [30, 30], set: t => one([0, 7.4 * t, 0, 7.4, 0]) },
@@ -128,7 +143,6 @@ Object.assign(SHOTS, {
     set: t => [[-4 + 2.2 * t, t < 3 ? 0 : -1.3 * (t - 3), Math.PI / 2 - (t < 3 ? 0 : 0.53), t < 3 ? 2.2 : 2.55, 0, 0, 'mate', true], [-0.8 + 2.2 * t, t < 3 ? 0 : -1.3 * (t - 3), Math.PI / 2 - (t < 3 ? 0 : 0.53), t < 3 ? 2.2 : 2.55, 1.5, 0, 'def'], null, null, null, null] },
   // standing near a ball that is rolled round them: ready stances, heads and shoulders following it, feet stepping round
   ready: { fov: 30, cam: [0.3, 1.3, 6.4], at: [0, 0.9, 0], ball: t => [2.6 * Math.sin(t * 0.9), 2.2 + 1.6 * Math.cos(t * 0.9)], set: t => [[-1.3, 0, 0.3, 0, 0, 0, 'def'], [0, -0.4, 0, 0, 0, 0, 'def'], [1.4, 0.2, -0.4, 0, 0, 0, 'mate'], null, null, null] },
-  strike: hit('shot', 24, 4.5, 3), pass: hit('pass', 15, 0, -6),
   // a goal: two jump on the spot, one runs across
   celebrate: { fov: 30, cam: [0.4, 1.3, 7], at: [0, 1.05, 0], ball: [30, 30], cheer: t => t > 0.4, set: t => [[-1.4, 0, 0.2, 0, 0], [0, -0.3, -0.1, 0, 0], [1.3, 0.2, -0.3, 0, 0], [-6 + 3.6 * t, -1.6, Math.PI / 2, 3.6, 0], [-7 + 3.6 * t, 1.4, Math.PI / 2, 3.6, 2], null] },
 });
@@ -207,7 +221,7 @@ function reelV(t, REEL = REEL0) { for (let i = 1; i < REEL.length; i++) if (t <=
 function reelX(t, T = REEL0, x = -20) { for (let u = 0; u < t; u += 1 / 120) x += reelV(u, T) / 120; return x; }
 const bX = t => reelX(t, BURST, -9);
 let time = +(q.get('t') || 0);
-const RAW = CLIPS[q.get('raw')], rawPose = newPose();
+const RAW = CLIPS[q.get('raw')], rawPose = Object.assign(newPose(), { a: new Float32Array(6) });
 function pose(t, dt) {
   const s = SHOTS[shot], set = s.set(t), b = s.trick ? [0, 0] : val(s.ball, t);
   if (b) { bp.x = b[0]; bp.z = b[1]; bp.y = b[2] ?? 0.11; ball.position.set(bp.x, bp.y, bp.z); ball.rotation.set(t * 9, 0.4, t * 3); }
@@ -229,21 +243,23 @@ function pose(t, dt) {
   }
   // a strike (game/strike.js): the swing starts `wind` before the ball goes, and the boot is on it as it does
   const k = s.strike;
+  let at = bp;
   if (k && dt > 0) {
     const m = players[k.who].m, l = Math.hypot(...k.dir), dir = { x: k.dir[0] / l, z: k.dir[1] / l };
-    if (t - dt < k.at - k.wind && t >= k.at - k.wind) startStrike(m, { kind: k.kind, wind: k.wind, dir, power: k.power });
-    if (t - dt < k.at && t >= k.at) struck(m, k.kind, dir, k.power);
+    if (k.wind > 0 && t - dt < k.at - k.wind && t >= k.at - k.wind) startStrike(m, { kind: k.kind, wind: k.wind, dir, power: k.power });
+    if (t - dt < k.at && t >= k.at) { struck(m, k.kind, dir, k.power); const c = val(s.ball, k.at); at = { x: c[0], y: c[2] ?? 0.11, z: c[1] }; }   // (posed on the ball where it was struck, whatever the step)
   }
   players.forEach(({ m, p }, i) => {
     const d = set[i]; if (!(s.trick && i < 2)) m.root.visible = m.shadow.visible = !!d;
     if (!d) return;
+    m.firstPerson = !!s.you; if (!s.you) m.bone.chest.scale.setScalar(1);
     const go = d[2] + (d[5] || 0);                           // d[5]: which way he travels, off the way he faces
     p.x = d[0]; p.z = d[1]; p.fx = Math.sin(d[2]); p.fz = Math.cos(d[2]); p.vx = Math.sin(go) * d[3]; p.vz = Math.cos(go) * d[3]; p.role = d[6] || 'mate';
     if (s.drib === i) dribble(p, d, go, t, dt);
     else if (p.stride === null) p.stride = d[4] + t * strideRate(d[3]); else p.stride += dt * strideRate(d[3]);   // his stride turns over with his speed
     placeModel(m, p);
-    animate(m, p, dt, t + i, !!(s.cheer && s.cheer(t)), null, bp, !!d[7]);
-    if (RAW) applyPose(m.bone, sampleStride(RAW, RAW.kind === 'loop' ? (t + i * 1.7) / RAW.period * Math.PI * 2 : p.stride, rawPose));        // ?raw=clip: the captured stride alone, nothing over it
+    animate(m, p, dt, t + i, !!(s.cheer && s.cheer(t)), null, i === k?.who ? at : bp, !!d[7]);
+    if (RAW) applyPose(m.bone, RAW.kind === 'kick' ? sampleKick(RAW, t - hitAt, rawPose) : sampleStride(RAW, RAW.kind === 'loop' ? (t + i * 1.7) / RAW.period * Math.PI * 2 : p.stride, rawPose));        // ?raw=clip: the captured stride alone, nothing over it
     m.shadow.position.set(p.x - LIGHT_DIR.x * 0.12, 0.01, p.z - LIGHT_DIR.z * 0.12);
   });
   for (const el of document.querySelectorAll('.bar')) el.style.display = shot === 'wide' ? 'block' : 'none';
@@ -251,7 +267,7 @@ function pose(t, dt) {
   camera.position.set(...val(s.cam, t)); camera.lookAt(...val(s.at, t));
 }
 // poses ease in over time (speed, lean, the head's turn), so a still is run up to, not jumped to (a shot's `warm`: for how many seconds)
-function warm() { for (const pl of players) { pl.p.stride = null; pl.m.gait = pl.m.strike = pl.m.special = pl.m.trick = null; pl.m.sway = null; pl.m.kickK = pl.m.onBallK = pl.m.cheerK = pl.m.driveT = 0; } for (let k = Math.round((SHOTS[shot].warm || 1.5) * 60); k > 0; k--) pose(time - k / 60, 1 / 60); }
+function warm() { for (const pl of players) { pl.p.stride = null; pl.m.gait = pl.m.strike = pl.m.special = pl.m.trick = null; pl.m.sway = null; pl.m.kickK = pl.m.onBallK = pl.m.cheerK = pl.m.driveT = 0; } for (let k = Math.round((SHOTS[shot].warm || 1.5) * 60); k >= 0; k--) pose(time - k / 60, 1 / 60); }   // (the last step is the moment itself: a still of the frame a ball is struck on is that frame)
 function frame(dt) {
   time += dt; pose(time, dt); renderer.render(scene, camera);
   document.getElementById('i').textContent = q.get('info') ? `${shot}  calls ${renderer.info.render.calls}  tris ${renderer.info.render.triangles}` : '';

@@ -28,6 +28,12 @@ export const CLIPS = {
   run: ['09_06', 'stride'], runB: ['16_46', 'stride'], runC: ['127_07', 'stride'],
   // for a man on the ball going slowly (game/dribblecap.js): 'quick little steps' (half a second a stride, 0.9 m), and a low jog on short strides
   quick: ['136_31', 'stride'], low: ['16_56', 'stride'],
+  // a 'kick' is a strike at a ball: the window round the contact, facing the way the foot goes through it (below).
+  // the library's soccer kicks ("soccer - kick ball") are subjects 10 and 11: 11_01 is the hardest of them, struck with
+  // the inside of the instep and followed through across the body with a hop; subject 10's are side-foot kicks (10_01 the
+  // most upright; 10_03 sits very low). Subject 74's "kick" takes are not football: front kicks at something off the ground
+  // (knee chambered, toes up). 141_22 and 16_01 are not kicks at all.
+  kickShot: ['11_01', 'kick'], kickPass: ['10_01', 'kick'],
   // a 'loop' is [from, to] seconds of a capture played round and round, e.g. stand: ['137_28', 'loop', { from: 2, to: 12 }].
   // None is baked: the library's standing takes (113_21, 77_02, 141_20, 137_28) have a tilted or bowed head, fidgeting or hands on hips.
 };
@@ -213,16 +219,68 @@ function loop(name, bvh, { from, to }) {
   return { kind: 'loop', speed: 0, period: +((f1 - f0) * bvh.dt).toFixed(3), n, q, h };
 }
 
+/* ---------- a kick: the swing through a ball ---------- */
+
+// Kept: from `lead` seconds before the contact (the plant foot's last touchdown and the top of the backswing
+// are both inside it) to the kicking foot coming down again. The contact is the kicking ankle's top speed
+// (it slows as it meets the ball); the pose faces +z the way the ankle is going then, and everything is
+// placed from where that ankle is at the contact (x, z). A left-footed kick is mirrored: every baked kick
+// is the right boot's. opt: { at: contact frame, lead, tail (s) }.
+const KHZ = 60, skel = bones[0];
+function kick(name, bvh, { at, lead = 0.3, tail = 0.6 } = {}) {
+  const R = rig(bvh), s0 = newPose(bvh), s1 = newPose(bvh), o0 = newOut(), o1 = newOut(), raw = [];
+  const span = f => [Math.floor(f), Math.min(bvh.frames - 1, Math.floor(f) + 1)];
+  for (let f = 0; f < bvh.frames; f++) { pose(bvh, f, s0); raw.push({ l: s0.p[R.id.LeftFoot].clone(), r: s0.p[R.id.RightFoot].clone() }); }
+  const foot = (n, f) => { const [a, b] = span(f); return raw[a][n].clone().lerp(raw[b][n], b > a ? (f - a) / (b - a) : 0).multiplyScalar(R.scale); };
+  R.floor = median(raw.flatMap(a => [a.l.y, a.r.y]).sort((x, y) => x - y).slice(0, raw.length >> 1));
+  const vel = (n, f) => foot(n, f + 2).sub(foot(n, f - 2)).multiplyScalar(1 / (4 * bvh.dt)), top = n => { let b = 12; for (let f = 12; f < bvh.frames - 2; f++) if (vel(n, f).length() > vel(n, b).length()) b = f; return b; };
+  const left = vel('l', top('l')).length() > vel('r', top('r')).length(), K = left ? 'l' : 'r', P = left ? 'r' : 'l', c = at ?? top(K);
+  const v = vel(K, c), yaw = Math.atan2(v.x, v.z), org = (left ? raw[c].l : raw[c].r).clone();
+  // where it ends: the kicking foot back on the ground (or `tail` s on); the plant foot's touchdown; the top of the backswing
+  let end = c + Math.round(0.12 / bvh.dt); const last = Math.min(bvh.frames - 3, c + Math.round(tail / bvh.dt));
+  while (end < last && !(foot(K, end).y - R.floor * R.scale < 0.06 && vel(K, end).length() < 1)) end++;
+  let down = c; while (down > 2 && vel(P, down).length() < 1.2) down--;
+  const game = (f, out) => {
+    const [a, b] = span(f), k = b > a ? (f - a) / (b - a) : 0;
+    retarget(bvh, R, pose(bvh, a, s0), yaw, org, o0); retarget(bvh, R, pose(bvh, b, s1), yaw, org, o1);
+    for (const n of NAMES) out.q[n].copy(o0.q[n]).slerp(o1.q[n], k);
+    out.hips.copy(o0.hips).lerp(o1.hips, k);
+    if (left) {      // seen in a mirror: left and right bones change places, every turn is reflected
+      for (const n of NAMES) { const q = out.q[n]; q.set(q.x, -q.y, -q.z, q.w); }
+      for (const n of NAMES) if (n.endsWith('L')) { const o = n.slice(0, -1) + 'R'; tmpQ.copy(out.q[n]); out.q[n].copy(out.q[o]); out.q[o].copy(tmpQ); }
+      out.hips.x = -out.hips.x;
+    }
+    // where that puts our own ankles (the capture's legs aren't quite ours)
+    for (const n of NAMES) byName[n].quaternion.copy(out.q[n]);
+    byName.hips.position.copy(out.hips); skel.updateMatrixWorld(true);
+    byName.footR.getWorldPosition(out.ankleR); byName.footL.getWorldPosition(out.ankleL);
+    return out;
+  };
+  const ci = Math.round(lead * KHZ), n = ci + Math.round((end - c) * bvh.dt * KHZ) + 1, A = newOut(), q = [], h = [], a = [];
+  const o = game(c, A).ankleR.clone(); let back = 0, topAt = 0, lo = 9;
+  for (let i = 0; i < n; i++) {
+    game(Math.max(0, c + (i - ci) / KHZ / bvh.dt), A);
+    for (const nm of NAMES) { const r = A.q[nm]; q.push(r.x, r.y, r.z, r.w); }
+    h.push(A.hips.x - o.x, A.hips.y, A.hips.z - o.z); a.push(A.ankleR.x - o.x, A.ankleR.y, A.ankleR.z - o.z, A.ankleL.x - o.x, A.ankleL.y, A.ankleL.z - o.z);
+    if (i <= ci && A.ankleR.z - A.hips.z < back) { back = A.ankleR.z - A.hips.z; topAt = (ci - i) / KHZ; }
+    lo = Math.min(lo, A.ankleL.y, A.ankleR.y);
+  }
+  for (const b of bones) if (b.name !== 'root') b.quaternion.identity();
+  if (REPORT) console.log(`${name.padEnd(9)} kick  ${left ? 'LEFT foot (mirrored)' : 'right foot'}  contact frame ${c} at ${v.length().toFixed(1)} m/s  backswing top ${topAt.toFixed(3)} s before, plant down ${((c - down) * bvh.dt).toFixed(3)} s before, ends ${((end - c) * bvh.dt).toFixed(2)} s after  ${n} poses  ankle at contact y ${o.y.toFixed(3)}, lowest ${lo.toFixed(3)}  hips ${h[ci * 3].toFixed(2)}, ${h[ci * 3 + 1].toFixed(2)}, ${h[ci * 3 + 2].toFixed(2)}  plant ankle ${a[ci * 6 + 3].toFixed(2)}, ${a[ci * 6 + 4].toFixed(2)}, ${a[ci * 6 + 5].toFixed(2)}`);
+  return { kind: 'kick', speed: +v.length().toFixed(2), hz: KHZ, n, c: ci, top: +topAt.toFixed(3), plant: +((c - down) * bvh.dt).toFixed(3), q, h, a };
+}
+
 /* ---------- write ---------- */
 
 const clips = {};
 for (const [name, [file, kind, opt]] of Object.entries(CLIPS)) {
   // (subjects 141 and 143 were captured at 60 Hz though their files say 120: checked against gravity in their runs' flight)
   const bvh = parseBVH(await readFile(`${dir}/${file}.bvh`, 'utf8'), /^14[13]_/.test(file) ? 60 : 0);
-  try { clips[name] = kind === 'loop' ? loop(name, bvh, opt) : stride(name, bvh, opt?.want); } catch (e) { console.log(String(e.message)); }
+  try { clips[name] = kind === 'kick' ? kick(name, bvh, opt) : kind === 'loop' ? loop(name, bvh, opt) : stride(name, bvh, opt?.want); } catch (e) { console.log(String(e.message)); }
 }
 const r = v => +v.toFixed(4);
-const body = Object.entries(clips).map(([name, c]) => `  ${name}: { kind: '${c.kind}', speed: ${c.speed}, period: ${c.period}, n: ${c.n},\n    q: [${c.q.map(r).join(',')}],\n    h: [${c.h.map(r).join(',')}] },`).join('\n');
+const head = c => (c.kind === 'kick' ? `hz: ${c.hz}, n: ${c.n}, c: ${c.c}, top: ${c.top}, plant: ${c.plant}` : `period: ${c.period}, n: ${c.n}`);
+const body = Object.entries(clips).map(([name, c]) => `  ${name}: { kind: '${c.kind}', speed: ${c.speed}, ${head(c)},\n    q: [${c.q.map(r).join(',')}],\n    h: [${c.h.map(r).join(',')}]${c.a ? `,\n    a: [${c.a.map(r).join(',')}]` : ''} },`).join('\n');
 await mkdir(fileURLToPath(new URL('../game/assets/anim/', import.meta.url)), { recursive: true });
-await writeFile(OUT, `// Motion-capture clips for the players, baked by tools/build-anim.mjs. Do not edit by hand.\n// The data used in this project was obtained from mocap.cs.cmu.edu. The database was created with funding\n// from NSF EIA-0196217.\n// q: one quaternion (x, y, z, w) per bone per sample, bones in BONES order; h: the hips' place per sample (m).\nexport const BONES = ${JSON.stringify(NAMES)};\nexport const CLIPS = {\n${body}\n};\n`);
+await writeFile(OUT, `// Motion-capture clips for the players, baked by tools/build-anim.mjs. Do not edit by hand.\n// The data used in this project was obtained from mocap.cs.cmu.edu. The database was created with funding\n// from NSF EIA-0196217.\n// q: one quaternion (x, y, z, w) per bone per sample, bones in BONES order; h: the hips' place per sample (m).\n// A kick is sampled hz times a second; sample c is the contact; a: the right (kicking) and left ankles per sample;\n// h and a are measured from the kicking ankle at the contact (x, z) and the grass (y).\nexport const BONES = ${JSON.stringify(NAMES)};\nexport const CLIPS = {\n${body}\n};\n`);
 console.log(`wrote ${Object.keys(clips).length} clips, ${(body.length / 1024).toFixed(0)} KB`);

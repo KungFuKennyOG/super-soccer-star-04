@@ -13,6 +13,7 @@ import { faceBody, poseLegs, leanHips } from './gait.js';
 import { poseUpper, layerLean, layerReady, layerBreath, layerKick, layerLook, strikeSwing } from './carriage.js';
 import { specialPose, dancePose, celebratePose } from './poses.js';
 import { strideLegs, strideTrunk } from './mocap.js';
+import { kickTrunk } from './kickcap.js';
 import { sway } from './sway.js';
 import { layerDribble, dribbleGlance } from './dribblecap.js';
 import { trickHips, trickLegs, trickBody, trickHead } from './tricks.js';
@@ -119,7 +120,7 @@ function pose(m, p, dt, t, celebrate, guide, ball, onBall) {
   m.kickK = (m.kickK || 0) + (kick - (m.kickK || 0)) * Math.min(1, dt * 22);
   if (cap > 0) strideTrunk(m, bn, g, 1 - m.kickK);
   layerLean(bn, g, 1 - cap); layerReady(bn, g); layerBreath(bn, g, dt);
-  layerKick(bn, m.kickK, strikeSwing(st));
+  if (!kickTrunk(m, bn)) layerKick(bn, m.kickK, strikeSwing(st));     // a recorded kick's trunk and arms (game/kickcap.js), or the hand-built layer for a poke, a scoop, a heel
   // on the ball: over it, arms wider, eyes on it for each touch and up for a look in between (game/dribblecap.js)
   const ob = (m.onBallK || 0) * (1 - m.kickK), up = ob > 0.5 && !st && dribbleGlance(m, p, dt);
   layerDribble(bn, g, ob, m.drive || 0);
