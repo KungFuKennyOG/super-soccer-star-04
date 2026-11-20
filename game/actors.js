@@ -14,6 +14,7 @@ import { poseUpper, layerLean, layerReady, layerBreath, layerKick, layerLook, st
 import { specialPose, dancePose, celebratePose } from './poses.js';
 import { strideLegs, strideTrunk } from './mocap.js';
 import { sway } from './sway.js';
+import { trickHips, trickLegs, trickBody, trickHead } from './tricks.js';
 
 const matCache = new Map();
 const mat = (key, make) => { if (!matCache.has(key)) matCache.set(key, make()); return matCache.get(key); };
@@ -96,13 +97,16 @@ function pose(m, p, dt, t, celebrate, guide, ball, onBall) {
   if (cap > 0 && !m.firstPerson) leanHips(bn, g, cap * (1 - (m.onBallK || 0)));
   if (m.special) { m.special.t += dt; if (m.special.t > 0.9) m.special = null; }
   const sp = m.special;
-  if (sp && sp.kind === 'roulette' && sp.t < SPIN) bn.hips.rotation.y += Math.PI * 2 * sp.t / SPIN;   // the roulette spins you on the spot
+  // a skill move or a trick (game/tricks.js) is the whole body's: the hips first (the roulette's spin, how
+  // low he sits), then the boot on the ball, then the other leg, and the trunk, arms and head further down
+  const trk = trickHips(m, bn, p, ball, dt);
   // the right boot goes to the ball: a strike swinging through it, a touch on the run, or a skill's
   // hold on it (the sole of a drag-back or roulette, the step-over's circle)
   let kick = 0;
   const st = m.strike;
   if (ball && st) kick = poseStrike(m, bn, ball, dt);
   else if (ball) { poseTouch(m, bn, p, ball, onBall, dt); if (sp && HOLDS.includes(sp.kind)) poseHold(m, bn, sp, ball); }
+  if (trk && ball) trickLegs(m, bn, trk, ball);
   if (sp && sp.kind === 'bicycle') { specialPose(bn, sp); if (m.firstPerson) bn.chest.scale.setScalar(0.001); return; }
   if (m.firstPerson) { bn.chest.scale.setScalar(0.001); return; }
 
@@ -115,7 +119,9 @@ function pose(m, p, dt, t, celebrate, guide, ball, onBall) {
   if (cap > 0) strideTrunk(m, bn, g, 1 - m.kickK);
   layerLean(bn, g, 1 - cap); layerReady(bn, g); layerBreath(bn, g, dt);
   layerKick(bn, m.kickK, strikeSwing(st));
+  if (trk) trickBody(m, bn, trk);
   layerLook(m, bn, g, celebrate ? null : ball, dt, 0.22 * (m.drive || 0));
+  if (trk) trickHead(bn, trk);
   sway(m, bn, p, dt, g);
   if (guide && p.role === 'mate') { dancePose(bn, guide); return; }
   if (sp && sp.kind === 'header') specialPose(bn, sp);
@@ -124,7 +130,7 @@ function pose(m, p, dt, t, celebrate, guide, ball, onBall) {
 }
 
 // Skill moves and the drag-back are posed on the ball by game/strike.js (m.special = { kind, t }).
-const HOLDS = ['drag', 'roulette', 'stepover'], SPIN = 0.45;
+const HOLDS = ['drag', 'roulette', 'stepover'];
 
 // The middle of a player's two hands in world space (out): where the keeper holds the ball.
 const handA = new THREE.Vector3(), handB = new THREE.Vector3();
