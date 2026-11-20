@@ -90,15 +90,15 @@ the Champions Cup's holds are at (±0.168, 0.47) (were ±0.175, 0.37). Read them
   7 cm off the axis). The waist is round and within 1.5 mm of 6 cm for 6 cm of height and swells under
   6 mm over the 9 cm a fist covers (tested); the collar is 5.5 cm below the hold, the body opens above.
 - Champions Cup: each fist round the upright run of an arm, 3.2 cm round (the thinnest the hands are
-  tested on) for about 9 cm, 5.3 cm or more clear of the bowl (tested: 4 cm or more). The arm is thinner
-  everywhere else (down to 1.1 cm at the scroll), so a hand placed much higher or lower than the hold
+  tested on) for about 9 cm, 6 cm or more clear of the bowl (tested: 4 cm or more). The arm is thinner
+  everywhere else (down to about 1 cm at the scroll), so a hand placed much higher or lower than the hold
   would not be closed on it.
 
 ## Numbers
 
 - Triangles: Star Cup **5,132** (gold 4,952, malachite 80, engraved 100); Champions Cup **6,724** (silver
   6,080, marble 480, engraved 164): over the "about 6,000" asked for, spent on the bowl (36 round) and
-  the arms; a player is about 6,400. Plinth 2,300 (the folds of the cloth are 112 round; could be halved).
+  the arms; a player is about 6,400. Plinth about 4,100 (most of it the folds of the cloth, 84 round; a plain cloth would be a tenth of that).
 - Draw calls: 3 per cup (polished metal, stone, engraved metal), 3 for the plinth (lacquer, gold, velvet).
 - Materials: MeshStandardMaterial, metalness 1 on the metals, vertex colours as a painted shade (the
   inside of the flame, the underside). Gold has four lines added to its shader (`onBeforeCompile`): where

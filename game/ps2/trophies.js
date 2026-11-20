@@ -36,13 +36,13 @@ export function buildTrophy2(kind, sketch) {
 export const REST_Y = 1.02;
 export function buildPlinth2() {
   const g = new THREE.Group();
-  g.add(new THREE.Mesh(revolve(smooth([[0, 0], [0.34, 0, 1], [0.34, 0.05, 1], [0.325, 0.06, 1], [0.29, 0.066, 1], [0.275, 0.1], [0.262, 0.5], [0.258, 0.9, 1], [0.27, 0.91], [0.288, 0.94], [0.292, 0.96, 1], [0.292, 1.0, 1], [0, 1.0]], 4), 48), lacquerMat()));
-  g.add(new THREE.Mesh(merge([revolve([[0.326, 0.05], [0.3285, 0.052], [0.3285, 0.058], [0.326, 0.06]], 48), revolve([[0.258, 0.888], [0.2615, 0.89], [0.2615, 0.9], [0.258, 0.902]], 48),
-    revolve([[0.3, 1.0005], [0.3045, 1.003], [0.3055, 1.0075], [0.3035, 1.012], [0.299, 1.0135]], 64)]), goldMat()));   // and a gold cord round the edge of the cloth
+  g.add(new THREE.Mesh(revolve(smooth([[0, 0], [0.34, 0, 1], [0.34, 0.05, 1], [0.325, 0.06, 1], [0.29, 0.066, 1], [0.275, 0.1], [0.262, 0.5], [0.258, 0.9, 1], [0.27, 0.91], [0.288, 0.94], [0.292, 0.96, 1], [0.292, 1.0, 1], [0, 1.0]], 1), 40), lacquerMat()));
+  g.add(new THREE.Mesh(merge([revolve([[0.326, 0.05], [0.3285, 0.052], [0.3285, 0.058], [0.326, 0.06]], 40), revolve([[0.258, 0.888], [0.2615, 0.89], [0.2615, 0.9], [0.258, 0.902]], 40),
+    revolve([[0.3, 1.0005], [0.3045, 1.003], [0.3055, 1.0075], [0.3035, 1.012], [0.299, 1.0135]], 48)]), goldMat()));   // and a gold cord round the edge of the cloth
   // the velvet: flat on top, over the edge, hanging 13 to 17 cm in soft folds (deeper toward the hem)
   const folds = 14, fold = (a, y) => { const t = Math.pow(Math.max(0, Math.min(1, (0.998 - y) / 0.15)), 0.6); return 1 + t * (0.04 * Math.sin(a * folds) + 0.014 * Math.sin(a * folds * 2.3 + 1)); };
   const hem = a => 0.855 + 0.018 * Math.cos(a * folds) + 0.01 * Math.sin(a * 3);
-  const cloth = revolve(smooth([[0, 1.019], [0.2, 1.019], [0.285, 1.0185], [0.297, 1.012], [0.3005, 1.0], [0.302, 0.96], [0.304, 0.9], [0.306, 0.856]], 3), 112, { mod: fold });
+  const cloth = revolve(smooth([[0, 1.019], [0.2, 1.019], [0.285, 1.0185], [0.297, 1.012], [0.3005, 1.0], [0.302, 0.96], [0.304, 0.9], [0.306, 0.856]], 2), 84, { mod: fold });
   const p = cloth.attributes.position;
   for (let i = 0; i < p.count; i++) { const y = p.getY(i); if (y < 0.99) { const a = Math.atan2(p.getX(i), -p.getZ(i)); p.setY(i, 1.0 - (1.0 - y) * (1.0 - hem(a)) / 0.144); } }
   cloth.computeVertexNormals();
