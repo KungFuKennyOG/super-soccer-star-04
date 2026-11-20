@@ -23,8 +23,11 @@ import { BONES } from './mocap.js';
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v)), mix = (a, b, k) => a + (b - a) * k;
 const ease = x => { x = clamp(x, 0, 1); return x * x * (3 - 2 * x); };
 export const SET = {
-  hips: 0.8, hipsFar: 0.9, pitch: 0.3, width: 0.46, ahead: 0.05, heel: 0.12, toeOut: 0.14,   // the set position (m, rad)
-  hands: [0.2, 0.15, 0.36],                                                                // palms: out, above the hips, ahead (m)
+  // the set position as it is coached (m, rad): feet shoulder width, knees a little bent, on the balls of the feet,
+  // weight forward (nose in front of the toes), chest to the ball, elbows narrow and bent, hands in front of the
+  // body a ball's width apart, open and relaxed. Not a deep or wide squat.
+  hips: 0.85, hipsFar: 0.9, pitch: 0.36, width: 0.44, ahead: 0.05, heel: 0.1, toeOut: 0.12, kneeOut: 0.08,
+  hands: [0.15, 0.2, 0.38],                                                                // palms: out, above the hips, ahead (m, in the hips' own tilted frame)
   step: { thr: 0.07, still: 0.11, time: [0.22, 0.17], lift: 0.05, gap: 0.27, rise: 0.05 },   // (lift, gap, rise and the quick time: measured from a recorded defensive slide, see the notes)                        // when a foot steps, how quick (slow, fast), how high
   split: { hop: 0.07, land: 0.17, up: 0.03, wide: 0.08, sink: 0.04 },                       // s, s, m, m, m
   recover: 1.8, run: 4.2,                                                                  // m/s back to his spot after a save; faster than this he runs
@@ -94,6 +97,14 @@ function plantFeet(m) {
   for (const [n, sd] of [['L', 1], ['R', -1]]) m.kf[n] = { p: toWorldPt(m, V(sd * SET.width / 2, 0, SET.ahead), V(0, 0, 0)), air: null };
 }
 
+// Swings a knee out (or in) round the line from hip to ankle, so the foot stays where it is.
+const kq = new THREE.Quaternion(), kv = new THREE.Vector3();
+function kneeOut(bn, n, a) {
+  const up = bn['upperLeg' + n], lo = bn['lowerLeg' + n], ft = bn['foot' + n];
+  kv.copy(ft.position).applyQuaternion(lo.quaternion).add(lo.position).applyQuaternion(up.quaternion).normalize();
+  up.quaternion.premultiply(kq.setFromAxisAngle(kv, -a));
+}
+
 /* ---------- the set position and the shuffle ---------- */
 
 function stance(m, p, dt, t, ball) {
@@ -145,7 +156,7 @@ function stance(m, p, dt, t, ball) {
   // hips: low in the set, riding up a little as he pushes across (the recorded slide rises 10 cm and more between its stops), up and loose when the ball is far; never higher than the legs reach
   const H = mix(mix(SET.hips, SET.hipsFar, far), 0.9, hold) - sink + Math.min(S.rise, sp * 0.022) + up + 0.005 * Math.sin(t * 2.3 + (m.phase || 0) * 0.1);
   const mid = at.L.clone().add(at.R).multiplyScalar(0.5);
-  bn.hips.position.set(mid.x * 0.6, H, mid.z * 0.4 - 0.03);
+  bn.hips.position.set(mid.x * 0.6, H, mid.z * 0.4 - mix(0.09, 0.03, Math.max(hold, far)));   // sat back a little: bent forward, his weight stays over the balls of his feet
   const reach = 0.86;
   for (const [n, sd] of [['L', 1], ['R', -1]]) {
     const dx = at[n].x - (bn.hips.position.x + sd * 0.09), dz = at[n].z - bn.hips.position.z, dh = Math.hypot(dx, dz);
@@ -153,9 +164,10 @@ function stance(m, p, dt, t, ball) {
   }
   const weight = clamp((at.L.y - at.R.y) * 4, -1, 1);                  // over the planted foot
   bn.hips.rotation.set(mix(SET.pitch, 0.08, hold) * mix(1, 0.55, far), 0, -weight * 0.05);
-  bn.spine.rotation.set(mix(0.1, 0.02, hold), 0, weight * 0.04); bn.chest.rotation.set(0.05, 0, 0);
+  bn.spine.rotation.set(mix(0.16, 0.02, hold) * mix(1, 0.5, far), 0, weight * 0.04); bn.chest.rotation.set(mix(0.1, 0.03, Math.max(hold, far)), 0, 0);
   for (const [n, sd] of [['L', 1], ['R', -1]]) {
     reachLeg(bn, n, at[n]);
+    kneeOut(bn, n, sd * SET.kneeOut * (1 - hold));
     aimFoot(bn, n, tq.setFromEuler(te.set(m.kf[n].air || up > 0.015 ? 0.35 : SET.heel * (1 - hold), sd * SET.toeOut, 0)));
   }
   // weight: springs on the trunk and arms (before the hands are put where they go)
@@ -172,11 +184,13 @@ function stance(m, p, dt, t, ball) {
   // hands out in front at waist height, palms to the ball, a little alive; lower and looser when it's far away
   const tb = ball ? toLocal(m, ball, V(0, 0, 0)) : V(0, 1, 10), g = {};
   for (const [n, sd] of [['L', 1], ['R', -1]]) {
-    const palm = V(sd * mix(SET.hands[0], 0.22, far), SET.hands[1] - 0.1 * far + 0.01 * Math.sin(t * 3.1 + sd), mix(SET.hands[2], 0.22, far)).applyQuaternion(bn.hips.quaternion).add(bn.hips.position);
-    const N = tb.clone().sub(palm).normalize().negate().lerp(V(-sd, 0, 0.2), far * 0.7).normalize().negate();
-    g[n] = { palm, N, F: V(sd * 0.2, 1, 0.3).normalize() };
+    const palm = V(sd * mix(SET.hands[0], 0.24, far), SET.hands[1] - 0.12 * far + 0.01 * Math.sin(t * 3.1 + sd), mix(SET.hands[2], 0.26, far)).applyQuaternion(bn.hips.quaternion).add(bn.hips.position);
+    // the hands hang ready off bent elbows: fingers forward and a little down, palms turned in toward each other and
+    // half to the ball, wrists straight (palms square to the ball with the fingers up folded the wrists right back)
+    const N = V(-sd * 0.75, -0.25, 0.6).lerp(V(-sd, -0.1, 0.1), far).normalize(), F = V(sd * 0.12, mix(-0.3, -0.75, far), 1).normalize();
+    g[n] = { palm, N, F: F.addScaledVector(N, -F.dot(N)).normalize() };
   }
-  placeHands(bn, g, 1, 1, 0.5);
+  placeHands(bn, g, 1, 0.55, 0.9);                                      // elbows narrow
   lookAt(bn, tb, 0.9);
 }
 

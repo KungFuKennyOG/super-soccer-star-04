@@ -15,11 +15,11 @@ export function sampleOnce(clip, t, out) {
   return out;
 }
 
-// Getting up off the grass after a dive (140_03 'get up laying on side', from sitting on his hip with his legs to one
-// side, up through a crouch to standing: 3.2 s as recorded, played faster by the caller). Recorded with his legs
-// off to his right (the side a dive to his left lands him on); for a dive to his right it is seen in a mirror.
+// Getting up off the grass after a dive (140_03 'get up laying on side', from 2.5 s in: lying on his side, up onto
+// his hip and a hand, through a crouch to standing: 4.1 s as recorded, played faster by the caller). He lies as the
+// dive left him: the recording is seen in a mirror if he lies on the other side, and turned about so his head points
+// the way he dived; that turn is let go as he comes up off his hip, so he stands facing play.
 const G = CLIPS.getup, gp = newOnce(), gm = newOnce();
-export const GETUP = { length: G ? (G.n - 1) / G.hz : 0, side: G ? Math.sign(G.h[0] - (G.a[0] + G.a[3]) / 2) || 1 : 1 };
 const PAIR = BONES.map(n => (/[LR]$/.test(n) ? BONES.indexOf(n.slice(0, -1) + (n.endsWith('L') ? 'R' : 'L')) : -1));
 // the pose seen in a mirror down his middle: left and right change places, every turn is reflected
 function mirror(src, out) {
@@ -30,16 +30,29 @@ function mirror(src, out) {
   out.h[0] = -src.h[0]; out.h[1] = src.h[1]; out.h[2] = src.h[2];
   return out;
 }
+const HI = BONES.indexOf('hips'), q = new THREE.Quaternion(), qy = new THREE.Quaternion(), v = new THREE.Vector3(), UP = new THREE.Vector3(0, 1, 0);
+// how the recording lies at its start: which way his head points and his chest faces (on the grass's plane)
+const lie = G ? (() => {
+  q.fromArray(G.q, HI * 4);
+  const head = new THREE.Vector3(0, 1, 0).applyQuaternion(q).setY(0).normalize(), chest = new THREE.Vector3(0, 0, 1).applyQuaternion(q).setY(0).normalize();
+  return { head: Math.atan2(head.x, head.z), hand: Math.sign(head.z * chest.x - head.x * chest.z) || 1 };
+})() : null;
+const SIT = 1.25;                                    // s into the recording: sitting up on his hip, about to come up
+export const GETUP = { length: G ? (G.n - 1) / G.hz : 0 };
+const ease = x => { x = clamp(x, 0, 1); return x * x * (3 - 2 * x); };
 // Poses the get-up `t` seconds in (as recorded) over whatever pose he has, by w; s: which way the dive went (+1 his
-// left); from: where his hips were lying (model space): the recording is moved to start there.
-const q = new THREE.Quaternion();
+// left); from: where his hips lie (model space): the recording starts there.
 export function getupPose(bn, t, s, from, w = 1) {
   if (!G) return false;
+  // lying with his head toward the dive's side and his chest to the pitch: head (s, 0, 0), chest (0, 0, 1)
+  const flip = lie.hand !== s;
   let p = sampleOnce(G, t, gp);
-  if (Math.sign(s) !== GETUP.side) p = mirror(p, gm);
-  const x0 = p === gm ? -G.h[0] : G.h[0], z0 = G.h[2];
-  for (let b = 0; b < NB; b++) { q.fromArray(p.q, b * 4); bn[BONES[b]].quaternion.slerp(q, w); }
+  if (flip) p = mirror(p, gm);
+  const yaw = (s * Math.PI / 2 - (flip ? -lie.head : lie.head)) * (1 - ease((t - SIT) / Math.max(0.3, GETUP.length - SIT - 0.4)));
+  qy.setFromAxisAngle(UP, yaw);
+  for (let b = 0; b < NB; b++) { q.fromArray(p.q, b * 4); if (b === HI) q.premultiply(qy); bn[BONES[b]].quaternion.slerp(q, w); }
+  v.set(p.h[0] - (flip ? -G.h[0] : G.h[0]), 0, p.h[2] - G.h[2]).applyQuaternion(qy);
   const hp = bn.hips.position;
-  hp.x += (p.h[0] - x0 + from.x - hp.x) * w; hp.y += (p.h[1] - hp.y) * w; hp.z += (p.h[2] - z0 + from.z - hp.z) * w;
+  hp.x += (v.x + from.x - hp.x) * w; hp.y += (p.h[1] - hp.y) * w; hp.z += (v.z + from.z - hp.z) * w;
   return true;
 }

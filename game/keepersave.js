@@ -17,14 +17,14 @@
 import * as THREE from 'three';
 import { stepBall } from '../rules/ball.js';
 import { reachLeg, aimFoot } from './legik.js';
-import { grip, placeHands, lookAt, pathAt, keyAt, ankleFor, BALL_R } from './keeperhands.js';
+import { grip, placeHands, lookAt, pathAt, keyAt, mono, ankleFor, BALL_R } from './keeperhands.js';
 import { getupPose, GETUP } from './keepercap.js';
 
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v)), mix = (a, b, k) => a + (b - a) * k;
 const ease = x => { x = clamp(x, 0, 1); return x * x * (3 - 2 * x); };
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
 const ZD = 0.12, ZS = 0.36;                  // the plane he meets the ball in, in front of where he stood: diving, standing
-export const SAVE = { zDive: ZD, zStand: ZS, getupRate: 1.9, hold: { catch: 0.45, parry: 0.25, beaten: 0.3, wide: 0.3 } };
+export const SAVE = { zDive: ZD, zStand: ZS, getupRate: 2.1, hold: { catch: 0.45, parry: 0.25, beaten: 0.3, wide: 0.3 } };
 
 // world ↔ the save's frame (origin O, turned Y): x his left, z the way he faced
 const toModel = (sv, x, y, z, out) => { const dx = x - sv.O.x, dz = z - sv.O.z, c = Math.cos(sv.Y), s = Math.sin(sv.Y); return out.set(dx * c - dz * s, y, dx * s + dz * c); };
@@ -57,7 +57,9 @@ export function startSave(m, p, ball, root) {
   sv.T = Math.max(sv.stand ? 0.12 : 0.18, k.t); sv.c = k.c;
   if (!sv.stand && Math.sign(sv.c.x) && Math.abs(sv.c.x) > 0.25) sv.s = Math.sign(sv.c.x);       // the way the ball really is
   if (sv.stand) sv.s = sv.c.x >= 0 ? 1 : -1;
-  sv.h0 = m.bone.hips.position.clone(); sv.p0 = m.bone.hips.rotation.x;
+  // from where his hips were a frame ago (the bones have just been put back to rest: starting from there he jumped up 10 cm)
+  const L = m.kLast, nb = L ? (L.length - 3) / 4 : 0;
+  sv.h0 = L ? V(L[nb * 4], L[nb * 4 + 1], L[nb * 4 + 2]) : m.bone.hips.position.clone(); sv.p0 = L ? 2 * Math.asin(clamp(L[0], -1, 1)) : m.bone.hips.rotation.x;
   shape(sv);
   return sv;
 }
@@ -91,31 +93,34 @@ const LEGS = ['upperLeg', 'lowerLeg', 'foot'];
 function dive(m, sv, dt, ball) {
   const bn = m.bone, s = sv.s, T = sv.T, r = sv.reach, h = sv.h, t = sv.t;
   const near = s > 0 ? 'L' : 'R', far = s > 0 ? 'R' : 'L';
-  // timing: power step done, far foot off, near foot off (take-off), contact, landing, settled
-  const tP = 0.34 * T, tF = 0.42 * T, tN = 0.58 * T, Tl = mix(0.13, 0.42, h), tL = T + Tl, tG = tL + SAVE.hold[sv.kind] + (sv.grip === 'low' ? 0.1 : 0);
-  // the body lays out along a line to the ball, flat for a low one and up across for a high one
+  // timing: loaded on the stepped-out near foot, far foot off, near foot off (take-off), contact, landing, settled.
+  // He falls from the contact as a body falls (Tl); the hips' path runs smoothly through its keys and never past
+  // them: down into the load, out and (for a high ball) up through the take-off, then down onto his side.
   const th = mix(-0.08, 0.7, h), L = 1.08;
   const pc = V(r.x - s * Math.cos(th) * L, clamp(r.y - Math.sin(th) * L, 0.3, 1.45), r.z - 0.12);
   if (s * pc.x < 0.3) pc.x = s * 0.3;
-  const low = 1 - h;
-  const keys = [[0, sv.h0], [tP, V(s * 0.17, 0.7, 0.08)], [tN, V(s * 0.42, mix(0.78, 0.6, low * low), 0.1)], [T, pc],
-    [tL, V(pc.x + s * mix(0.12, 0.3, h), 0.17, pc.z - 0.04)], [tL + 0.3, V(pc.x + s * mix(0.14, 0.33, h), 0.17, pc.z - 0.05)]];
+  const tP = 0.38 * T, tF = 0.5 * T, tN = 0.66 * T, Tl = clamp(Math.sqrt(2 * Math.max(0.02, pc.y - 0.2) / 9.8), 0.14, 0.5), tL = T + Tl, tG = tL + SAVE.hold[sv.kind] + (sv.grip === 'low' ? 0.1 : 0);
+  const ax = Math.abs(pc.x), xN = Math.min(0.62, ax * 0.5), yP = Math.min(sv.h0.y - 0.06, mix(0.62, 0.66, h)), yN = Math.max(Math.min(pc.y, yP), mix(0.58, 0.84, h));
+  const land = V(pc.x + s * mix(0.1, 0.24, h), 0.19, pc.z - 0.04);
   const tt = Math.min(t, tG);
   sv.ground = t >= tL;                                     // landed: something of him is on the grass from now till he stands
-  pathAt(keys, tt, bn.hips.position);
-  const roll = keyAt([[0, 0], [tP, 0.12], [tN, 0.45], [T, Math.PI / 2 - th], [tL, 1.45]], tt);
-  const pitch = keyAt([[0, sv.p0], [tP, 0.34], [tN, 0.2], [T, 0.05], [tL, 0.18]], tt);
+  bn.hips.position.set(
+    s * mono([[0, s * sv.h0.x], [tP, Math.min(0.3, ax * 0.3)], [tN, xN], [T, ax], [tL, s * land.x], [tL + 0.3, s * land.x + 0.03]], tt),
+    mono([[0, sv.h0.y], [tP, yP], [tN, yN], [T, pc.y], [tL, land.y]], tt),
+    mono([[0, sv.h0.z], [tP, 0.02], [tN, 0.08], [T, pc.z], [tL, land.z]], tt));
+  const roll = mono([[0, 0], [tP, 0.3], [tN, 0.8], [T, Math.PI / 2 - th], [tL, 1.5]], tt);
+  const pitch = mono([[0, sv.p0], [tP, 0.4], [tN, 0.25], [T, 0.05], [tL, 0.1]], tt);
   bn.hips.quaternion.setFromAxisAngle(w1.set(0, 0, 1), -s * roll).multiply(qa.setFromAxisAngle(w1.set(1, 0, 0), pitch));
   const reachK = ease((tt - tP) / (T - tP)) * (1 - ease((tt - T) / 0.25));
   const curl = sv.kind === 'catch' ? ease((tt - T) / 0.3) : 0;
-  bn.spine.rotation.set(keyAt([[0, 0.12], [tN, 0.04], [T, 0], [tL, 0.1]], tt) + 0.22 * curl, 0, -s * 0.12 * reachK);
+  bn.spine.rotation.set(keyAt([[0, 0.12], [tN, 0.04], [T, 0], [tL, 0.1]], tt) + 0.22 * curl, 0, -s * (0.12 * reachK + 0.14 * ease(tt / tP) * (1 - ease((tt - T) / 0.2))));   // bent toward the ball from the first step: he goes with his whole side
   bn.chest.rotation.set(0.04 + 0.12 * curl, 0, -s * 0.08 * reachK);
 
   // legs: on the grass the feet are where they are (the near one steps out first), then each leaves in turn
   const step = ease((tt - 0.04 * T) / (tP - 0.04 * T));
   for (const n of [near, far]) {
     const isN = n === near, foot = sv.feet[n], at = toModel(sv, foot.x, 0, foot.z, V(0, 0, 0));
-    if (isN) { at.x += s * 0.38 * step; at.z += 0.16 * step; }   // the step toward the ball: his stance opens to about 90% of leg length between the two pushes (Ibrahim et al. 2019)
+    if (isN) { at.x += s * 0.3 * step; at.z += 0.16 * step; }   // the step toward the ball: his stance opens to about 90% of leg length between the two pushes (Ibrahim et al. 2019)
     const lift = isN ? Math.sin(Math.PI * step) * 0.05 : 0, toes = isN ? 0 : ease((tt - 0.6 * tF) / (0.4 * tF));
     reachLeg(bn, n, at.setY(ankleFor(toes * 0.7) + lift + toes * 0.03));
     aimFoot(bn, n, qa.setFromEuler(e1.set(toes * 0.7, isN ? s * 0.5 * step : 0, 0)));
@@ -123,7 +128,7 @@ function dive(m, sv, dt, ball) {
     // landed: the bottom leg a little bent, the top knee up and its foot down in front, ready to rock up
     const off = ease((tt - (isN ? tN : tF)) / 0.08), down = ease((tt - (T + Tl * 0.4)) / (Tl * 0.7));
     if (off <= 0) continue;
-    const air = isN ? [[0.12, 0, s * 0.06], [0.18], [0.55]] : [[mix(0.1, -1.05, h), 0, -s * 0.05], [mix(0.45, 1.45, h)], [0.5]];
+    const air = isN ? [[mix(0.5, 0.12, h), 0, s * 0.06], [mix(1.0, 0.18, h)], [0.55]] : [[mix(-0.35, -1.05, h), 0, -s * 0.05], [mix(1.35, 1.45, h)], [0.5]];   // (the far leg trails folded: straight, it went through the grass and he was hoisted up to clear it)
     const land = isN ? [[-0.3, 0, s * 0.05], [0.65], [0.3]] : [[-1.0, 0, -s * 0.15], [1.35], [0.2]];
     LEGS.forEach((b, i) => {
       const a = air[i], l = land[i];
@@ -134,7 +139,9 @@ function dive(m, sv, dt, ball) {
 
   // hands: from the ready position (carried with the body) out to the ball, leading; then the grip's follow-up
   const ready = readyGrip(bn), G = grip(sv.grip, r, s);
-  const u = clamp((tt - 0.06 * T) / (0.94 * T), 0, 1), wk = 1 - (1 - u) * (1 - u) * (1 - u);
+  // (they stay in front of him through the step and the load and go to the ball as he drives off: thrown out at
+  // once, his arms stood out sideways from an upright body while he was still squatting. Kenny: "what the hell is this")
+  const u = clamp((tt - 0.3 * T) / (0.7 * T), 0, 1), wk = u * u * (3 - 2 * u);
   let g = lerpGrip(ready, G, wk);
   m.held = null;
   if (tt >= T) {
@@ -148,8 +155,8 @@ function dive(m, sv, dt, ball) {
     } else {
       // pushed on and wide (a parry) or past the hands (beaten); then the arms give, toward the grass
       const push = V(s * 0.28, 0.05, 0.1).multiplyScalar(ease(a / 0.12)), drop = ease((a - 0.12) / (Tl + 0.1));
-      // (down to the grass beyond his head as he lands: left where a high ball was they stood straight up in the air)
-      const c2 = r.clone().add(push).lerp(V(keys[4][1].x + s * 0.8, 0.15, pc.z + 0.18), drop);
+      // (and down onto the grass in front of his chest as he lands, to take his weight)
+      const c2 = r.clone().add(push).lerp(V(land.x + s * 0.42, 0.14, pc.z + 0.34), drop);
       g = grip(sv.grip, c2, s);
       if (sv.kind === 'parry' && a < 0.05 && ball && ball.vz !== undefined) m.held = r.clone();
     }
@@ -157,12 +164,13 @@ function dive(m, sv, dt, ball) {
   placeHands(bn, g, 1, 1, 0.35);
   lookAt(bn, tt < T + 0.3 ? r : m.held || V(pc.x + s * 2, 0.4, 2), 0.8);
 
-  // up off the grass: a recorded get-up (game/keepercap.js), sped up; the ball, if he has it, held to his chest
-  if (t > tG) {
-    const gt = (t - tG) * SAVE.getupRate;
+  // up off the grass: a recorded get-up (game/keepercap.js), sped up; the ball, if he has it, held to his chest.
+  // While he lies there he comes round to the recording's first pose (propped on his hip), so the get-up starts
+  // from where he is and not across a blend of two different bodies (that blend threw him 30 cm into the air).
+  if (t > tL + 0.06) {
+    const gt = Math.max(0, t - tG) * SAVE.getupRate;
     if (gt > GETUP.length) return false;
-    const w = ease((t - tG) / 0.3);
-    getupPose(bn, gt, s, keys[5][1], w);
+    getupPose(bn, gt, s, land, ease((t - tL - 0.06) / Math.max(0.15, tG - tL - 0.06)));
     if (sv.kind === 'catch') {
       chestPoint(bn, hp);
       const b = sv.ballAt.clone().lerp(hp, ease((t - tG) / 0.4));
@@ -224,13 +232,14 @@ function standing(m, sv, dt, ball) {
 
 /* ---------- shared ---------- */
 
-// where his hands are in the set position, carried with the hips: palms toward the ball at waist height
+// where his hands are in the set position, carried with the hips: in front of him off bent elbows, fingers forward,
+// palms turned in and half to the ball, wrists straight (as the stance in game/keeperpose.js has them)
 function readyGrip(bn) {
   const out = {};
   for (const [lo, sd] of [['L', 1], ['R', -1]]) {
-    const palm = V(sd * 0.2, 0.15, 0.36).applyQuaternion(bn.hips.quaternion).add(bn.hips.position);
-    const N = V(-sd * 0.25, 0.1, -1).normalize().applyQuaternion(bn.hips.quaternion), F = V(sd * 0.15, 1, 0.2).normalize().applyQuaternion(bn.hips.quaternion);
-    out[lo] = { palm, N, F };
+    const palm = V(sd * 0.15, 0.2, 0.38).applyQuaternion(bn.hips.quaternion).add(bn.hips.position);
+    const N = V(-sd * 0.75, -0.25, 0.6).normalize().applyQuaternion(bn.hips.quaternion), F = V(sd * 0.12, -0.3, 1).normalize().applyQuaternion(bn.hips.quaternion);
+    out[lo] = { palm, N, F: F.addScaledVector(N, -F.dot(N)).normalize() };
   }
   return out;
 }

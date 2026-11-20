@@ -68,20 +68,31 @@ function forearmTurn(bn, lo, out) {
 
 // Puts each hand's gloved palm on its spot: the wrist where the palm then lands, the arm bent to it (elbow toward
 // `pole`, model space), the hand turned. w (0..1) eases it in from the pose the arm already has.
-const want = new THREE.Quaternion(), held = {};
-export function placeHand(bn, lo, sp, pole, w = 1) {
+// A wrist only bends so far (WRIST): if the spot asks the hand to stand further off the line of the forearm than
+// that, the hand gives (the palm stays on its spot and faces a little off it) and the arm is solved again. Without
+// this the palms were always square to the ball and the wrists folded back at right angles (Kenny: "broken wrist").
+export const WRIST = 0.5;                          // rad, about 30 degrees
+const want = new THREE.Quaternion(), held = {}, fd = new THREE.Vector3(), hd3 = new THREE.Vector3(), ax = new THREE.Vector3(), qf = new THREE.Quaternion();
+function solve(bn, lo, sp, pole, lim) {
   const qWant = handTurn(lo, sp.N, sp.F, want);
-  const wrist = v3.copy(PALM[lo]).applyQuaternion(qWant).negate().add(sp.palm);
-  if (w < 1) {
-    const up = bn['upperArm' + lo], fa = bn['foreArm' + lo], hd = bn['hand' + lo];
-    held.u = up.quaternion.clone(); held.f = fa.quaternion.clone(); held.h = hd.quaternion.clone();
+  for (let it = 0; it < 3; it++) {
+    const wrist = v3.copy(PALM[lo]).applyQuaternion(qWant).negate().add(sp.palm);
     reachArm(bn, lo, wrist.clone(), pole);
-    hd.quaternion.copy(forearmTurn(bn, lo, q1).invert().multiply(qWant));
-    up.quaternion.copy(held.u.slerp(up.quaternion, w)); fa.quaternion.copy(held.f.slerp(fa.quaternion, w)); hd.quaternion.copy(held.h.slerp(hd.quaternion, w));
-    return;
+    fd.copy(FL).applyQuaternion(forearmTurn(bn, lo, q1)); hd3.copy(FL).applyQuaternion(qWant);
+    const ang = fd.angleTo(hd3);
+    if (ang <= lim + 0.02) break;
+    ax.crossVectors(hd3, fd);
+    if (ax.lengthSq() < 1e-8) break;
+    qWant.premultiply(qf.setFromAxisAngle(ax.normalize(), ang - lim));
   }
-  reachArm(bn, lo, wrist.clone(), pole);
-  bn['hand' + lo].quaternion.copy(forearmTurn(bn, lo, q1).invert().multiply(qWant));
+  return qWant;
+}
+export function placeHand(bn, lo, sp, pole, w = 1, lim = WRIST) {
+  const up = bn['upperArm' + lo], fa = bn['foreArm' + lo], hd = bn['hand' + lo];
+  if (w < 1) { held.u = up.quaternion.clone(); held.f = fa.quaternion.clone(); held.h = hd.quaternion.clone(); }
+  const qWant = solve(bn, lo, sp, pole, lim);
+  hd.quaternion.copy(forearmTurn(bn, lo, q1).invert().multiply(qWant));
+  if (w < 1) { up.quaternion.copy(held.u.slerp(up.quaternion, w)); fa.quaternion.copy(held.f.slerp(fa.quaternion, w)); hd.quaternion.copy(held.h.slerp(hd.quaternion, w)); }
 }
 // both hands; poles out to each side and a little down and back, in the hips' frame
 export function placeHands(bn, g, w = 1, poleOut = 1, poleDown = 0.4) {
@@ -141,6 +152,18 @@ export function pathAt(keys, t, out) {
   const u = (t - t1) / (t2 - t1), u2 = u * u, u3 = u2 * u;
   for (const c of ['x', 'y', 'z']) out[c] = 0.5 * (2 * p1[c] + (-p0[c] + p2[c]) * u + (2 * p0[c] - 5 * p1[c] + 4 * p2[c] - p3[c]) * u2 + (-p0[c] + 3 * p1[c] - 3 * p2[c] + p3[c]) * u3);
   return out;
+}
+// A number along keys [[t, v], ...] on a smooth curve that never overshoots a key (monotone cubic, Fritsch-Carlson):
+// it runs on through the keys without stopping at each, and without the bounces a plain spline puts in.
+export function mono(keys, t) {
+  const n = keys.length;
+  if (t <= keys[0][0]) return keys[0][1];
+  if (t >= keys[n - 1][0]) return keys[n - 1][1];
+  let i = 0; while (keys[i + 1][0] < t) i++;
+  const d = k => (keys[k + 1][1] - keys[k][1]) / (keys[k + 1][0] - keys[k][0]);
+  const slope = k => { if (k === 0) return d(0); if (k === n - 1) return d(n - 2); const a = d(k - 1), b = d(k); return a * b <= 0 ? 0 : 2 * a * b / (a + b); };
+  const h = keys[i + 1][0] - keys[i][0], u = (t - keys[i][0]) / h, u2 = u * u, u3 = u2 * u;
+  return (2 * u3 - 3 * u2 + 1) * keys[i][1] + (u3 - 2 * u2 + u) * h * slope(i) + (-2 * u3 + 3 * u2) * keys[i + 1][1] + (u3 - u2) * h * slope(i + 1);
 }
 // a number along keys [[t, v], ...], eased between them
 export function keyAt(keys, t) {
