@@ -34,7 +34,7 @@
 import * as THREE from 'three';
 import { animate, placeModel } from '../game/actors.js';
 import { startStrike, struck } from '../game/strike.js';
-import { byId } from '../rules/teams.js';
+import { byId, awayFor, keeperKit } from '../rules/teams.js';
 import { strideRate, strides, dribbleLead } from '../rules/dribble.js';
 import { BALL } from '../rules/tuning.js';
 import { buildPlayer2, LIGHT_DIR } from '../game/ps2/player.js';
@@ -74,6 +74,13 @@ const cast = [
   { kit: TUR, num: 4, look: 5, o: { style: 0, skinI: 4, hairI: 3 } },
 ];
 const t0 = performance.now();
+// ?team=GER: the cast wears that team's kits, for looking a kit over (docs/kits.md): players 0 and 2 the home kit (10),
+// 1 and 3 the change kit (7), 4 the keeper's (1). ?team=GER,ITA puts ITA's home kit on 1 and 3 instead.
+const TEAM = (q.get('team') || '').split(',').map(byId).filter(Boolean);
+if (TEAM.length) {
+  const other = TEAM[1] ? TEAM[1].kit : awayFor(TEAM[0]);
+  [[0, TEAM[0].kit, 10], [2, TEAM[0].kit, 10], [1, other, 7], [3, other, 7], [4, keeperKit(TEAM[0].kit), 1]].forEach(([i, kit, num]) => { cast[i].kit = kit; cast[i].num = num; });
+}
 const players = cast.map((c, i) => {
   const m = buildPlayer2(c.kit, c.num, c.look, c.o);
   if (q.get('foot') === 'L') m.foot = 'L';                     // ?foot=L: everyone left-footed
@@ -96,6 +103,7 @@ const SHOTS = {
   vr: { fov: 92, cam: [0.1, 1.66, 2.3], at: [0.1, 1.5, 0], ball: [0.35, 1.2], set: t => [[-0.6, 0, 0.15, 0, 0], [0.75, -0.2, -0.2, 0, 0], off, off, [-5, -9, 1, 3, 1], [6, -12, -1, 3, 2]] },
   face: { fov: 22, cam: [0, 1.74, 1.25], at: [0, 1.7, 0], ball: [3, 3], set: t => [[-0.2, 0, 0.3, 0, 0], [0.2, 0, -0.3, 0, 0], off, off, off, off] },
   face2: { fov: 22, cam: [0, 1.74, 1.25], at: [0, 1.7, 0], ball: [3, 3], set: t => [off, off, [-0.2, 0, 0.5, 0, 0], [0.2, 0, -0.5, 0, 0], off, off] },
+  kitcard: { fov: 30, cam: [0.2, 1.08, 6.6], at: [0.2, 0.93, 0], ball: [60, 60], set: () => [[-2.2, 0, 0.12, 0, 0, 0, 'def'], [0.2, 0, 0.12, 0, 0, 0, 'def'], [-1.0, 0, Math.PI - 0.12, 0, 0, 0, 'def'], [1.4, 0, Math.PI + 0.12, 0, 0, 0, 'def'], [2.6, 0, -0.12, 0, 0, 0, 'def'], off] },   // a kit looked over: home front and back, change kit front and back, the keeper (use with ?team=)
   kit: { fov: 28, cam: [0, 1.15, 3.6], at: [0, 1.0, 0], ball: [0, 0.6], set: t => [[-0.5, 0, 0.1, 0, 0], [0.5, 0, -0.1, 0, 0], off, off, off, off] },
   side: { fov: 28, cam: [3.7, 1.15, 0.3], at: [0, 1.0, 0], ball: [3, 3], set: t => [[0, -0.55, 0, 0, 0], [0, 0.55, 0, 0, 0], off, off, off, off] },
   // one player from the side, the camera going with him: [speed, which way he travels off his facing]

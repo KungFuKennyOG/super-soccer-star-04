@@ -95,7 +95,7 @@ function badge(ctx, x, y, s, ink, field, star) {
 // 1 = piping curving from the collar to the armhole, 2 = side panels in the trim color.
 function styleOf(k) {
   const h = hash(parseInt(k.shirt.slice(1), 16) & 0xffff, parseInt(k.trim.slice(1), 16) & 0xffff, 11), plain = k.pattern === 'solid' || k.pattern === 'sleeves';
-  return { plain, neck: 1, cut: Math.floor(h * 977) % 3, hoops: Math.floor(h * 131) % 2 };
+  return { plain, neck: 1, cut: k.cut ?? Math.floor(h * 977) % 3, hoops: +(k.hoops ?? Math.floor(h * 131) % 2) };      // (a kit may say its own cut and sock tops: rules/teams.js)
 }
 // The collar: how far below the top of the shirt its upper edge sits at x (it scoops at the throat), and how deep the band is.
 const BAND = 9;

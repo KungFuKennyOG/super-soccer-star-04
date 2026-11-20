@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { NATIONS, CLUBS, ALL, byId, kitsClash, awayKit, matchKit, keeperKit } from '../../rules/teams.js';
+import { NATIONS, CLUBS, ALL, byId, kitsClash, awayKit, awayFor, matchKit, keeperKit, k } from '../../rules/teams.js';
 
 test('32 nations and 17 clubs with unique ids and sane fields', () => {
   assert.equal(NATIONS.length, 32);
@@ -51,4 +51,14 @@ test('every nation can be reached from every other by moving the stick', () => {
     for (const d of ['left', 'right', 'up', 'down']) { const n = nationToward(id, d); if (n && !seen.has(n)) { seen.add(n); queue.push(n); } }
   }
   assert.equal(seen.size, 32, [...NATIONS.map(n => n.id)].filter(x => !seen.has(x)).join(' '));
+});
+
+test("a team's own change kit is worn on a clash in place of the plain one", () => {
+  const home = { id: 'AAA', kit: k('solid', '#c8102e', null, '#f2f1ea', '#c8102e', '#f2f1ea', '#f2f1ea') };
+  const plain = { id: 'BBB', kit: k('solid', '#d0101e', null, '#f2f1ea', '#161618', '#161618', '#f2f1ea') };
+  const own = { ...plain, id: 'CCC', away: k('solid', '#14204f', null, '#14204f', '#14204f', '#f2f1ea', '#f2f1ea', { cut: 1, hoops: 0 }) };
+  assert.deepEqual(awayFor(plain), awayKit(plain.kit));
+  assert.equal(awayFor(own), own.away);
+  assert.equal(matchKit(own, home), own.away);
+  assert.equal(matchKit(own, { id: 'DDD', kit: k('solid', '#1b7a3a', null, '#1b7a3a', '#1b7a3a', '#f2f1ea', '#f2f1ea') }), own.kit);
 });

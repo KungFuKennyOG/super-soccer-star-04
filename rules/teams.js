@@ -7,8 +7,13 @@
 //            | 'halves' (left half shirt, right half alt)
 //            | 'sleeves' (body in shirt, sleeves in alt)
 //   alt: the pattern's second color. sleeve: sleeve color (defaults to shirt, or alt for 'sleeves').
+//   Only the '04 look reads these two (game/ps2/kit.js; left out, each is picked from the kit's colors):
+//   cut: 0 side panels edged with piping | 1 piping curving from the collar to the armhole | 2 side panels in the trim color.
+//   hoops: sock tops, 1 = two thin hoops, 0 = one band.
+// A team may also carry `away`: its own change kit (same fields), worn on a clash in place of the plain one awayKit makes.
+// How to design them, step by step: docs/kits.md; `node tools/kitcheck.mjs` checks them, `node tools/kitshots.mjs` draws them.
 
-const k = (pattern, shirt, alt, shorts, socks, trim, number, extra = {}) =>
+export const k = (pattern, shirt, alt, shorts, socks, trim, number, extra = {}) =>
   ({ pattern, shirt, alt: alt || shirt, shorts, socks, band: extra.band || trim, trim, trim2: extra.trim2 || trim, number, ...extra });
 
 const W = '#f2f1ea', BLK = '#161618', NAVY = '#14204f', RED = '#c8102e', GOLD = '#f2c21a', GREEN = '#1b7a3a', SKY = '#7cbbe8';
@@ -108,7 +113,7 @@ export const teamsFor = cup => (cup === 'world' ? NATIONS : CLUBS);
 /* ---------- kit helpers ---------- */
 
 const rgb = hex => { const n = parseInt(hex.slice(1), 16); return [n >> 16, (n >> 8) & 255, n & 255]; };
-const colorDist = (a, b) => { const x = rgb(a), y = rgb(b); return Math.hypot(x[0] - y[0], x[1] - y[1], x[2] - y[2]); };
+export const colorDist = (a, b) => { const x = rgb(a), y = rgb(b); return Math.hypot(x[0] - y[0], x[1] - y[1], x[2] - y[2]); };
 const light = hex => { const [r, g, b] = rgb(hex); return 0.3 * r + 0.59 * g + 0.11 * b; };
 
 // Do two kits look too alike to play each other?
@@ -123,9 +128,12 @@ export function awayKit(kit) {
   return { pattern: 'solid', shirt, alt: shirt, shorts: pale ? '#1a2350' : '#f2f1ea', socks: shirt, band: other, trim: other, trim2: other, number: other };
 }
 
+// A team's change kit: its own if it has one, else the plain one.
+export const awayFor = team => team.away || awayKit(team.kit);
+
 // The opponent's kit for a match against `home`: their own, or the change kit on a clash.
 export function matchKit(opp, home) {
-  return kitsClash(opp.kit, home.kit) ? awayKit(opp.kit) : opp.kit;
+  return kitsClash(opp.kit, home.kit) ? awayFor(opp) : opp.kit;
 }
 
 // Goalkeeper kit: green, or yellow if the team plays in green.
