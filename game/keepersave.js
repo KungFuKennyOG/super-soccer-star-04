@@ -179,6 +179,7 @@ function dive(m, sv, dt, ball) {
     if (sv.kind === 'catch') {
       chestPoint(bn, hp);
       const b = sv.ballAt.clone().lerp(hp, ease((t - tG) / 0.4));
+      bn.clavicleL.quaternion.identity(); bn.clavicleR.quaternion.identity();   // (the recording rolls a shoulder in: with the ball in his arms that put an upper arm inside his chest)
       placeHands(bn, grip('sides', b, s), 1, 1, 0.2);
       m.held = b;
     }

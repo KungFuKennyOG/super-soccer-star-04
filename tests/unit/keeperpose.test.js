@@ -8,7 +8,7 @@ import * as THREE from 'three';
 import { buildSkeleton } from '../../game/body.js';
 import { animate, placeModel } from '../../game/actors.js';
 import { heldBall } from '../../game/keeperpose.js';
-import { PALM, BALL_R } from '../../game/keeperhands.js';
+import { PALM, BALL_R, armInside } from '../../game/keeperhands.js';
 import { createWorld, stepSim } from '../../rules/sim.js';
 import { GOAL } from '../../rules/tuning.js';
 
@@ -38,7 +38,7 @@ function play({ tx, ty, hold = 0.5, from = 16, fx = 0, kind = null, secs = 3, ac
     for (const b of Object.values(by)) assert.ok(Number.isFinite(b.quaternion.x + b.quaternion.w + b.position.y), `${b.name} finite`);
     const palms = ['L', 'R'].map(n => by['hand' + n].localToWorld(PALM[n].clone()));
     const held = heldBall(m, v());
-    rows.push({ t, ev: ev.map(e => e.type), sv: m.sv && { t: m.sv.t, T: m.sv.T, kind: m.sv.kind, stand: m.sv.stand, grip: m.sv.grip }, palms, held, ball: { ...w.ball }, before,
+    rows.push({ t, ev: ev.map(e => e.type), sv: m.sv && { t: m.sv.t, T: m.sv.T, kind: m.sv.kind, stand: m.sv.stand, grip: m.sv.grip }, palms, held, ball: { ...w.ball }, before, arm: Math.max(armInside(by, 'L'), armInside(by, 'R')),
       low: lowest(m), feet: ['L', 'R'].map(n => by['foot' + n].getWorldPosition(v())), owner: w.owner, gkx: gk.x });
   }
   return rows;
@@ -114,3 +114,14 @@ test('keeper: his feet grip the grass as he shuffles across', () => {
 });
 
 test.after(() => { if (process.env.KEEPER_REPORT) console.log(REPORT.join('\n')); });
+
+// His arms stay out of his body (Kenny: "his arms still go through his body sometimes"): the arm's middle line may
+// brush a fat trunk (3 cm) but is never well inside it for long. Before the hands were kept in front of his chest an
+// arm reaching across was 10 cm and more inside for up to a second of a save.
+for (const [name, o] of [...DIVES, ...STANDS]) {
+  test(`keeper: ${name}: his arms don't go through his body`, () => {
+    const rows = play({ ...o, secs: 3.4 }), deep = rows.filter(r => r.arm > 0.03), worst = Math.max(...rows.map(r => r.arm));
+    assert.ok(worst < 0.1, `an arm ${cm(worst)} cm inside his trunk`);
+    assert.ok(deep.length <= 26, `${deep.length} frames with an arm over 3 cm inside (72 a second)`);
+  });
+}
