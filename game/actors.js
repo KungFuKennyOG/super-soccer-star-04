@@ -47,7 +47,39 @@ export function buildYou(kit, boots = 0) {
 // has his own (game/keeperpose.js). Place the model (placeModel) before posing it: the boot is sent to the
 // ball, and the model's heading is eased from the one placeModel gave it.
 // ball: the sim ball, for the keeper and for the boot to meet; onBall: he has it at his feet.
+// The boot that does the work is the right one, or the left for a left-footed player (below).
 export function animate(m, p, dt, t, celebrate, guide = null, ball = null, onBall = false) {
+  if (m.foot !== 'L' || p.role === 'gk' || m.firstPerson) return pose(m, p, dt, t, celebrate, guide, ball, onBall);
+  // A left-footed player (m.foot 'L', game/squad.js) is posed as his right-footed twin in a mirror standing
+  // on the pitch's long axis (x → -x: his place, velocity, facing, the ball, a strike's direction), then the
+  // pose is mirrored back onto him. So every touch, strike and pass is his left boot's, and nothing that puts
+  // a boot on the ball needs to know. The twin's world is a whole one, so what the poses remember between
+  // frames (footprints, heading, springs) stays true in it.
+  const r = m.root, x = r.position.x, st = m.strike, flip = v => (v === undefined ? v : -v);
+  const pm = Object.create(p); pm.x = flip(p.x); pm.vx = flip(p.vx); pm.fx = flip(p.fx);
+  let bm = null, gm = guide;
+  if (ball) { bm = Object.create(ball); bm.x = -ball.x; bm.vx = flip(ball.vx); }
+  if (guide && (guide.move === 'left' || guide.move === 'right')) { gm = Object.create(guide); gm.move = guide.move === 'left' ? 'right' : 'left'; }   // the dance's arm signals stay on the side they were called
+  r.position.x = -x; r.rotation.y = -r.rotation.y;
+  if (st) st.dir.x = -st.dir.x;
+  pose(m, pm, dt, t, celebrate, gm, bm, onBall);
+  if (st) st.dir.x = -st.dir.x;
+  r.position.x = x; r.rotation.y = -r.rotation.y;
+  mirrorPose(m.bone);
+  if (m.cloth) m.cloth.uCloth.value.x *= -1;
+}
+
+// A pose seen in a mirror down the body's middle: left and right bones change places and every turn is reflected.
+const sides = new WeakMap(), qm = new THREE.Quaternion();
+function mirrorPose(bn) {
+  let k = sides.get(bn);
+  if (!k) { const names = Object.keys(bn); sides.set(bn, k = { pairs: names.filter(n => n.endsWith('L') && bn[n.slice(0, -1) + 'R']).map(n => n.slice(0, -1)), mid: names.filter(n => !(/[LR]$/.test(n) && bn[n.slice(0, -1) + (n.endsWith('L') ? 'R' : 'L')])) }); }
+  for (const n of k.mid) { const q = bn[n].quaternion; q.set(q.x, -q.y, -q.z, q.w); }
+  for (const n of k.pairs) { const l = bn[n + 'L'].quaternion, rq = bn[n + 'R'].quaternion; qm.set(l.x, -l.y, -l.z, l.w); l.set(rq.x, -rq.y, -rq.z, rq.w); rq.copy(qm); }
+  bn.hips.position.x = -bn.hips.position.x;
+}
+
+function pose(m, p, dt, t, celebrate, guide, ball, onBall) {
   const bn = m.bone;
   if (p.role === 'gk') { animateKeeper(m, p, dt, t, ball); return; }
   restPose(bn);

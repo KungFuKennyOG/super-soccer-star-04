@@ -30,12 +30,12 @@ function gap(m, n, ball) {
 
 // You run with the ball (drawn as your own first-person legs, or as a whole body), optionally letting go
 // of a shot or pass at 1.2 s. Returns one row per frame.
-function play({ firstPerson, sprint = true, shot = null, pass = null, secs = 2.4 }) {
+function play({ firstPerson, sprint = true, shot = null, pass = null, secs = 2.4, foot = 'R' }) {
   const w = createWorld(fixed);
   for (const id of ['d1', 'd2', 'd3']) { w.byId[id].x = 20; w.byId[id].z = -1; w.byId[id].stun = 99; }
   const { bones, by } = buildSkeleton(), root = new THREE.Group();
   root.add(bones[0]);
-  const m = { root, bone: by, shadow: new THREE.Object3D(), phase: 0, strike: null, firstPerson }, rows = [];
+  const m = { root, bone: by, shadow: new THREE.Object3D(), phase: 0, strike: null, firstPerson, foot }, rows = [];
   for (let t = 0; t < secs; t += DT) {
     const it = { move: { x: 0, z: -1 }, facing: { x: 0, z: -1 }, sprint };
     if (Math.abs(t - 1.2) < DT / 2) {
@@ -153,3 +153,19 @@ for (const firstPerson of [true, false]) {
     assert.ok(Math.min(...during.map(r => r.right)) < 0.12, `but close round it (${cm(Math.min(...during.map(r => r.right)))} cm)`);
   });
 }
+
+test('a left-footed player does it all with his left boot: strikes, passes and dribbling touches', () => {
+  for (const [name, o] of [['a low shot', { shot: { x: 3, y: 0.5, hold: 0.8 } }], ['a shot across goal', { shot: { x: -3.2, y: 2, hold: 0.9 } }], ['a pass', { pass: 'm1' }]]) {
+    const rows = play({ firstPerson: false, foot: 'L', ...o }), k = rows.findIndex(r => r.hit);
+    assert.ok(k > 0, `${name}: struck`);
+    assert.ok(Math.abs(rows[k].left) < 0.02, `${name}: left boot ${(rows[k].left * 100).toFixed(1)} cm from the ball when it's struck`);
+    assert.ok(rows[k].right > 0.005, `${name}: the standing boot isn't on the ball (${(rows[k].right * 100).toFixed(1)} cm)`);
+    assert.ok(rows[k + 3].left > 0.15, `${name}: and the ball has left it three frames later`);
+  }
+  for (const sprint of [true, false]) {
+    const rows = play({ firstPerson: false, foot: 'L', sprint, secs: 3 }).filter(r => r.t > 0.7), touches = rows.filter(r => r.touch);
+    assert.ok(touches.length >= 3, `${touches.length} touches`);
+    for (const r of touches) assert.ok(Math.abs(r.left) < 0.03, `left boot ${(r.left * 100).toFixed(1)} cm from the ball on a touch`);
+    assert.ok(Math.min(...rows.map(r => r.right)) > 0.03, 'the right boot never reaches it');
+  }
+});

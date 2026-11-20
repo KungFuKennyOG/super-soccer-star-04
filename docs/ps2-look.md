@@ -31,12 +31,15 @@ Status, 20 Nov 2026. This repo began as a copy of `KungFuKennyOG/super-soccer-st
 5. "That is actually really good."
 6. No V-necks; expose the neck less → done.
 7. Hand-built standing is fine for now (the library's standing takes were unusable).
-8. Cloth movement: shown side by side, barely visible; he hasn't said keep or drop.
+8. Cloth movement: shown side by side, barely visible; he left the call to Claude: kept, no more time on it.
+9. "Everything right-footed" → about three outfield players in ten are now left-footed and do everything with the left boot.
+10. Asked whether tricks, moves and dribbling got the realistic treatment: not the legs (see below).
 
 ## Still short (told to Kenny)
 
 - Cuts have no plant-and-push on the outside foot; a stop ends with the feet easing into place.
-- Legs on the ball and side-steps are procedural, not captured. Every strike is right-footed.
+- **Legs on the ball are the earlier hand-built ones**: dribbling, the kicking leg and every trick. Capture and the sprint drive switch off for anyone on the ball. This is the next big animation job.
+- Side-steps are procedural, not captured. Each player uses one foot for everything (no weak-foot strikes); you are right-footed.
 - Sprint sleeves wing out when the arm swings far back.
 - Faces are painted and clean where FIFA's are photo-derived; everyone shares one skull shape.
 - Standing is hand-built: stance, weight shift, breathing, hands on hips.
@@ -55,4 +58,3 @@ Still open:
 
 - The name on the title screen and logo still says '96.
 - Hosting: GitHub Pages isn't set up for this repo.
-- Keep or drop the cloth movement.
