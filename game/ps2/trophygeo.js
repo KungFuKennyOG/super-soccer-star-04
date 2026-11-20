@@ -16,9 +16,9 @@ import { revolve, tube, starGeo } from './metal.js';
 // Where the hands go (trophy-local, the middle of the fist), index 0 on +x for your left hand. The same
 // on the nations' cup the hands close either side of a round grip 6.6 cm across (the same points and
 // thickness as game/trophy.js); on the clubs' cup each fist closes round a round vertical bar 3.2 cm
-// across (trophy.js: 3 cm boxes; 3.2 is the thinnest the new hands' grip pose is tested on), 38 cm apart (trophy.js: 50 cm, round its big ears; moved in so the
-// handles stay slim and close to the body: 4 cm of room for the fingers behind the bar).
-export const GRIPS2 = { world: [[0.07, 0.24, 0], [-0.07, 0.24, 0]], club: [[0.19, 0.37, 0], [-0.19, 0.37, 0]] };
+// across (trophy.js: 3 cm boxes; 3.2 is the thinnest the new hands' grip pose is tested on), 35 cm apart (trophy.js: 50 cm, round its big ears; moved in so the
+// handles stay slim and close to the body: 5 cm of room for the fingers behind the bar).
+export const GRIPS2 = { world: [[0.07, 0.24, 0], [-0.07, 0.24, 0]], club: [[0.175, 0.37, 0], [-0.175, 0.37, 0]] };
 export const HOLD_D = { world: 0.066, club: 0.032 };
 // Per hand-hold, for the hands' grip pose (buildHand(side, 'hold', kit, skin, { d, at })): where the middle
 // of the fist goes, the handle's axis (both vertical) and the diameter of the round section it closes on.
@@ -78,20 +78,20 @@ export function worldParts(variant = 'flame') {
   stone.push(prism(0.089, 0.017, 0.073));
   metal.push(revolve([[0, 0.073], [0.092, 0.073, 1], [0.097, 0.077, 1], [0.097, 0.086, 1], [0.084, 0.092, 1], [0.074, 0.094, 1], [0.064, 0.118, 1], [0.054, 0.142, 1], [0.05, 0.15]], 8, { flat: true, a0: O }));
   // round from here: bead, collar, the waisted grip (3.3 cm radius where the palms go), the upper collar
-  const col = [[0.05, 0.149], [0.057, 0.153], [0.058, 0.158], [0.053, 0.162, 1], [0.046, 0.164], [0.045, 0.17], [0.038, 0.178], [0.0345, 0.19], [0.033, 0.215],
-    [0.0335, 0.24], [0.033, 0.265], [0.0345, 0.285], [0.04, 0.293], [0.047, 0.297], [0.049, 0.302], [0.045, 0.306, 1], [0.038, 0.309]];
+  const col = [[0.05, 0.149], [0.058, 0.155], [0.053, 0.162, 1], [0.045, 0.17], [0.036, 0.185], [0.033, 0.215], [0.0335, 0.24], [0.033, 0.265],
+    [0.036, 0.29], [0.047, 0.297], [0.049, 0.302], [0.045, 0.306, 1], [0.038, 0.309]];
   if (variant === 'flame') {
     // a calyx the leaves grow from: a shallow bowl, open, its rim rolled
-    metal.push(revolve([...col, [0.04, 0.33], [0.048, 0.36], [0.054, 0.378], [0.057, 0.383], [0.052, 0.385], [0.044, 0.38], [0, 0.36]], 32));
+    metal.push(revolve([...col, [0.04, 0.33], [0.05, 0.365], [0.057, 0.383], [0.05, 0.385], [0, 0.36]], 20));
     // five broad tongues of flame, symmetric (they rise, swell and flick out at the tip, no spiral), a gap
     // at the front for the star's face, and five short ones between them, the front one under the star
     const big = { R: [[0, 0.036], [0.35, 0.058], [0.72, 0.064], [1, 0.092]], Y: [[0, 0.305], [0.35, 0.365], [0.72, 0.44], [1, 0.505]],
       W: [[0, 0.012], [0.3, 0.027], [0.62, 0.026], [0.86, 0.013], [1, 0.0006]], T: [[0, 0.006], [0.5, 0.007], [1, 0.0014]] };
-    for (let k = 0; k < 5; k++) metal.push(blade(Math.PI / 5 + k * 2 * Math.PI / 5, big, 18, 12));
+    for (let k = 0; k < 5; k++) metal.push(blade(Math.PI / 5 + k * 2 * Math.PI / 5, big, 10, 8));
     const small = { R: [[0, 0.04], [0.45, 0.06], [0.8, 0.064], [1, 0.08]], Y: [[0, 0.33], [0.45, 0.37], [0.8, 0.405], [1, 0.43]],
       W: [[0, 0.01], [0.35, 0.02], [0.75, 0.013], [1, 0.0006]], T: [[0, 0.005], [1, 0.001]] };
-    for (let k = 0; k < 5; k++) metal.push(blade(k * 2 * Math.PI / 5, small, 12, 10));
-    metal.push(revolve([[0.009, 0.36], [0.008, 0.42], [0.012, 0.44], [0, 0.445]], 10));      // the post the star stands on
+    for (let k = 0; k < 5; k++) metal.push(blade(k * 2 * Math.PI / 5, small, 6, 6));
+    metal.push(revolve([[0.009, 0.36], [0.008, 0.42], [0.012, 0.44], [0, 0.445]], 6));      // the post the star stands on
     metal.push(place(starGeo(0.08, 0.034, 0.026, 0.0065), 0, 0.472, 0));
   } else if (variant === 'spire') {
     metal.push(revolve([...col, [0.05, 0.33], [0.06, 0.34, 1], [0.052, 0.36], [0.03, 0.44], [0.012, 0.47], [0, 0.48]], 6, { flat: true }));
@@ -111,42 +111,42 @@ export function worldParts(variant = 'flame') {
 // the top corner. Corners are kept sharp by points either side of them.
 function bracket(side, top = 0.468, neck = 0.074, low = [0.118, 0.29]) {
   const X = GRIPS2.club[0][0], b0 = 0.306, b1 = 0.44, e = 0.006;
-  const pts = [[low[0] - 0.01, low[1]], [X - e, b0 - e * 0.15], [X, b0 + e * 0.4], [X, b0 + e * 1.2], [X, b1 - e * 1.2], [X, b1 - e * 0.4], [X - e, b1 + e * 0.1], [neck - 0.01, top + 0.004]];
-  const rad = [0.007, 0.0095, 0.012, 0.016, 0.016, 0.012, 0.0095, 0.0065];
-  const g = tube(pts.map(([x, y]) => [side * x, y, 0]), rad, 12, { up: [0, 0, 1] });
-  const spike = revolve([[0.012, 0], [0.013, 0.005], [0.007, 0.011], [0, 0.022]], 8);
+  const pts = [[low[0] - 0.01, low[1]], [X - e, b0 - e * 0.15], [X, b0 + e * 0.4], [X, b0 + e * 1.2], [X, GRIPS2.club[0][1]], [X, b1 - e * 1.2], [X, b1 - e * 0.4], [X - e, b1 + e * 0.1], [neck - 0.01, top + 0.004]];
+  const rad = [0.007, 0.0095, 0.012, 0.016, 0.016, 0.016, 0.012, 0.0095, 0.0065];
+  const g = tube(pts.map(([x, y]) => [side * x, y, 0]), rad, 10, { up: [0, 0, 1] });
+  const spike = revolve([[0.012, 0], [0.013, 0.005], [0.007, 0.011], [0, 0.022]], 6);
   return [g, place(spike, side * X, b1 + 0.004, 0)];
 }
+const rAt = (prof, y) => { for (let i = 1; i < prof.length; i++) if (prof[i][1] >= y && prof[i - 1][1] <= y) { const [r0, y0] = prof[i - 1], [r1, y1] = prof[i]; return r0 + (r1 - r0) * (y - y0) / (y1 - y0 || 1); } return 0; };
+// the amphora, foot to finial post: (r, y, hard). Three runs: the foot and knop (smooth), the fluted belly
+// (64 round, four steps to a flute), the shoulder band, neck, rim and lid (smooth).
+const FOOT = [[0, 0.106], [0.07, 0.106, 1], [0.07, 0.113, 1], [0.05, 0.124], [0.026, 0.142], [0.018, 0.165], [0.026, 0.176], [0.03, 0.182], [0.024, 0.19], [0.018, 0.2], [0.024, 0.215]];
+const BELLY = [[0.024, 0.215], [0.05, 0.235], [0.08, 0.27], [0.1, 0.315], [0.106, 0.36], [0.102, 0.4], [0.093, 0.425], [0.085, 0.43]];
+const TOP = [[0.085, 0.428], [0.099, 0.43, 1], [0.099, 0.44, 1], [0.09, 0.445], [0.075, 0.47], [0.062, 0.5], [0.058, 0.52], [0.064, 0.535], [0.075, 0.545, 1], [0.075, 0.553, 1],
+  [0.062, 0.557], [0.045, 0.567], [0.026, 0.578], [0.014, 0.585, 1], [0.008, 0.598], [0.006, 0.636], [0, 0.638]];
 export function clubParts(variant = 'amphora') {
   const metal = [], dark = [], Q = Math.PI / 4;
-  // the black stepped plinth (square) with a thin silver band, then the silver foot plate
+  // the black stepped plinth (square) with a thin silver band
   dark.push(revolve([[0, 0], [0.142, 0, 1], [0.142, 0.024, 1], [0.126, 0.028, 1], [0.126, 0.09, 1], [0.108, 0.094, 1], [0.108, 0.106, 1], [0, 0.106]], 4, { flat: true, a0: Q }));
   metal.push(revolve([[0.131, 0.024], [0.131, 0.03, 1], [0.126, 0.03]], 4, { flat: true, a0: Q }));
-  let body;
-  if (variant === 'amphora' || variant === 'hex') {
-    body = [[0, 0.106], [0.076, 0.106, 1], [0.076, 0.113, 1], [0.066, 0.12], [0.044, 0.132], [0.027, 0.15], [0.02, 0.168], [0.026, 0.177], [0.033, 0.184], [0.034, 0.19], [0.029, 0.197], [0.02, 0.205],
-      [0.022, 0.214], [0.04, 0.228], [0.07, 0.25], [0.1, 0.278], [0.122, 0.31], [0.133, 0.345], [0.132, 0.375], [0.124, 0.398, 1], [0.127, 0.402], [0.127, 0.41], [0.119, 0.414, 1], [0.104, 0.432], [0.086, 0.452],
-      [0.073, 0.468], [0.069, 0.482], [0.072, 0.496], [0.083, 0.508, 1], [0.089, 0.512, 1], [0.089, 0.518, 1], [0.08, 0.521, 1],
-      [0.078, 0.524], [0.07, 0.53, 1], [0.06, 0.534], [0.04, 0.545], [0.022, 0.552, 1], [0.022, 0.558], [0.012, 0.562], [0.008, 0.572], [0.006, 0.59], [0.0075, 0.598], [0.006, 0.603], [0, 0.604]];
-  } else {
-    body = [[0, 0.106], [0.07, 0.106, 1], [0.07, 0.114, 1], [0.04, 0.13], [0.022, 0.16], [0.018, 0.21], [0.024, 0.23], [0.045, 0.26], [0.07, 0.32], [0.085, 0.4], [0.1, 0.48], [0.115, 0.54, 1], [0.108, 0.545, 1], [0.098, 0.5], [0.08, 0.42], [0, 0.4]];
-  }
-  if (variant === 'hex') metal.push(revolve(body, 6, { flat: true }));
-  else {
-    // flutes on the lower body: sixteen channels with sharp ridges, deepest in the middle, fading out at both ends
-    const fl = (a, y) => { const d = 0.075 * Math.max(0, Math.min(1, (y - 0.222) / 0.04)) * Math.max(0, Math.min(1, (0.392 - y) / 0.05)); return 1 - d * Math.abs(Math.sin(8 * a)); };
-    metal.push(revolve(body, 64, { mod: variant === 'amphora' ? fl : null }));
-  }
-  if (variant === 'amphora') {
-    // a ring of eight small stars standing out from the band at the shoulder
-    for (let k = 0; k < 8; k++) { const a = (k / 8) * Math.PI * 2; metal.push(place(starGeo(0.011, 0.0048, 0.004, 0.0015), Math.sin(a) * 0.129, 0.406, -Math.cos(a) * 0.129, -a)); }
-    metal.push(place(starGeo(0.032, 0.014, 0.011, 0.004), 0, 0.613, 0));
-    for (const s of [1, -1]) metal.push(...bracket(s));
-  } else if (variant === 'hex') {
-    metal.push(place(starGeo(0.032, 0.014, 0.011, 0.004), 0, 0.613, 0));
-    for (const s of [1, -1]) metal.push(...bracket(s));
-  } else {
+  const star = () => place(starGeo(0.03, 0.013, 0.01, 0.004), 0, 0.648, 0);
+  if (variant === 'tulip') {
+    // (a sketch, not used: an open tall vase; too near the real Champions League cup's proportions)
+    metal.push(revolve([[0, 0.106], [0.07, 0.106, 1], [0.07, 0.114, 1], [0.04, 0.13], [0.022, 0.16], [0.018, 0.21], [0.024, 0.23], [0.045, 0.26], [0.07, 0.32], [0.085, 0.4], [0.1, 0.48], [0.115, 0.54, 1], [0.108, 0.545, 1], [0.098, 0.5], [0.08, 0.42], [0, 0.4]], 32));
     for (const s of [1, -1]) metal.push(...bracket(s, 0.52, 0.11, [0.06, 0.25]));
+    return { metal, stone: [], dark, plate: plateAt(Q) };
   }
-  return { metal, stone: [], dark, plate: { w: 0.15, h: 0.04, y: 0.059, z: -0.126 * Math.cos(Q) - 0.0016, d: 0.003 } };
+  const hex = variant === 'hex';
+  metal.push(revolve(FOOT, hex ? 6 : 20, { flat: hex }));
+  // sixteen flutes, deepest round the middle of the belly, fading out at both ends (where the runs meet; the belly's top ends inside the shoulder band so no seam shows)
+  const fl = (a, y) => { const d = 0.09 * Math.max(0, Math.min(1, (y - 0.215) / 0.04)) * Math.max(0, Math.min(1, (0.425 - y) / 0.05)); return 1 - d * Math.abs(Math.sin(8 * a)); };
+  metal.push(revolve(BELLY, hex ? 6 : 64, { flat: hex, mod: hex ? null : fl }));   // 4 steps a flute: ridge, flank, channel, flank
+  metal.push(revolve(TOP, hex ? 6 : 24, { flat: hex }));
+  // a ring of eight small stars standing out from the band at the shoulder
+  if (!hex) for (let k = 0; k < 8; k++) { const a = (k / 8) * Math.PI * 2; metal.push(place(starGeo(0.011, 0.0048, 0.004, 0.0015), Math.sin(a) * 0.1, 0.435, -Math.cos(a) * 0.1, -a)); }
+  metal.push(star());
+  const all = [...FOOT, ...BELLY, ...TOP];
+  for (const s of [1, -1]) metal.push(...bracket(s, 0.505, rAt(all, 0.505), [rAt(all, 0.29), 0.29]));
+  return { metal, stone: [], dark, plate: plateAt(Q) };
 }
+const plateAt = Q => ({ w: 0.15, h: 0.04, y: 0.059, z: -0.126 * Math.cos(Q) - 0.0016, d: 0.003 });

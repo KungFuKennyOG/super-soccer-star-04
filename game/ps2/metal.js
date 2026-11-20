@@ -129,11 +129,12 @@ export function stadiumEnv() {
     const k = 40 + 90 * h; x.fillStyle = h > 0.93 ? `rgb(${k * 1.4},${k * 0.6},${k * 0.55})` : h > 0.8 ? `rgb(${k},${k},${k * 1.2})` : `rgb(${k * 0.6},${k * 0.6},${k * 0.7})`; x.fillRect(px, py, 1, 1);
   }
   x.fillStyle = '#0b0c10'; x.fillRect(0, yRoof, W, 4);
-  for (let i = 0; i < 16; i++) { x.fillStyle = i % 2 ? '#c9ced6' : '#3a4250'; x.fillRect(i * W / 16, yAds, W / 16, yPitch - yAds); }
+  for (let i = 0; i < 40; i++) { const k = 70 + 90 * hash(i, 7); x.fillStyle = `rgb(${k},${k},${k + 12})`; x.fillRect(i * W / 40, yAds, W / 40, yPitch - yAds); }   // ad boards, soft
   const pitch = x.createLinearGradient(0, yPitch, 0, H);
-  pitch.addColorStop(0, '#323a2e'); pitch.addColorStop(0.25, '#171c15'); pitch.addColorStop(1, '#08090a');
+  pitch.addColorStop(0, '#4c5644'); pitch.addColorStop(0.3, '#2c3428'); pitch.addColorStop(1, '#161a14');   // the pitch, greyed: a low green-grey, so a cup's lower half is dark but not black or bright green
   x.fillStyle = pitch; x.fillRect(0, yPitch, W, H - yPitch);
-  for (let i = 0; i < 24; i += 2) { x.fillStyle = 'rgba(255,255,255,.07)'; x.fillRect(i * W / 24, yPitch, W / 24, H - yPitch); }
+  for (let i = 0; i < 24; i += 2) { x.fillStyle = 'rgba(255,255,255,.08)'; x.fillRect(i * W / 24, yPitch, W / 24, H - yPitch); }
+  x.fillStyle = 'rgba(240,240,235,.8)'; x.fillRect(0, yPitch + 9, W, 2); x.fillRect(0, yPitch + 40, W, 3);   // touchline and halfway line
   // read it back as lit values, then the floodlights: four banks over the stands, hot cores and a halo
   const d = x.getImageData(0, 0, W, H).data, f = new Float32Array(W * H * 4);
   for (let i = 0; i < W * H; i++) { const j = ((H - 1 - Math.floor(i / W)) * W + (i % W)) * 4; f[j] = d[i * 4] / 255; f[j + 1] = d[i * 4 + 1] / 255; f[j + 2] = d[i * 4 + 2] / 255; f[j + 3] = 1; }   // (a data texture's first row is the bottom)
@@ -146,7 +147,9 @@ export function stadiumEnv() {
   for (let py = Math.round(yRoof) + 5; py < yRoof + 7; py++) for (let px = 0; px < W; px++) { const j = ((H - 1 - py) * W + px) * 4; f[j] += 0.9; f[j + 1] += 0.9; f[j + 2] += 0.85; }   // the lit underside of the roof
   for (let k = 0; k < 4; k++) { const u = 0.125 + k * 0.25; lamp(u, 0.22, 0.012, 9); lamp(u - 0.012, 0.23, 0.007, 4); lamp(u + 0.012, 0.23, 0.007, 4); lamp(u, 0.22, 0.05, 0.45); lamp(u + 0.125, 0.25, 0.008, 5); }
   lamp(0.62, 0.08, 0.06, 0.9);                                    // a bright patch of sky (the sun behind cloud)
-  const t = new THREE.DataTexture(f, W, H, THREE.RGBAFormat, THREE.FloatType);
+  // half floats: filterable on every WebGL2 device (32-bit float filtering is an extension the Quest may lack)
+  const h16 = new Uint16Array(f.length); for (let i = 0; i < f.length; i++) h16[i] = THREE.DataUtils.toHalfFloat(Math.min(f[i], 60000));
+  const t = new THREE.DataTexture(h16, W, H, THREE.RGBAFormat, THREE.HalfFloatType);
   t.mapping = THREE.EquirectangularReflectionMapping; t.magFilter = t.minFilter = THREE.LinearFilter; t.needsUpdate = true;
   ENV = t;
   return t;
@@ -155,7 +158,7 @@ export function stadiumEnv() {
 // ---------- materials ----------
 
 // gold: warm and deep, reflections tinted, the dark of the stands turning it bronze-brown
-export const goldMat = (o = {}) => new THREE.MeshStandardMaterial({ color: '#ffc25a', metalness: 1, roughness: 0.24, emissive: '#3c2205', envMap: stadiumEnv(), envMapIntensity: 1.7, ...o });
+export const goldMat = (o = {}) => new THREE.MeshStandardMaterial({ color: '#e6a646', metalness: 1, roughness: 0.16, emissive: '#2a1604', envMap: stadiumEnv(), envMapIntensity: 1.5, ...o });
 // silver: near white, sharp, so the stands read as dark streaks in it
 export const silverMat = (o = {}) => new THREE.MeshStandardMaterial({ color: '#f4f6fa', metalness: 1, roughness: 0.09, envMap: stadiumEnv(), envMapIntensity: 1.1, ...o });
 // black lacquered stone for the club cup's plinth

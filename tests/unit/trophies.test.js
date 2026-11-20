@@ -9,10 +9,10 @@ import { merge, tris } from '../../game/ps2/metal.js';
 const all = parts => merge([...parts.metal, ...parts.stone, ...parts.dark]);
 const verts = g => { const p = g.attributes.position, out = []; for (let i = 0; i < p.count; i++) out.push([p.getX(i), p.getY(i), p.getZ(i)]); return out; };
 
-test('each cup is 4,000 to 8,000 triangles and the size of a real one', () => {
-  for (const [parts, lo, hi] of [[worldParts(), 0.5, 0.58], [clubParts(), 0.6, 0.66]]) {
+test('each cup is a PS2-era 1,500 to 3,000 triangles and the size of a real one', () => {
+  for (const [parts, lo, hi] of [[worldParts(), 0.5, 0.58], [clubParts(), 0.62, 0.72]]) {
     const g = all(parts), n = tris(g) + 12;
-    assert.ok(n >= 4000 && n <= 8000, `${n} triangles`);
+    assert.ok(n >= 1500 && n <= 3000, `${n} triangles`);
     g.computeBoundingBox();
     assert.ok(g.boundingBox.min.y > -0.001 && g.boundingBox.max.y > lo && g.boundingBox.max.y < hi, `height ${g.boundingBox.max.y}`);
   }
@@ -28,13 +28,13 @@ test("the nations' cup: a round grip 6.6 cm across where the palms go", () => {
 test("the clubs' cup: each hand-hold is on a round vertical bar 3.2 cm thick, 4 cm or more out from the body", () => {
   const v = verts(all(clubParts()));
   for (const [x, y] of GRIPS2.club) {
-    const bar = v.filter(p => Math.abs(p[1] - y) < 0.07 && Math.sign(p[0]) === Math.sign(x) && Math.abs(p[0]) > 0.16);
+    const bar = v.filter(p => Math.abs(p[1] - y) < 0.05 && Math.sign(p[0]) === Math.sign(x) && Math.abs(p[0]) > 0.145);
     const xs = bar.map(p => Math.abs(p[0]));
     assert.ok(Math.abs(Math.max(...xs) - Math.min(...xs) - HOLD_D.club) < 0.003, `bar ${((Math.max(...xs) - Math.min(...xs)) * 100).toFixed(1)} cm`);
     assert.ok(Math.abs((Math.max(...xs) + Math.min(...xs)) / 2 - Math.abs(x)) < 0.002, 'bar through the hand-hold');
     const zs = bar.map(p => p[2]);
     assert.ok(Math.abs(Math.max(...zs) - Math.min(...zs) - HOLD_D.club) < 0.003, 'round, not oval');
-    const body = v.filter(p => Math.abs(p[1] - y) < 0.05 && Math.abs(p[0]) < 0.16).map(p => Math.hypot(p[0], p[2]));
+    const body = v.filter(p => Math.abs(p[1] - y) < 0.05 && Math.abs(p[0]) < 0.145).map(p => Math.hypot(p[0], p[2]));
     assert.ok(Math.abs(x) - HOLD_D.club / 2 - Math.max(...body) >= 0.04, `room behind the bar ${((Math.abs(x) - HOLD_D.club / 2 - Math.max(...body)) * 100).toFixed(1)} cm`);
   }
 });
