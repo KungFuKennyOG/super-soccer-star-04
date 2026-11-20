@@ -15,26 +15,35 @@ integer and, for nose and lips, off how dark the skin is.
 ## Now
 
 - `rules/looks.js` (pure, tested by `tests/unit/looks.test.js`):
-  - `TONES`: 10 skin tones (fair rosy, fair warm, light olive, light golden East Asian, olive/tan, light brown, brown,
-    dark brown, deep brown, deeper golden East Asian). `HAIRS`: 7 (black, near-black, dark brown, mid brown, dark
-    blonde, blonde, auburn). `STYLES`: crop, shaved, slick, long, curls (mapped to each body's own styles).
+  - `TONES`: 10 skin tones (fair rosy, fair warm, light olive, light warm-ivory East Asian, olive/tan, light brown,
+    brown, dark brown, deep brown, a deeper East Asian). Each player also gets `shade` (`toneOf`): up to 5% darker or 3%
+    lighter than his tone, so no two men of one tone are quite the same. `HAIRS`: 8 (black, near-black, dark brown, mid
+    brown, dark blonde, blonde, auburn, dyed light brown). `STYLES`: crop, shaved, slick, long, curls, spiky, mop
+    (mapped to each body's own styles; spiky and mop are two new '04 hair shells, below).
   - `GROUPS`: 8 appearance clusters (north, west, south, mena, eastAsia, mestizo, mixed, black), each a weight table
     over tones, hair colors and styles, which iris colors are allowed, a stubble chance, and paint-only face
     settings (`feat`).
   - `LOOKS`: per team id (all 49), weights over the groups. `DEFAULT_LOOKS` for an unknown id.
   - `pickSquad(teamId, keys, seed)`: one match's looks. Groups are assigned by systematic (stratified) sampling, so
     each group gets floor or ceil of n x its weight: a 90/10 side never shows 2 of 4 from the 10%. Leftover places fall
-    where a random offset puts them and are shuffled, so the line-up varies match to match.
+    where a random offset puts them and are shuffled, so the line-up varies match to match. Within a side, nobody
+    gets another player's (tone, hairstyle, hair color) while the tables leave room (up to 12 redraws).
+  - Within any group each man also gets his own brow weight (x0.75-1.35), nose width (-0.08..+0.14) and lip fullness
+    (-0.12..+0.18), passed to face.js through `feat`, on top of the face seed.
 - `game/squad.js`: `squadLooks()` draws both sides from one seed per match (a `WeakMap` on the sim world, so
   `game/replay.js`'s copies get the same faces). `buildSet` takes `make` (the PS1 `buildPlayer` or the '04
   `buildPlayer2`) and `seed`. **Left-footers are unchanged**: they're still picked from the old `look` integer.
 - `game/actors.js` `buildPlayer` and `game/ps2/player.js` `buildPlayer2` take `{ ap }` (a look) in place of the
   integer's picks. The tone goes to both the head sheet and the kit sheet (arms, hands, legs), so face, ears, neck,
   arms, hands and legs share it on both bodies (checked in the hands and heads sheets).
-- `game/ps2/face.js` (small, local): `paintHead` takes `feat` = `{ crease, open, tilt, arch, eyes }`. eastAsia: lid
+- `game/ps2/face.js` (small, local): `paintHead` takes `feat` = `{ crease, open, tilt, arch, eyes, brow, nose, lips }`. eastAsia: lid
   fold at 40% strength and lower, eye opening x0.88, outer corner lifted 0.004, brows less arched; mestizo and mena:
   brows a little flatter. Iris colors: 'dark' (browns), 'light' (mostly blue, grey, green) or 'any'. All default to
   the old look. Nose and lips still follow skin darkness as before. Nothing in the geometry changed.
+- `game/ps2/headgeo.js`: two hair shells appended to `HAIR2` (indices 5, 6; the old ones keep theirs): `spiky` (short
+  tufts standing up, front lifted) and `mop` (a longer crop with a low fringe). PS1 maps them to flat-top and
+  crop/mullet. Per hairstyle the '04 body is built once (figure.js caches it), so two more styles cost two more body
+  builds at load (about 110 ms each in software GL).
 - `game/menus.js`: the team-select model wears one of that team's looks.
 - Look page: `tools/ps2look.html?shot=squad&team=NED&seed=3` (six players of one side). Sheets:
   `tools/looks.html?teams=JPN,NGA&n=8` (`&heads=1`, `&hands=1`, `&body=ps1`, `&seed=`), rendered by
@@ -64,6 +73,7 @@ as before).
   Arab or African descent. https://www.spokesman.com/stories/2006/jul/09/french-minorities-see-parity-in-teams-mix
 - [FA] The FA's list of England men's players of Black heritage with debut dates:
   https://www.englandfootball.com/articles/2025/Oct/10/england-mens-senior-team-black-players-list
+- [TSWC] Brazil's 2002 World Cup squad list: https://www.thesoccerworldcups.com/rosters/2002_brazil_players.php
 - [OKA] OkayAfrica, "The Black Colombian Team" (Colombia's squads have a large Afro-Colombian contingent; qualitative,
   later era): https://www.okayafrica.com/the-black-colombian-team/135610
 - "Squad (recalled)": my own count from the 2002 World Cup / Euro 2004 / 2006 World Cup squads and 2003-04 club squads
@@ -98,10 +108,10 @@ Sure: H high, M medium, L low.
 | ROU | Romanian 89.5%, Hungarian 6.6%, Roma 2.5%, 2002 census (F05) | white (recalled) | so .80 we .20 | H |
 | BUL | Bulgarian 83.9%, Turk 9.4%, Roma 4.7%, 2001 census (F05) | almost all ethnic Bulgarian (recalled) | so .85 we .10 me .05 | M |
 | NOR | Norwegian, Sami 20,000 (F05) | Carew (Gambian heritage) 1 of ~23 (recalled) | no .85 we .10 mx .05 | M |
-| BRA | white 53.7%, mulatto 38.5%, black 6.2%, other 0.9%, 2000 census (F05) | 2002 WC darker than the census: roughly 7 white, 5 pardo, 11 Black (recalled; Brazilian self-identification is fuzzy) | so .30 mx .30 bl .40 | M (squad differs) |
+| BRA | white 53.7%, mulatto 38.5%, black 6.2%, other 0.9%, 2000 census (F05) | 2002 WC squad list (TSWC): by appearance about 8 fair/olive (Marcos, Ceni, Lúcio, Belletti, Polga, Ricardinho, Juninho, Kaká), 8 mixed/brown, 7 Black: a third each, darker than the census. (Review: the first weights, Black .40, came out 6 of 8 dark.) Who counts as mixed vs Black is my call by appearance | so .35 mx .35 bl .30 | M |
 | ARG | white (Spanish, Italian) 97%, mestizo/Amerindian/other 3% (F05) | mostly white/light; a few mestizo (recalled) | so .82 we .08 mz .10 | M |
 | URU | white 88%, mestizo 8%, black 4% (F05) | mostly white; 1-2 Black (e.g. Zalayeta) (recalled) | so .82 mz .08 bl .06 mx .04 | M |
-| COL | mestizo 58%, white 20%, mulatto 14%, black 4%, black-Amerindian 3%, Amerindian 1% (F05) | squads carry a large Afro-Colombian contingent (OKA, later era; 2001-05 e.g. Córdoba, Perea recalled), well above the census | mz .45 so .15 bl .30 mx .10 | L-M |
+| COL | mestizo 58%, white 20%, mulatto 14%, black 4%, black-Amerindian 3%, Amerindian 1% (F05) | squads carry a large Afro-Colombian contingent (OKA, later era; 2001-05 e.g. Córdoba, Perea recalled), well above the census; rebalanced toward mixed after review | mz .45 so .15 bl .25 mx .15 | L-M |
 | CHI | white and white-Amerindian 95%, Amerindian 3% (F05) | mestizo/white (recalled) | mz .55 so .45 | M |
 | NGA | Hausa-Fulani 29%, Yoruba 21%, Igbo 18%, Ijaw 10%... (F05; ethnicity not in census) | all Black | bl 1 | H |
 | CMR | Highlanders 31%, Equatorial Bantu 19%, ... non-African < 1% (F05) | all Black | bl 1 | H |
@@ -153,3 +163,17 @@ Whether the deepest and the fairest tones read naturally on the Quest's panel an
 East Asian face paint (softer lid fold, slightly narrower eye) reads at all at 10 m. In a match today the PS1 bodies
 already get the team looks (`buildSet` → `buildPlayer` with `ap`); the '04 body gets them once it is wired in by passing
 `make: buildPlayer2` to `buildSet`.
+
+## Review fixes (orchestrator)
+
+1. Sameness inside one-group sides (JPN looked like clones): per-man tone shade, brow/nose/lip settings, two new
+   hairstyles, a dyed light brown (eastAsia hair: black .5, near-black .25, mid brown .1, dyed light brown .1, dark
+   blonde .05; styles: spiky .25, crop .22, mop .2, slick .18, shaved .08, long .07), and no repeated (tone, style,
+   hair) triple inside a side. Tested: 8-man JPN/KOR/NGA/MEX/SWE sides have at least 7 distinct triples and 3+ styles
+   over 50 seeds.
+2. East Asian tones lighter and less orange: `#e7c29b` → `#e8c7a4` and `#d8ad80` → `#dbb791` (about the fair tones'
+   brightness, less red). Side by side with `wes` and `sou` in looks-1-heads (JPN, KOR) and looks-2-heads.
+3. BRA rebalanced to about a third each (squad list above); `mixed` tones spread through the middle (olive/tan .25,
+   light brown .40, brown .35; was .10/.45/.45). COL: Black .30 → .25, mixed .10 → .15.
+
+Left-footers and determinism unchanged (replays get the same faces from the same per-world seed).

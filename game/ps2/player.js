@@ -9,7 +9,7 @@ import { ATLAS, HEAD_SHEET, R, paintKit } from './kit.js';
 import { paintHead } from './face.js';
 import { HAIR2 } from './headgeo.js';
 import { figureGeometry } from './figure.js';
-import { TONES, HAIRS as LHAIRS, STYLE_PS2 } from '../../rules/looks.js';
+import { toneOf, HAIRS as LHAIRS, STYLE_PS2 } from '../../rules/looks.js';
 import { canvas, hex, smoothTex } from './paint.js';
 
 export const LIGHT_DIR = new THREE.Vector3(-0.45, 1, 0.35).normalize();   // toward the sun
@@ -104,7 +104,7 @@ function looseness(geo) {
 // ap: a look from rules/looks.js (pickSquad) in place of all that: its tone, hair, style, stubble, face paint.
 export function buildPlayer2(kit, num, look = 0, { ap = null, style = [0, 2, 1, 0, 4, 0, 3, 2][look % 8], boots = 0, skinI = look, hairI = look * 3 + 1 } = {}) {
   let head = { look, style, skinI, hairI };
-  if (ap) { head = { look: ap.face, style: STYLE_PS2[ap.style], skinI: TONES[ap.tone], hairI: LHAIRS[ap.hair], stubble: ap.stubble, feat: { ...ap.feat, eyes: ap.eyes } }; style = head.style; skinI = head.skinI; }
+  if (ap) { head = { look: ap.face, style: STYLE_PS2[ap.style], skinI: toneOf(ap), hairI: LHAIRS[ap.hair], stubble: ap.stubble, feat: { ...ap.feat, eyes: ap.eyes } }; style = head.style; skinI = head.skinI; }
   const mats = [kitSheet({ kit, num, skinI, boots }), headSheet(head)];
   const { bones, by } = buildSkeleton(), geo = figureGeometry(style);
   if (!geo.attributes.aLoose) geo.setAttribute('aLoose', looseness(geo));

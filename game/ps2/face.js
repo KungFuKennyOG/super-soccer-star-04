@@ -59,15 +59,16 @@ const EYES = [[64, 40, 22], [48, 31, 19], [78, 98, 118], [84, 96, 62], [40, 27, 
 
 // skin, hair: [r, g, b]. st: a style from HAIR2. look: an integer that varies the face.
 // feat (rules/looks.js GROUPS, all optional): crease, open, arch scale the lid's fold, the eye's opening and the brows' arch;
-// tilt lifts the eye's outer corner; eyes: 'light' | 'any' | 'dark' narrows the iris colors.
+// tilt lifts the eye's outer corner; eyes: 'light' | 'any' | 'dark' narrows the iris colors; brow scales the brows'
+// weight, nose and lips add to the nose's width and the lips' fullness.
 export function paintHead(ctx, { skin, hair, st, stubble = false, look = 0, feat = {} }) {
   const img = ctx.createImageData(HEAD_SHEET.w, HEAD_SHEET.h), d = img.data;
   const rnd = k => hash(look, k, 5), dk = sstep(0.45, 0.78, 1 - (skin[0] + skin[1] + skin[2]) / 765);     // dk: 0 for fair skin, 1 for the darkest
   // what a look changes. The head's shape is the same for everyone, so these are all paint: how heavy and
   // how arched the brows are, the eyes' size, opening, slant and spacing, how wide the nose spreads, the
   // lips, how gaunt the cheeks are, the lines of age, freckles, a cleft chin
-  const noseW = 0.86 + 0.4 * rnd(1) + 0.1 * dk, lipFull = 0.66 + 0.6 * rnd(2) + 0.2 * dk, mouthW = 0.9 + 0.2 * rnd(12);
-  const browH = 0.016 + 0.012 * rnd(3), browArch = (0.2 + 0.9 * rnd(4)) * (feat.arch ?? 1), browTilt = 0.018 * (rnd(5) - 0.5), browUp = 0.008 * (rnd(14) - 0.4), browIn = 0.09 + 0.06 * rnd(15);
+  const noseW = 0.86 + 0.4 * rnd(1) + 0.1 * dk + (feat.nose || 0), lipFull = 0.66 + 0.6 * rnd(2) + 0.2 * dk + (feat.lips || 0), mouthW = 0.9 + 0.2 * rnd(12);
+  const browH = (0.016 + 0.012 * rnd(3)) * (feat.brow ?? 1), browArch = (0.2 + 0.9 * rnd(4)) * (feat.arch ?? 1), browTilt = 0.018 * (rnd(5) - 0.5), browUp = 0.008 * (rnd(14) - 0.4), browIn = 0.09 + 0.06 * rnd(15);
   const eyeOpen = (0.82 + 0.38 * rnd(6)) * (feat.open ?? 1), eyeTilt = -0.002 + 0.01 * rnd(7) + (feat.tilt || 0), eyeW = 0.92 + 0.16 * rnd(8), ec = 0.345 + 0.025 * rnd(16);
   const gaunt = 0.3 + 1.3 * rnd(9), fold = 0.04 + 0.16 * rnd(10), lined = rnd(11), tired = rnd(17), cleft = rnd(18) < 0.3, freckled = dk < 0.2 && rnd(19) < 0.4;
   const beard = stubble ? 1 + Math.floor(rnd(13) * 4) : 0;                    // 0 shaved this morning, 1 a day's growth, 2 heavy, 3 a goatee and moustache, 4 a moustache

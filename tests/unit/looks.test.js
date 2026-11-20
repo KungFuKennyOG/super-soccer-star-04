@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { TONES, HAIRS, STYLES, GROUPS, LOOKS, DEFAULT_LOOKS, looksOf, stratify, pickSquad, rng, toneWeights, stylePS1, STYLE_PS2 } from '../../rules/looks.js';
+import { TONES, HAIRS, STYLES, GROUPS, LOOKS, DEFAULT_LOOKS, looksOf, stratify, pickSquad, rng, toneWeights, stylePS1, STYLE_PS2, toneOf } from '../../rules/looks.js';
 import { ALL } from '../../rules/teams.js';
 
 const sum = o => Object.values(o).reduce((a, b) => a + b, 0);
@@ -20,7 +20,7 @@ test('groups point at real tones, hair colors and styles', () => {
     for (const k of Object.keys(g.tone)) assert.ok(TONES[+k], n);
     for (const k of Object.keys(g.hair)) assert.ok(HAIRS[+k], n);
     for (const k of Object.keys(g.style)) assert.ok(STYLES.includes(k), n);
-    for (const s of STYLES) { assert.ok(Number.isInteger(STYLE_PS2[s])); assert.ok(Number.isInteger(stylePS1(s, 3))); }
+    for (const s of STYLES) { assert.ok(Number.isInteger(STYLE_PS2[s]) && STYLE_PS2[s] < 7); assert.ok(Number.isInteger(stylePS1(s, 3))); }
     for (const tab of [g.tone, g.hair, g.style]) assert.ok(Math.abs(sum(tab) - 1) < 1e-9, n);
   }
   for (const c of [...TONES, ...HAIRS]) assert.match(c, /^#[0-9a-f]{6}$/);
@@ -66,5 +66,23 @@ test('teams differ the way their weights say', () => {
   for (let s = 0; s < 200; s++) {
     for (const l of Object.values(pickSquad('NGA', [3, 5, 4, 1], s))) assert.ok(l.tone >= 6 && l.tone <= 8);
     for (const l of Object.values(pickSquad('KOR', [3, 5, 4, 1], s))) assert.ok(l.tone === 3 || l.tone === 9);
+  }
+});
+
+test('inside one side, no two players share tone, hairstyle and hair color when the tables allow', () => {
+  const nums = [7, 10, 9, 3, 5, 4, 8, 11];
+  for (const id of ['JPN', 'KOR', 'NGA', 'MEX', 'SWE']) for (let s = 0; s < 50; s++) {
+    const sq = Object.values(pickSquad(id, nums, s)), keys = new Set(sq.map(l => `${l.tone}|${l.style}|${l.hair}`));
+    assert.ok(keys.size >= 7, `${id} seed ${s}: ${keys.size} distinct of 8`);
+    assert.ok(new Set(sq.map(l => l.style)).size >= 3, `${id} seed ${s}: styles`);
+  }
+});
+
+test('toneOf: a step or two either side of the tone, never brighter than 3%', () => {
+  const lum = c => [1, 3, 5].reduce((a, i, k) => a + parseInt(c.slice(i, i + 2), 16) * [0.3, 0.59, 0.11][k], 0);
+  for (let t = 0; t < TONES.length; t++) for (const shade of [-1, 0, 0.6]) {
+    const c = toneOf({ tone: t, shade }), r = lum(c) / lum(TONES[t]);
+    assert.match(c, /^#[0-9a-f]{6}$/);
+    assert.ok(r > 0.94 && r < 1.035, `${t} ${shade} ${r}`);
   }
 });
