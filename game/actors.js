@@ -13,6 +13,7 @@ import { faceBody, poseLegs, leanHips } from './gait.js';
 import { poseUpper, layerLean, layerReady, layerBreath, layerKick, layerLook, strikeSwing } from './carriage.js';
 import { specialPose, dancePose, celebratePose } from './poses.js';
 import { strideLegs, strideTrunk } from './mocap.js';
+import { kickTrunk } from './kickcap.js';
 import { sway } from './sway.js';
 
 const matCache = new Map();
@@ -114,7 +115,7 @@ function pose(m, p, dt, t, celebrate, guide, ball, onBall) {
   m.kickK = (m.kickK || 0) + (kick - (m.kickK || 0)) * Math.min(1, dt * 22);
   if (cap > 0) strideTrunk(m, bn, g, 1 - m.kickK);
   layerLean(bn, g, 1 - cap); layerReady(bn, g); layerBreath(bn, g, dt);
-  layerKick(bn, m.kickK, strikeSwing(st));
+  if (!kickTrunk(m, bn)) layerKick(bn, m.kickK, strikeSwing(st));     // a recorded kick's trunk and arms (game/kickcap.js), or the hand-built layer for a poke, a scoop, a heel
   layerLook(m, bn, g, celebrate ? null : ball, dt, 0.22 * (m.drive || 0));
   sway(m, bn, p, dt, g);
   if (guide && p.role === 'mate') { dancePose(bn, guide); return; }
