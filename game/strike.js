@@ -16,7 +16,7 @@
 // m.strike = { kind: a STYLE, wind, t, dir (world), power, hit, hold, c (ball at contact, model space) }
 import * as THREE from 'three';
 import { BALL, HOLD } from '../rules/tuning.js';
-import { sinceTouch } from '../rules/dribble.js';
+import { touchBoot } from './dribblecap.js';
 import { ankleOf, footOf, reachLeg, aimFoot } from './legik.js';
 
 const FOLLOW = 0.14, RECOVER = 0.2;      // seconds of follow-through, then back to the run
@@ -34,10 +34,7 @@ const STYLE = {
 };
 const SOLE = { spot: [0, -0.085, 0.06], face: [0, -1, 0] };          // the studs on top of the ball
 const OVER = { r: 0.29, y: 0.14, rise: 0.22, time: 0.4 };              // a step-over: the boot's circle round the ball (m), and how long it takes
-// a dribbling touch: the toe, turned in, as the right leg swings forward (the run cycle has it at the back
-// of the ball right then: DRIBBLE.touchAt); before/after: how much of the stride either side of the touch
-// the boot is steered onto the ball and follows it; wide: how far apart the feet run (rad at the hip)
-const TOUCH = { spot: [0, -0.05, 0.2], face: [0, 0, 1], yaw: 0.5, pitch: 0.2, before: 0.07, after: 0.08, lift: 0.14, wide: 0.1 };
+const WIDE = 0.1;                                        // dribbling on hand-built legs: how far apart the feet run (rad at the hip)
 const PLANT = new THREE.Vector3(0.11, 0.085, 0.12);    // where the standing foot plants for a strike: a step forward, beside the ball
 const MAX_TURN = 1.3;                                    // the swing follows the ball's direction this far round (rad)
 
@@ -111,19 +108,11 @@ export function poseTouch(m, bn, p, ball, onBall, dt) {
   m.onBallK = Math.min(1, Math.max(0, (m.onBallK || 0) + (onBall ? 1 : -1) * dt * 8));
   const k = m.onBallK;
   if (k <= 0) return 0;
-  // the feet run either side of the ball, not through it
-  bn.upperLegL.rotation.z += TOUCH.wide * k; bn.upperLegR.rotation.z -= TOUCH.wide * k;
-  const speed = Math.hypot(p.vx, p.vz), u = sinceTouch(p.stride ?? m.phase);
-  let w = u > 1 - TOUCH.before ? smooth((u - (1 - TOUCH.before)) / TOUCH.before) : u < TOUCH.after ? 1 - smooth(u / TOUCH.after) : 0;
-  w *= k * smooth((speed - 1.2) / 2);
-  toModel(m, ball.x, ball.y ?? BALL.r, ball.z, B);
-  if (w <= 0 || B.z < 0.25 || B.z > 1.1 || Math.abs(B.x) > 0.3) return 0;     // only a ball in front of him
-  qf.setFromEuler(eul.set(TOUCH.pitch, TOUCH.yaw, 0));
-  ankleFor(TOUCH, B, qf, A);
-  if (u < TOUCH.after) A.y += TOUCH.lift * u / TOUCH.after;       // then it lifts off and over as the ball runs on
-  ankleOf(bn, 'R', nR); footOf(bn, 'R', qn);
-  reachLeg(bn, 'R', nR.lerp(A, w)); aimFoot(bn, 'R', qn.slerp(qf, w));
-  return w;
+  // hand-built legs (your own, or his when he isn't on a captured stride) run either side of the ball, not
+  // through it; a captured stride steps round it instead (game/dribblecap.js dribbleFoot)
+  const wide = WIDE * k * (1 - (m.capLegs || 0));
+  bn.upperLegL.rotation.z += wide; bn.upperLegR.rotation.z -= wide;
+  return touchBoot(m, bn, p, ball, k, dt);
 }
 
 // Holds. sp: the model's special { kind: 'drag' | 'roulette' | 'stepover', t, side }. A drag-back or a

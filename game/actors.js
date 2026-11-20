@@ -14,6 +14,7 @@ import { poseUpper, layerLean, layerReady, layerBreath, layerKick, layerLook, st
 import { specialPose, dancePose, celebratePose } from './poses.js';
 import { strideLegs, strideTrunk } from './mocap.js';
 import { sway } from './sway.js';
+import { layerDribble, dribbleGlance } from './dribblecap.js';
 
 const matCache = new Map();
 const mat = (key, make) => { if (!matCache.has(key)) matCache.set(key, make()); return matCache.get(key); };
@@ -92,8 +93,8 @@ function pose(m, p, dt, t, celebrate, guide, ball, onBall) {
   const g = poseLegs(m, bn, p, dt);
   // running and walking forward are motion capture (game/mocap.js), laid over that gait; the lean into a
   // turn that the captured pelvis took the place of is put back, over the same footprints
-  const cap = strideLegs(m, bn, g, dt);
-  if (cap > 0 && !m.firstPerson) leanHips(bn, g, cap * (1 - (m.onBallK || 0)));
+  const cap = strideLegs(m, bn, g, dt, onBall ? ball : null);
+  if (cap > 0 && !m.firstPerson) leanHips(bn, g, cap);
   if (m.special) { m.special.t += dt; if (m.special.t > 0.9) m.special = null; }
   const sp = m.special;
   if (sp && sp.kind === 'roulette' && sp.t < SPIN) bn.hips.rotation.y += Math.PI * 2 * sp.t / SPIN;   // the roulette spins you on the spot
@@ -115,7 +116,10 @@ function pose(m, p, dt, t, celebrate, guide, ball, onBall) {
   if (cap > 0) strideTrunk(m, bn, g, 1 - m.kickK);
   layerLean(bn, g, 1 - cap); layerReady(bn, g); layerBreath(bn, g, dt);
   layerKick(bn, m.kickK, strikeSwing(st));
-  layerLook(m, bn, g, celebrate ? null : ball, dt, 0.22 * (m.drive || 0));
+  // on the ball: over it, arms wider, eyes on it for each touch and up for a look in between (game/dribblecap.js)
+  const ob = (m.onBallK || 0) * (1 - m.kickK), up = ob > 0.5 && !st && dribbleGlance(m, p, dt);
+  layerDribble(bn, g, ob, m.drive || 0);
+  layerLook(m, bn, g, celebrate || up ? null : ball, dt, 0.22 * (m.drive || 0));
   sway(m, bn, p, dt, g);
   if (guide && p.role === 'mate') { dancePose(bn, guide); return; }
   if (sp && sp.kind === 'header') specialPose(bn, sp);

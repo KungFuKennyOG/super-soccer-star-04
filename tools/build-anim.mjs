@@ -26,6 +26,8 @@ export const CLIPS = {
   walk: ['35_02', 'stride'], walkB: ['35_28', 'stride'], walkC: ['141_25', 'stride'],
   jog: ['16_36', 'stride'], jogB: ['35_20', 'stride'], jogC: ['143_01', 'stride'],
   run: ['09_06', 'stride'], runB: ['16_46', 'stride'], runC: ['127_07', 'stride'],
+  // for a man on the ball going slowly (game/dribblecap.js): 'quick little steps' (half a second a stride, 0.9 m), and a low jog on short strides
+  quick: ['136_31', 'stride'], low: ['16_56', 'stride'],
   // a 'loop' is [from, to] seconds of a capture played round and round, e.g. stand: ['137_28', 'loop', { from: 2, to: 12 }].
   // None is baked: the library's standing takes (113_21, 77_02, 141_20, 137_28) have a tilted or bowed head, fidgeting or hands on hips.
 };

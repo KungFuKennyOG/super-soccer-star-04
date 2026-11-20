@@ -5,6 +5,7 @@ import * as THREE from 'three';
 import { BONES, CLIPS } from './assets/anim/clips.js';
 import { strideRate } from '../rules/dribble.js';
 import { ankleOf, footOf, reachLeg, aimFoot } from './legik.js';
+import { quickSteps, dribbleFoot } from './dribblecap.js';
 
 const TAU = Math.PI * 2, NB = BONES.length, slerp = THREE.Quaternion.slerpFlat;
 for (const c of Object.values(CLIPS)) { c.q = new Float32Array(c.q); c.h = new Float32Array(c.h); }
@@ -53,7 +54,9 @@ export function applyPose(bn, pose, w = 1, which = null) {
 const LEGS = new Set(['hips', 'upperLegL', 'lowerLegL', 'footL', 'toeL', 'upperLegR', 'lowerLegR', 'footR', 'toeR']);
 const TRUNK = new Set(['spine', 'chest', 'clavicleL', 'upperArmL', 'foreArmL', 'clavicleR', 'upperArmR', 'foreArmR']);
 const LADDER = [CLIPS.walk, CLIPS.jog, CLIPS.jogB, CLIPS.runB].filter(Boolean);
-const P0 = newPose(), smooth = x => { const k = Math.min(1, Math.max(0, x)); return k * k * (3 - 2 * k); };
+// on the ball and slow he is on short quick steps (game/dribblecap.js): 'quick little steps' at a walk, a low short-stride jog above it
+const QUICK = [CLIPS.quick, CLIPS.low].filter(Boolean);
+const P0 = newPose(), P1 = newPose(), smooth = x => { const k = Math.min(1, Math.max(0, x)); return k * k * (3 - 2 * k); };
 
 // How much of the pose is the captured stride (0..1): all of it moving forward, none standing or going
 // sideways or backwards (the procedural gait in game/gait.js covers those). g: the gait state.
@@ -80,24 +83,26 @@ function strideLength(ladder, speed) {
 const DRIVE = { rise: 9, fade: 1.3, from: 1.5, full: 6.5, cruise: 0.3 };   // 1/s, 1/s, m/s2 of eased push, share kept at full speed
 const X = new THREE.Vector3(1, 0, 0), qx = new THREE.Quaternion(), pt = new THREE.Vector3(), SOLE = 0.085;
 const AV = { L: new THREE.Vector3(), R: new THREE.Vector3() }, AQ = { L: new THREE.Quaternion(), R: new THREE.Quaternion() };
-export function strideLegs(m, bn, g, dt = 0) {
+export function strideLegs(m, bn, g, dt = 0, bl = null) {
   const w = m.mocapW = LADDER.length > 1 ? strideWeight(g) : 0;
   const want = smooth((g.lean - DRIVE.from) / (DRIVE.full - DRIVE.from)) * Math.max(0, g.uz);
   let dr = m.driveT || 0;
   if (dt > 0) dr += want > dr ? (want - dr) * Math.min(1, dt * DRIVE.rise) : -dr * Math.min(1, dt * DRIVE.fade);
   m.driveT = dr;
-  const d0 = dr + (1 - dr) * DRIVE.cruise * g.sprint;
+  // with the ball at his feet (ob) he can't drive as a sprinter does: half of it
+  const ob = bl && !m.firstPerson ? m.onBallK || 0 : 0, d0 = (dr + (1 - dr) * DRIVE.cruise * g.sprint) * (1 - 0.5 * ob);
   m.drive = d0 * w;
-  if (w <= 0) return 0;
+  if (w <= 0) return m.capLegs = 0;
   // played at the gait's own cadence (g.ph: the sim's when he runs, its own when he walks, game/gait.js)
   strideFor(LADDER, g.s, g.ph ?? m.phase, P0);
-  // the legs are the capture's unless the boots have work to do: on the ball they run either side of it and
-  // reach for it (game/gait.js, game/strike.js), and your own boots stay as steady as they were
-  const legs = w * (1 - (m.onBallK || 0)) * (m.firstPerson ? 0 : 1);
+  // the legs are the capture's too, on the ball as off it (game/dribblecap.js has what the ball changes: the
+  // cadence g.ph already keeps, quick short steps when slow, feet put down clear of the ball, and the touch,
+  // which game/strike.js lays over this); only your own boots stay as steady as they were
+  const legs = m.capLegs = w * (m.firstPerson ? 0 : 1), qk = QUICK.length > 1 ? ob * quickSteps(m, dt) : 0;
   if (legs <= 0) { if (m.lock) { m.lock.L.on = m.lock.R.on = false; m.lock.L.pz = m.lock.R.pz = null; } return w; }
-  applyPose(bn, P0, legs, LEGS);
-  const cover = g.cover ?? g.s * TAU / strideRate(g.s);
-  const k = (Math.min(1.42, Math.max(0.7, cover / strideLength(LADDER, g.s))) - 1) * legs, d = d0 * legs, h = bn.hips.position;
+  applyPose(bn, qk > 0 ? mixPose(P0, strideFor(QUICK, g.s, g.ph ?? m.phase, P1), qk, P1) : P0, legs, LEGS);
+  const cover = g.cover ?? g.s * TAU / strideRate(g.s), len = strideLength(LADDER, g.s);
+  const k = (Math.min(1.42, Math.max(0.7, cover / (len + (strideLength(QUICK, g.s) - len) * qk))) - 1) * legs, d = d0 * legs, h = bn.hips.position;
   const lock = m.lock || (m.lock = { L: { on: false, wx: 0, wz: 0, ox: 0, oz: 0, oy: 0, pz: null }, R: { on: false, wx: 0, wz: 0, ox: 0, oz: 0, oy: 0, pz: null } });
   const rp = m.root.position, ry = m.root.rotation.y, c = Math.cos(ry), sn = Math.sin(ry), fade = Math.exp(-dt * 14);
   for (const n of 'LR') {
@@ -107,6 +112,7 @@ export function strideLegs(m, bn, g, dt = 0) {
     a.y += Math.max(0, a.y - 0.2) * 0.5 * Math.max(0, k)                          // the heel comes through higher
       + (rel > 0 ? 0.16 * d * air * smooth(rel / 0.25) : 0);                      // and the knee drives up in front
     if (rel < 0) AQ[n].multiply(qx.setFromAxisAngle(X, 0.45 * d * smooth(-rel / 0.35)));   // off the toes behind
+    if (ob > 0) dribbleFoot(m, n, a, AQ[n], bl, ob * legs);                              // and round the ball, not onto it
     // a planted boot stays where it came down: while the ball of the foot is on the grass and going back under
     // him, its spot on the pitch is kept, the sole is pressed onto the ground, and what that moved it by is
     // eased away once it lifts (or at once if it can't be held: a turn, a restart)
@@ -128,8 +134,18 @@ export function strideLegs(m, bn, g, dt = 0) {
     L.oy += ((L.on ? -low - a.y : 0) - L.oy) * Math.min(1, dt * 30);
     a.y = Math.max(-low, a.y + L.oy);
   }
-  h.y -= 0.075 * Math.max(0, k) + 0.05 * d; h.z += 0.04 * d;
+  h.y -= 0.075 * Math.max(0, k) + 0.05 * d + 0.02 * ob * legs * (1 - qk); h.z += 0.04 * d;      // (lower over the ball)
   bn.hips.rotateX(0.28 * d);
+  if (ob > 0) {
+    // on the ball, on short steps, a planted boot is held to the end of its step: the hips come down as far as that leg needs
+    let top = 9;
+    for (const n of 'LR') {
+      pt.set(n === 'L' ? 0.09 : -0.09, -0.02, 0).applyQuaternion(bn.hips.quaternion);
+      const dx = AV[n].x - h.x - pt.x, dz = AV[n].z - h.z - pt.z;
+      if (lock[n].on) top = Math.min(top, AV[n].y - pt.y + Math.sqrt(Math.max(0.01, 0.835 * 0.835 - dx * dx - dz * dz)));
+    }
+    h.y -= Math.min(0.03, Math.max(0, h.y - top)) * ob;          // (a few centimetres: a runner's last push is past any leg's reach)
+  }
   for (const n of 'LR') { reachLeg(bn, n, AV[n]); aimFoot(bn, n, AQ[n]); }
   return w;
 }
