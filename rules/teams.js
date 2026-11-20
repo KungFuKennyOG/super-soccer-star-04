@@ -22,8 +22,8 @@ export const NATIONS = [
   // Europe
   { id: 'GER', name: 'GERMANY', s: 5, kit: k('solid', W, null, BLK, W, BLK, BLK, { trim2: RED, cut: 0, hoops: 0 }),
     away: k('solid', BLK, null, BLK, W, '#8a1c2b', W, { cut: 0, hoops: 0 }) },
-  { id: 'ITA', name: 'ITALY', s: 5, kit: k('solid', '#1d4fa8', null, W, '#1d4fa8', GOLD, W, { trim2: W, cut: 0, hoops: 0 }),
-    away: k('solid', W, null, '#1d4fa8', W, '#1d4fa8', '#1d4fa8', { trim2: GOLD, cut: 0, hoops: 0 }) },
+  { id: 'ITA', name: 'ITALY', s: 5, kit: k('solid', '#1d4fa8', null, W, '#1d4fa8', W, W, { trim2: W, cut: 0, hoops: 0 }),
+    away: k('solid', W, null, '#1d4fa8', W, '#1d4fa8', '#1d4fa8', { trim2: W, cut: 0, hoops: 0 }) },
   { id: 'FRA', name: 'FRANCE', s: 5, kit: k('solid', '#1a3a8a', null, W, RED, RED, W, { trim2: W, cut: 0, hoops: 0 }),
     away: k('solid', W, null, W, W, '#1a3a8a', '#1a3a8a', { trim2: RED, cut: 0, hoops: 0 }) },
   { id: 'ENG', name: 'ENGLAND', s: 4, kit: k('solid', W, null, NAVY, W, RED, NAVY, { trim2: NAVY, cut: 1, hoops: 0 }),

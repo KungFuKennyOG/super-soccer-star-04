@@ -9,7 +9,7 @@ Honest summary of the era research: shirt, shorts and sock colors were confirmed
 | id | name | cut | hoops | away kit (shirt / shorts / socks) | status | notes |
 | --- | --- | --- | --- | --- | --- | --- |
 | GER | GERMANY | 0 | 0 | black / black / white, #8a1c2b trim | DONE | era: WC 2002 / Euro 2004, 3 sources. home white/black/white, away black with dark red detail. trim details unverified |
-| ITA | ITALY | 0 | 0 | white / blue / white, blue trim | DONE | era: Euro 2004, 3 sources. gold trim on home; away white/blue/white |
+| ITA | ITALY | 0 | 0 | white / blue / white, blue trim | DONE | era: Euro 2004, 3 sources. home blue/white/blue; away white/blue/white. The real shirt's gold was only on the maker logos and numbers, so no gold trim (Kenny) |
 | FRA | FRANCE | 0 | 0 | white / white / white, blue trim | DONE | era: 2 tournaments, 3 sources. ERA MISMATCH noted: Euro 2004 home shorts were blue; Kenny chose white (the 2002 look). away all white |
 | ENG | ENGLAND | 1 | 0 | red / white / red, white trim | DONE | era: Euro 2004, 2 sources. red tapering trim on home (cut 1); away red/white/red |
 | ESP | SPAIN | 1 | 1 | white / white / white, red trim | DONE | era: Euro 2004, 2 sources. away all white. trim and cut unverified |
