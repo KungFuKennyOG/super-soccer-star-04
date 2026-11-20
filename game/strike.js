@@ -6,12 +6,13 @@
 //             (STRIKE in rules/tuning.js, the 'windup' event) so the swing has time to get there; anyone
 //             else's starts on the contact frame (boot on the ball, then the follow-through). Replays
 //             know what's coming, so there everyone gets the full swing.
-//             Knock-ons and nutmegs are toe-pokes, the standing flick-up a scoop, a volley the laces
-//             wherever the ball is in the air; the rainbow's heel rolls it up behind you and flicks it over.
+//             A knock-on is a push with the laces in stride, a nutmeg a toe-poke, the standing flick-up a
+//             scoop, a volley the laces wherever the ball is in the air; the rainbow's heel flicks it over
+//             from behind you. What the rest of the body does in a trick is game/tricks.js.
 //   touches   dribbling: the feet run either side of the ball and, once a stride (rules/dribble.js), the
 //             right boot comes in and taps it on.
 //   holds     the sole on top of the ball, pulling it in (drag-back, roulette: the sim moves the ball,
-//             HOLD in rules/tuning.js), and the step-over's boot circling round the front of it.
+//             HOLD in rules/tuning.js), and the step-over's boot going over the front of it.
 //
 // m.strike = { kind: a STYLE, wind, t, dir (world), power, hit, hold, c (ball at contact, model space) }
 import * as THREE from 'three';
@@ -35,6 +36,7 @@ const STYLE = {
 };
 const SOLE = { spot: [0, -0.085, 0.06], face: [0, -1, 0] };          // the studs on top of the ball
 const OVER = { r: 0.21, y: 0.14, rise: 0.12, time: 0.15 };             // a step-over: the boot's arc round the front of the ball (m), and how long it takes
+const UP = new THREE.Vector3(0, 1, 0);
 // a dribbling touch: the toe, turned in, as the right leg swings forward (the run cycle has it at the back
 // of the ball right then: DRIBBLE.touchAt); before/after: how much of the stride either side of the touch
 // the boot is steered onto the ball and follows it; wide: how far apart the feet run (rad at the hip)
@@ -45,7 +47,7 @@ const MAX_TURN = 1.3;                                    // the swing follows th
 const B = new THREE.Vector3(), K = new THREE.Vector3(), T = new THREE.Vector3(), A = new THREE.Vector3();
 const nR = new THREE.Vector3(), nL = new THREE.Vector3(), spot = new THREE.Vector3(), face = new THREE.Vector3();
 const qf = new THREE.Quaternion(), qn = new THREE.Quaternion(), ql = new THREE.Quaternion(), flat = new THREE.Quaternion(), eul = new THREE.Euler(0, 0, 0, 'YXZ');
-const smooth = x => { const k = Math.min(1, Math.max(0, x)); return k * k * (3 - 2 * k); }, UP = new THREE.Vector3(0, 1, 0);
+const smooth = x => { const k = Math.min(1, Math.max(0, x)); return k * k * (3 - 2 * k); };
 
 // A point on the pitch as the model sees it (out: Vector3). The model stands at root.position turned by root.rotation.y.
 function toModel(m, x, y, z, out) {

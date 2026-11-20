@@ -20,6 +20,8 @@
 //   rainbow    a hop: the left foot, turned out, sweeps the ball back and up the right calf, then lands as
 //              the right heel flicks it up; trunk forward
 //
+// Only you do these, so they are seen as your own boots (first person: the legs here, the hips kept under
+// you) and as the whole-body you of a goal replay (game/replay.js records them).
 // Model space (game/legik.js): +z the way he faces, +x his left. Written right-footed (game/actors.js mirrors).
 // m.trick = { kind, t, dir, spin, pin } while one is on. Call trickHips before the boot is sent to the ball,
 // trickLegs after it, trickBody before layerLook and trickHead after it.
@@ -40,7 +42,7 @@ const BODY = {
   knock: [[0, [0.18, 0, -0.2, 0.6, 0.2, 1.3, -0.6, 0.25, 1.1]], [0.14, [0.3, 0, 0, 0.2, 0.2, 1.3, -0.2, 0.2, 1.3]]],
   nutmeg: [[0, [0.28, 0, -0.15, 0.4, 0.35, 1.0, -0.4, 0.4, 0.9]], [0.16, [0.3, 0, 0, 0.1, 0.3, 1.2, -0.1, 0.3, 1.2]]],
   flick: [[0, [-0.03, 0.07, 0, 0.1, 0.5, 0.45, 0.1, 0.5, 0.45]], [0.16, [-0.08, 0.08, 0, 0.05, 0.65, 0.4, 0.15, 0.65, 0.4]], [0.45, [-0.03, 0.03, 0, 0.05, 0.45, 0.4, 0.1, 0.45, 0.4]]],
-  drag: [[0.1, [0.3, 0.06, -0.15, 0.35, 0.55, 0.7, -0.35, 0.7, 0.6]], [0.2, [0.26, 0.08, -0.32, 0.25, 0.6, 0.8, -0.45, 0.75, 0.5]], [0.36, [0.15, 0, -0.15, 0.1, 0.4, 0.8, -0.2, 0.5, 0.7]]],
+  drag: [[0.1, [0.3, 0.06, -0.15, 0.35, 0.55, 0.7, -0.3, 0.55, 0.75]], [0.2, [0.26, 0.08, -0.32, 0.25, 0.6, 0.8, -0.4, 0.6, 0.7]], [0.36, [0.15, 0, -0.15, 0.1, 0.4, 0.8, -0.2, 0.45, 0.8]]],
   // (fake to his right; mirrored for a fake to his left) shoulder dropped and arm tucked on the fake's side, the other flung out; then the drive
   stepover: [[0.07, [0.32, -0.3, -0.25, -0.1, 0.85, 0.7, 0.1, 0.25, 0.9]], [0.2, [0.42, 0.12, 0.3, -0.5, 0.35, 1.1, 0.5, 0.3, 1.2]], [0.36, [0.3, 0.05, 0, 0, 0.25, 1.2, 0, 0.25, 1.2]]],
   // low over the ball, the right arm up to hold his man off, both out for balance
@@ -161,8 +163,8 @@ export function trickLegs(m, bn, tr, ball) {
     if (tr.kind === 'knock' && st) { ankleOf(bn, 'R', aR); footOf(bn, 'R', qR); h.position.y = tr.hy; reachLeg(bn, 'R', aR); aimFoot(bn, 'R', qR); }
     if (!tr.pin.L) ankleOf(bn, 'L', aL);
     stance(m, tr, 'L', clamp(aL.x, 0.07, 0.16), clamp(aL.z, 0.05, 0.3), 0.1, 1 - smooth((t - 0.08) / 0.12));
-    // and the boot that played it comes down ahead of him as his next step
-    if (t > 0.07) stance(m, tr, 'R', -0.1, 0.36, 0, smooth((t - 0.07) / 0.07) * (1 - smooth((t - 0.24) / 0.1)), undefined, 0.1 * (1 - smooth((t - 0.07) / 0.07)));
+    // and the boot that pushed it comes down ahead of him as his next step (a nutmeg's poke is short: the ball is still there)
+    if (tr.kind === 'knock' && t > 0.07) stance(m, tr, 'R', -0.1, 0.36, 0, smooth((t - 0.07) / 0.07) * (1 - smooth((t - 0.24) / 0.1)), undefined, 0.1 * (1 - smooth((t - 0.07) / 0.07)));
   } else if (tr.kind === 'drag') {
     // planted behind the ball and to its side, under him
     stance(m, tr, 'L', 0.15, clamp(B.z - 0.45, -0.1, 0.1), 0.2, smooth(t / 0.06) * (1 - smooth((t - 0.24) / 0.14)));

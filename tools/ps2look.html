@@ -129,15 +129,16 @@ Object.assign(SHOTS, {
 // the ball (or standing: the flick-up) and doing the move at 1.2 s, nobody near. The sim's pitch is turned so he
 // runs along +x past the main stand; log: one row per sim step.
 const TRICKS = { knock: { knock: true }, flickup: { knock: true, still: true }, drag: { drag: true }, stepover: { skill: { move: 'stepover', side: 1 } }, stepoverin: { skill: { move: 'stepover', side: -1 } },
-  roulette: { skill: { move: 'roulette', side: 1 } }, nutmeg: { skill: { move: 'nutmeg', side: 1 } }, rainbow: { skill: { move: 'rainbow', side: 1 } } };
+  roulette: { skill: { move: 'roulette', side: 1 } }, nutmeg: { skill: { move: 'nutmeg', side: 1 }, man: 2.1 }, rainbow: { skill: { move: 'rainbow', side: 1 } } };   // man: a defender stood square, this far ahead (you run round him)
 let played = 1e9;
 const SIM = 1 / 72, logs = {}, unit = (x, z) => { const l = Math.hypot(x, z) || 1; return { x: x / l, z: z / l }; };
 function trickLog(name) {
   if (logs[name]) return logs[name];
-  const { still, ...act } = TRICKS[name], w = createWorld(() => 0.5), log = logs[name] = [];
+  const { still, man, ...act } = TRICKS[name], w = createWorld(() => 0.5), log = logs[name] = [];
   for (const id of ['d1', 'd2', 'd3']) { w.byId[id].x = 20; w.byId[id].z = -1; w.byId[id].stun = 99; }
   for (let t = 0; t < 3; t += SIM) {
-    const ev = stepSim(w, { move: { x: 0, z: still ? 0 : -1 }, facing: { x: 0, z: -1 }, sprint: false, ...(Math.abs(t - 1.2) < SIM / 2 ? act : {}) }, SIM, () => 0.5), y = w.you, b = w.ball;
+    if (man && Math.abs(t - 1.2) < SIM / 2) { w.byId.d1.x = w.you.x; w.byId.d1.z = w.you.z - man; log.man = { x: w.you.x, z: w.you.z - man }; }
+    const ev = stepSim(w, { move: { x: man && t > 1.2 && t < 1.5 ? 1 : 0, z: still ? 0 : -1 }, facing: { x: 0, z: -1 }, sprint: false, ...(Math.abs(t - 1.2) < SIM / 2 ? act : {}) }, SIM, () => 0.5), y = w.you, b = w.ball;
     log.push({ ev, p: { x: -y.z - 14, z: y.x, vx: -y.vz, vz: y.vx, fx: -y.fz, fz: y.fx, stride: y.stride, role: 'mate' }, b: { x: -b.z - 14, y: b.y, z: b.x, vx: -b.vz, vy: b.vy, vz: b.vx }, own: w.owner === 'you' && !w.dead });
   }
   return log;
@@ -195,6 +196,10 @@ function pose(t, dt) {
     if (Math.hypot(p.vx, p.vz) > 0.5) m.root.rotation.y = Math.atan2(p.vx, p.vz);       // like you in a replay: he faces the way he runs
     animate(m, p, dt, t, false, null, bp, row.own);
     m.shadow.position.set(p.x - LIGHT_DIR.x * 0.12, 0.01, p.z - LIGHT_DIR.z * 0.12);
+    // the man he takes on stands where the sim has him, facing him
+    const d = players[1], dm = log.man;
+    d.m.root.visible = d.m.shadow.visible = !!dm;
+    if (dm) { Object.assign(d.p, { x: -dm.z - 14, z: dm.x, fx: -1, fz: 0, vx: 0, vz: 0, role: 'def' }); placeModel(d.m, d.p); animate(d.m, d.p, dt, t + 1, false, null, bp, false); d.m.shadow.position.set(d.p.x - LIGHT_DIR.x * 0.12, 0.01, d.p.z - LIGHT_DIR.z * 0.12); }
   }
   // a strike (game/strike.js): the swing starts `wind` before the ball goes, and the boot is on it as it does
   const k = s.strike;
@@ -204,7 +209,7 @@ function pose(t, dt) {
     if (t - dt < k.at && t >= k.at) struck(m, k.kind, dir, k.power);
   }
   players.forEach(({ m, p }, i) => {
-    const d = set[i]; if (!(s.trick && !i)) m.root.visible = m.shadow.visible = !!d;
+    const d = set[i]; if (!(s.trick && i < 2)) m.root.visible = m.shadow.visible = !!d;
     if (!d) return;
     const go = d[2] + (d[5] || 0);                           // d[5]: which way he travels, off the way he faces
     p.x = d[0]; p.z = d[1]; p.fx = Math.sin(d[2]); p.fz = Math.cos(d[2]); p.vx = Math.sin(go) * d[3]; p.vz = Math.cos(go) * d[3]; p.role = d[6] || 'mate';
