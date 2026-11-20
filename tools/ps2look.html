@@ -19,6 +19,9 @@
      strikeyou, passfront ...); &wind=0 strikes with no
      wind-up, &power=0..1 sets how hard; kickraw / kickrawfront with &raw=kickShot|kickPass play a
      recorded kick alone, as baked.
+     the keeper's gloves (game/ps2/gloves.js) in his real poses (game/keeperpose.js): gloves | glovesfull | glovesback | glovesbackhand |
+     glovespalm (close on one glove) | glovescatch | gloveshold | glovesover | glovesdive (a high parry, its touch at t = 0.92) |
+     glovesdivecatch (low dive, caught). Saves start at 0.5 s; a standing save's touch is at 0.72. ?team= picks whose keeper.
      tools/ps2shots.mjs renders them all to files. -->
 <style>html,body{margin:0;background:#101830;overflow:hidden}canvas{display:block}#i{position:fixed;left:8px;top:8px;font:12px monospace;color:#fff;text-shadow:0 0 3px #000}
 .bar{position:fixed;bottom:6%;width:27%;display:none;font:600 2.3vw 'Trebuchet MS',Arial,sans-serif;color:#fff}.bar b{display:block;padding:.25em .9em;border-radius:.6em;background:linear-gradient(#3a4250e6,#151a22e6);box-shadow:0 0 0 2px #0006}.bar i{display:block;height:.5vw;margin:.5vw .4em 0;background:repeating-linear-gradient(90deg,#f2f2f2 0 1.5vw,#0000 1.5vw 1.9vw)}</style>
@@ -43,6 +46,7 @@ import { buildStand, buildSky } from '../game/ps2/stand.js';
 import { CLIPS, sampleStride, applyPose, newPose } from '../game/mocap.js';
 import { createWorld, stepSim } from '../rules/sim.js';
 import { sampleKick } from '../game/kickcap.js';
+import { gripPoint, palmPoint, palmNormal } from '../game/ps2/gloves.js';
 
 const q = new URLSearchParams(location.search);
 let shot = q.get('shot') || 'duel';
@@ -81,6 +85,7 @@ if (TEAM.length) {
   const other = TEAM[1] ? TEAM[1].kit : awayFor(TEAM[0]);
   [[0, TEAM[0].kit, 10], [2, TEAM[0].kit, 10], [1, other, 7], [3, other, 7], [4, keeperKit(TEAM[0].kit), 1]].forEach(([i, kit, num]) => { cast[i].kit = kit; cast[i].num = num; });
 }
+if (shot.startsWith('gloves')) Object.assign(cast[4], { kit: keeperKit((TEAM[0] || byId('MAD')).kit), num: 1 });   // the keeper's shots: player 4 in his kit and gloves
 const players = cast.map((c, i) => {
   const m = buildPlayer2(c.kit, c.num, c.look, c.o);
   if (q.get('foot') === 'L') m.foot = 'L';                     // ?foot=L: everyone left-footed
@@ -196,7 +201,30 @@ for (const name of Object.keys(TRICKS)) {
   const at = t => rowAt(name, t).p, side = { trick: name, fov: 30, cam: t => [at(t).x + 0.9, 1.0, at(t).z + 4.6], at: t => [at(t).x + 0.3, 0.9, at(t).z], set: () => one(null) };
   SHOTS[name] = side; SHOTS[name + 'front'] = { ...side, cam: t => [at(t).x + 4.8, 1.05, at(t).z + 0.7], at: t => [at(t).x, 0.9, at(t).z] };
 }
-const val = (v, t) => (typeof v === 'function' ? v(t) : v);
+// The keeper's gloves (game/ps2/gloves.js) in his real poses (game/keeperpose.js, called through animate()):
+// player 4 is the keeper at the origin facing +z. keep(t): what the sim tells the page ({ save, dive, holding });
+// a save is latched at 0.5 s and timed so the touch is at TOUCH. grip: the ball is held between his palms.
+// gloves (ready stance, ball far out in front), glovesback, glovespalm (close on the palms), glovescatch (a shot
+// into the chest, then held), gloveshold (holding it, side), glovesdive (a high dive, parried: at the touch),
+// glovesdivecatch (a low dive, caught), glovesover (caught overhead).
+const GK = (cam, at, o = {}) => ({ fov: o.fov || 26, cam, at, ball: o.ball || [0.3, 9], keep: o.keep || (() => ({})), grip: o.grip, palm: o.palm, set: () => [null, null, null, null, [0, 0, 0, 0, 0, 0, 'gk'], null] });
+const save = (y, kind, dive = 0) => Object.assign(t => (t >= 0.5 ? { save: { y, kind, id: 1, eta: dive ? 0.42 : 0.22 }, dive, holding: kind === 'catch' && t > 0.5 + (dive ? 0.42 : 0.22) } : {}), { y, dive, touch: 0.5 + (dive ? 0.42 : 0.22) });
+// the shot on its way in: from 9 m out to where his hands will be (the page's guess; after the touch the ball is in his gloves)
+const shotIn = k => t => { const f = Math.min(1, Math.max(0, (t - (k.touch - 0.5)) / 0.5)); return [mix(0.3, k.dive * 1.3, f), mix(9, 0.45, f), mix(1.0, k.y, f)]; };
+const mix = (a, b, f) => a + (b - a) * f;
+Object.assign(SHOTS, {
+  gloves: GK([0.55, 1.15, 2.1], [0, 1.0, 0.3]),
+  glovesfull: GK([0.8, 1.1, 4.4], [0, 0.85, 0], { fov: 30 }),
+  glovesbackhand: { ...GK([0, 0, 0], [0, 0, 1]), fov: 24, follow: ['L', [0.45, 0.12, 0.25]] },
+  glovesback: GK([-0.7, 1.45, -2.8], [0, 0.95, 0.3], { fov: 30 }),
+  glovespalm: { ...GK([0, 0, 0], [0, 0, 1]), fov: 24, follow: ['L', [-0.35, 0.05, 0.4]] },
+  glovescatch: GK([0.9, 1.25, 2.3], [0, 1.1, 0.2], { keep: save(1.1, 'catch'), grip: true, ball: shotIn(save(1.1, 'catch')) }),
+  gloveshold: GK([1.4, 1.2, 0.9], [0, 1.05, 0.15], { keep: () => ({ holding: true }), grip: true }),
+  glovesover: GK([1.1, 1.5, 3.2], [0, 1.75, 0.2], { keep: save(2.0, 'catch'), grip: true, ball: shotIn(save(2.0, 'catch')) }),
+  glovesdive: GK([0.4, 1.2, 3.6], [0.9, 1.1, 0], { fov: 34, keep: save(1.5, 'parry', 1), palm: 'L', ball: shotIn(save(1.5, 'parry', 1)) }),
+  glovesdivecatch: GK([0.4, 1.0, 3.6], [0.9, 0.6, 0], { fov: 34, keep: save(0.5, 'catch', 1), grip: true, ball: shotIn(save(0.5, 'catch', 1)) }),
+});
+const val = (v, t) => (typeof v === 'function' ? v(t) : v), gripV = new THREE.Vector3(), gripT = new THREE.Vector3();
 // the carrier's stride and his touches are the sim's own (strides: a 'dribble' event on the touch frame); the ball is where the sim's carry puts it
 const DW = { players: [], owner: 'you', dead: false, wind: null }, rollQ = new THREE.Quaternion(), rollAxis = new THREE.Vector3();
 let touchAt = -9;
@@ -265,17 +293,24 @@ function pose(t, dt) {
     p.x = d[0]; p.z = d[1]; p.fx = Math.sin(d[2]); p.fz = Math.cos(d[2]); p.vx = Math.sin(go) * d[3]; p.vz = Math.cos(go) * d[3]; p.role = d[6] || 'mate';
     if (s.drib === i) dribble(p, d, go, t, dt);
     else if (p.stride === null) p.stride = d[4] + t * strideRate(d[3]); else p.stride += dt * strideRate(d[3]);   // his stride turns over with his speed
+    if (s.keep) { delete p.save; delete p.dive; delete p.holding; Object.assign(p, s.keep(t)); }
     placeModel(m, p);
     animate(m, p, dt, t + i, !!(s.cheer && s.cheer(t)), null, i === k?.who ? at : bp, !!d[7]);
+    if (s.keep && (s.grip && (p.holding || (m.save && m.save.t > m.save.touch)) || s.palm && m.save && m.save.t > m.save.touch - 0.02)) {          // the ball: in his gloves once he has it (or on the leading palm, a parry)
+      if (s.palm) { const h = m.bone['hand' + s.palm], sg = s.palm === 'L' ? 1 : -1; m.root.updateMatrixWorld(true); h.localToWorld(gripV.set(...palmPoint(sg))); gripT.set(...palmNormal(sg)).transformDirection(h.matrixWorld); gripV.addScaledVector(gripT, BALL.r + 0.012); }
+      else gripPoint(m, gripV, gripT);
+      bp.x = gripV.x; bp.y = gripV.y; bp.z = gripV.z; ball.position.copy(gripV);
+    }
     if (RAW) applyPose(m.bone, RAW.kind === 'kick' ? sampleKick(RAW, t - hitAt, rawPose) : sampleStride(RAW, RAW.kind === 'loop' ? (t + i * 1.7) / RAW.period * Math.PI * 2 : p.stride, rawPose));        // ?raw=clip: the captured stride alone, nothing over it
     m.shadow.position.set(p.x - LIGHT_DIR.x * 0.12, 0.01, p.z - LIGHT_DIR.z * 0.12);
   });
   for (const el of document.querySelectorAll('.bar')) el.style.display = shot === 'wide' ? 'block' : 'none';
   camera.fov = s.fov; camera.aspect = W / H; camera.updateProjectionMatrix();
   camera.position.set(...val(s.cam, t)); camera.lookAt(...val(s.at, t));
+  if (s.follow) { const h = players[4].m.bone['hand' + s.follow[0]]; h.localToWorld(gripV.set(...palmPoint(s.follow[0] === 'L' ? 1 : -1))); camera.position.copy(gripV).add(gripT.set(...s.follow[1])); camera.lookAt(gripV); }   // close on one glove: [which hand, the camera's offset from its palm]
 }
 // poses ease in over time (speed, lean, the head's turn), so a still is run up to, not jumped to (a shot's `warm`: for how many seconds)
-function warm() { for (const pl of players) { pl.p.stride = null; pl.m.gait = pl.m.strike = pl.m.special = pl.m.trick = null; pl.m.sway = null; pl.m.kickK = pl.m.onBallK = pl.m.cheerK = pl.m.driveT = 0; } for (let k = Math.round((SHOTS[shot].warm || 1.5) * 60); k >= 0; k--) pose(time - k / 60, 1 / 60); }   // (the last step is the moment itself: a still of the frame a ball is struck on is that frame)
+function warm() { for (const pl of players) { pl.p.stride = null; pl.m.gait = pl.m.strike = pl.m.special = pl.m.trick = null; pl.m.sway = null; pl.m.kickK = pl.m.onBallK = pl.m.cheerK = pl.m.driveT = 0; pl.m.save = pl.m.saveId = null; pl.m.split = undefined; } for (let k = Math.round((SHOTS[shot].warm || 1.5) * 60); k >= 0; k--) pose(time - k / 60, 1 / 60); }   // (the last step is the moment itself: a still of the frame a ball is struck on is that frame)
 function frame(dt) {
   time += dt; pose(time, dt); renderer.render(scene, camera);
   document.getElementById('i').textContent = q.get('info') ? `${shot}  calls ${renderer.info.render.calls}  tris ${renderer.info.render.triangles}` : '';

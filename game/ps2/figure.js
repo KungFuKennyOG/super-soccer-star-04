@@ -16,15 +16,16 @@ import { sstep, gauss } from './paint.js';
 import { leg, arm } from './limbs.js';
 
 const cache = new Map();
-export function figureGeometry(style = 0) {
-  if (cache.has(style)) return cache.get(style);
+export function figureGeometry(style = 0, gloves = false) {   // gloves: a keeper's hands (gloves.js)
+  const key = style + (gloves ? 'g' : '');
+  if (cache.has(key)) return cache.get(key);
   const b = new Builder();
   torso(b);
-  for (const [s, n] of [[1, 'L'], [-1, 'R']]) { shorts(b, s, n); leg(b, s, n); arm(b, s, n); }
+  for (const [s, n] of [[1, 'L'], [-1, 'R']]) { shorts(b, s, n); leg(b, s, n); arm(b, s, n, gloves); }
   b.part(HEAD_SHEET);                                   // the head and hair: second material, their own sheet
   addHead(b, style);
   const g = b.geometry();
-  cache.set(style, g);
+  cache.set(key, g);
   return g;
 }
 
