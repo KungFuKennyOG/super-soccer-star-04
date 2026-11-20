@@ -180,7 +180,7 @@ function dive(m, sv, dt, ball) {
       chestPoint(bn, hp);
       const b = sv.ballAt.clone().lerp(hp, ease((t - tG) / 0.4));
       bn.clavicleL.quaternion.identity(); bn.clavicleR.quaternion.identity();   // (the recording rolls a shoulder in: with the ball in his arms that put an upper arm inside his chest)
-      placeHands(bn, grip('sides', b, s), 1, 1, 0.2);
+      placeHands(bn, grip('sides', b, s), 1, 1.8, 0.05);    // elbows well out: tucked in, his upper arms sat in his sides
       m.held = b;
     }
   }
@@ -238,13 +238,20 @@ function standing(m, sv, dt, ball) {
 
 /* ---------- shared ---------- */
 
-// where his hands are in the set position, carried with the hips: in front of him off bent elbows, fingers forward,
-// palms turned in and half to the ball, wrists straight (as the stance in game/keeperpose.js has them)
+// where his hands are carried through a save before they go to the ball: in front of his chest off bent elbows,
+// fingers forward, palms turned in and half to the ball, wrists straight. Carried with the chest, not the hips: as
+// he sinks into the load his thighs come up, and hands hung off the hips went into his lap and his stomach.
+const rq = new THREE.Quaternion(), rI = new THREE.Quaternion(), rp = new THREE.Vector3();
 function readyGrip(bn) {
   const out = {};
+  rq.copy(bn.hips.quaternion); rp.copy(bn.spine.position).applyQuaternion(rq).add(bn.hips.position);
+  rq.multiply(bn.spine.quaternion); rp.add(w1.copy(bn.chest.position).applyQuaternion(rq)); rq.multiply(bn.chest.quaternion);
+  // (hung from the chest but only a third turned with it: bent well forward, hands that followed the chest all the
+  // way came down onto his knees)
+  rq.slerp(rI, 0.65);
   for (const [lo, sd] of [['L', 1], ['R', -1]]) {
-    const palm = V(sd * 0.15, 0.2, 0.38).applyQuaternion(bn.hips.quaternion).add(bn.hips.position);
-    const N = V(-sd * 0.75, -0.25, 0.6).normalize().applyQuaternion(bn.hips.quaternion), F = V(sd * 0.12, -0.3, 1).normalize().applyQuaternion(bn.hips.quaternion);
+    const palm = V(sd * 0.17, -0.2, 0.36).applyQuaternion(rq).add(rp);
+    const N = V(-sd * 0.75, -0.25, 0.6).normalize().applyQuaternion(rq), F = V(sd * 0.12, -0.3, 1).normalize().applyQuaternion(rq);
     out[lo] = { palm, N, F: F.addScaledVector(N, -F.dot(N)).normalize() };
   }
   return out;

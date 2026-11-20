@@ -97,30 +97,45 @@ function fk(bn, lo) {
     const b = bn[name], P = fkP[name] ??= new THREE.Vector3(), Q = fkQ[name] ??= new THREE.Quaternion();
     if (parent) { P.copy(b.position).applyQuaternion(fkQ[parent]).add(fkP[parent]); Q.copy(fkQ[parent]).multiply(b.quaternion); } else { P.copy(b.position); Q.copy(b.quaternion); }
   };
-  at('hips'); at('spine', 'hips'); at('chest', 'spine'); at('neck', 'chest');
+  at('hips'); at('spine', 'hips'); at('chest', 'spine'); at('neck', 'chest'); at('head', 'neck');
   at('clavicle' + lo, 'chest'); at('upperArm' + lo, 'clavicle' + lo); at('foreArm' + lo, 'upperArm' + lo); at('hand' + lo, 'foreArm' + lo);
+  for (const n of ['L', 'R']) { at('upperLeg' + n, 'hips'); at('lowerLeg' + n, 'upperLeg' + n); at('foot' + n, 'lowerLeg' + n); }
 }
 const ARM_PTS = [['upperArm', 'foreArm', 0.55], ['upperArm', 'foreArm', 1], ['foreArm', 'hand', 0.5], ['foreArm', 'hand', 1]];
+export const insideWhat = { part: '', pt: -1 };            // what the deepest point was in (for the tests' messages)
 export function armInside(bn, lo, out = null) {
   fk(bn, lo);
-  let worst = 0;
+  let worst = 0, cur = -1;
   const test = p => {
     for (const [a, b, rx, rz] of TRUNK) {
       tA.copy(fkP[a]); tB.copy(fkP[b]).sub(tA);
       const t = Math.min(1, Math.max(0, tv.copy(p).sub(tA).dot(tB) / tB.lengthSq()));
       tv.copy(p).sub(tA.addScaledVector(tB, t)); ti.copy(fkQ[b]).invert(); tn.copy(tv).applyQuaternion(ti);
       const k = Math.hypot(tn.x / rx, tn.z / rz, tn.y / 0.12), d = (1 - k) * Math.min(rx, rz);
-      if (d > worst) { worst = d; if (out) { out.set(tn.x / (rx * rx), 0, tn.z / (rz * rz) + 0.4 / rz).applyQuaternion(fkQ[b]).normalize(); } }
+      if (d > worst) { worst = d; insideWhat.part = b; insideWhat.pt = cur; if (out) { out.set(tn.x / (rx * rx), 0, tn.z / (rz * rz) + 0.4 / rz).applyQuaternion(fkQ[b]).normalize(); } }
     }
   };
-  for (const [a, b, k] of ARM_PTS) test(tv.copy(fkP[a + lo]).lerp(fkP[b + lo], k).clone());
-  test(tv.set(0, -0.09, 0).applyQuaternion(fkQ['hand' + lo]).add(fkP['hand' + lo]).clone());
+  // and his legs: the forearm, wrist and hand against each thigh (8.5 cm round its line) and shin (6 cm)
+  const leg = p => {
+    for (const n of ['L', 'R']) for (const [a, b, r] of [['upperLeg', 'lowerLeg', 0.085], ['lowerLeg', 'foot', 0.06]]) {
+      tA.copy(fkP[a + n]); tB.copy(fkP[b + n]).sub(tA);
+      const t = Math.min(1, Math.max(0, tn.copy(p).sub(tA).dot(tB) / tB.lengthSq())), d = r - tn.copy(p).sub(tA.addScaledVector(tB, t)).length();
+      if (d > worst) { worst = d; insideWhat.part = a + n; insideWhat.pt = cur; if (out) out.copy(tn).normalize(); }
+    }
+  };
+  const pts = ARM_PTS.map(([a, b, k]) => tv.copy(fkP[a + lo]).lerp(fkP[b + lo], k).clone());
+  pts.push(tv.set(0, -0.09, 0).applyQuaternion(fkQ['hand' + lo]).add(fkP['hand' + lo]).clone());
+  // and his head: a ball 11 cm round, 9 cm up from the top of his neck
+  tA.set(0, 0.09, 0.01).applyQuaternion(fkQ.head).add(fkP.head);
+  const head = p => { const d = 0.115 - tn.copy(p).sub(tA).length(); if (d > worst) { worst = d; insideWhat.part = 'head'; insideWhat.pt = cur; if (out) out.copy(tn).normalize(); } };
+  pts.forEach((p, i) => { cur = i; test(p); if (i >= 2) leg(p); if (i >= 1) head(p); });
   return worst;
 }
 // The arm kept out of the trunk, smoothly (no searching, so nothing can flip from one frame to the next: a search
 // for a clear elbow did flip, and the arms flickered). A palm asked to be across his chest or in it is brought to
 // the front of the chest, and the elbow of an arm reaching across goes forward, so the arm passes in front of him.
 const cq = new THREE.Quaternion(), cqi = new THREE.Quaternion(), cpos = new THREE.Vector3(), lp = new THREE.Vector3(), spT = { palm: new THREE.Vector3(), N: null, F: null }, pl = new THREE.Vector3();
+const hq = new THREE.Quaternion(), hc = new THREE.Vector3();
 const sm = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
 export function placeHand(bn, lo, sp, pole, w = 1, lim = WRIST) {
   const up = bn['upperArm' + lo], fa = bn['foreArm' + lo], hd = bn['hand' + lo], sd = lo === 'L' ? 1 : -1;
@@ -129,10 +144,20 @@ export function placeHand(bn, lo, sp, pole, w = 1, lim = WRIST) {
   cq.copy(bn.hips.quaternion); cpos.copy(bn.spine.position).applyQuaternion(cq).add(bn.hips.position);
   cq.multiply(bn.spine.quaternion); cpos.add(lp.copy(bn.chest.position).applyQuaternion(cq)); cq.multiply(bn.chest.quaternion); cqi.copy(cq).invert();
   lp.copy(sp.palm).sub(cpos).applyQuaternion(cqi);                       // the palm as the chest sees it: x toward this arm's side is sd * x
-  const across = sm(0.24, 0.06, sd * lp.x), level = sm(-0.5, -0.36, lp.y) * sm(0.42, 0.3, lp.y);   // how far over his body it is, and whether it is at the trunk's height at all
-  const k = across * level, front = 0.17;
+  const across = sm(0.24, 0.06, sd * lp.x), level = sm(-0.5, -0.36, lp.y) * sm(0.54, 0.4, lp.y);   // how far over his body it is, and whether it is at the trunk's height at all
+  const k = across * level, front = 0.17 + 0.17 * sm(0.02, -0.28, sd * lp.x);   // further forward the further past his middle it is: the whole arm has to clear his chest
   if (k > 0 && lp.z < front) lp.z += (front - lp.z) * k;                  // (by how far over him it is: a palm well clear of him is left exactly where it was asked)
   spT.palm.copy(lp).applyQuaternion(cq).add(cpos); spT.N = sp.N; spT.F = sp.F;
+  // and off his head: a palm asked to be nearer than 16.5 cm to its middle is moved straight out from it, to the front
+  // if it is dead centre (a hand going from in front of his chest to a ball over his far shoulder went through his face)
+  hq.copy(cq).multiply(bn.neck.quaternion); hc.copy(bn.neck.position).applyQuaternion(cq).add(cpos).add(lp.copy(bn.head.position).applyQuaternion(hq));
+  hq.multiply(bn.head.quaternion); hc.add(lp.set(0, 0.09, 0.01).applyQuaternion(hq));
+  lp.copy(spT.palm).sub(hc); const hd0 = lp.length();
+  if (hd0 < 0.165) { if (hd0 < 0.02) lp.set(0, 0, 1).applyQuaternion(hq); else lp.multiplyScalar(1 / hd0); lp.addScaledVector(pl.set(0, 0, 0.35).applyQuaternion(hq), 1).normalize(); spT.palm.copy(hc).addScaledVector(lp, 0.165 + (0.165 - hd0) * 0.2); }
+  // and the shoulder rolls forward as an arm reaches across (as a real one does): without it the upper arm lay through
+  // the top of his chest
+  const over = k * sm(0.1, -0.25, sd * lp.x);
+  if (over > 0) { const cl = bn['clavicle' + lo]; cl.quaternion.slerp(q2.setFromAxisAngle(v2.set(0, 1, 0), -sd * 0.6), over); }
   pl.set(sd * 0.1, -0.15, 1).applyQuaternion(cq).lerp(pole, 1 - k);
   const qWant = solve(bn, lo, spT, pl, lim);
   hd.quaternion.copy(forearmTurn(bn, lo, q1).invert().multiply(qWant));
