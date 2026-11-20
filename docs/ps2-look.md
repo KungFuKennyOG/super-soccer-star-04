@@ -47,9 +47,10 @@ Status, 20 Nov 2026. This repo began as a copy of `KungFuKennyOG/super-soccer-st
 - Wiring the look into the game: players in `main.js`, keepers and gloves, first-person boots and hands, every ground in `grounds.js`, rain and snow, replays, a far-distance LOD if fps needs it.
 - The keeper's animation is untouched.
 
-## Open decisions for Kenny
+## Decisions
 
-- Is the PS2 look the only look of this game, or a GRAPHICS setting next to PS1 (the original plan in the '96 repo)?
+- Decided 20 Nov: the new look lives only in this repo. The '96 repo stays the PS1 game; its `ps2-look` branch and PR #3 are superseded by this repo.
+- Should the '96 repo get the new animation (capture, gait, springs) without the look? It drives the PS1 bodies too.
 - The name on the title screen and logo still says '96.
 - Hosting: GitHub Pages isn't set up for this repo.
 - Keep or drop the cloth movement.
