@@ -37,7 +37,7 @@ const INSIDE = { spot: [0.052, -0.035, 0.05], face: [1, 0, 0], yaw: -1.05, pitch
 // boot on the ground may come (m, in plan)
 const TOUCH = { before: 0.24, after: 0.085, follow: 0.05, clear: BALL.r + 0.075 };
 
-const stateOf = m => m.drib || (m.drib = { n: 1, in: 0, u: 0, z0: DRIBBLE.near, w: 0, t: 0, up: 0, since: 9, seed: (m.gait && m.gait.seed) || 0.5 });
+const stateOf = m => m.drib || (m.drib = { n: 1, in: 0, u: 0, z0: DRIBBLE.near, up: 0, since: 9, seed: (m.gait && m.gait.seed) || 0.5 });
 
 // How fast the legs turn over this frame (rad/s) for a man on the ball. ph: the legs' phase (the gait's own);
 // stride: the sim's. The legs go round a whole number of times between two touches, the number that comes
@@ -108,9 +108,8 @@ export function touchBoot(m, bn, p, ball, k, dt = 0) {
   const hold = strideRate(speed) * Math.max(dt, 1 / 72) * 1.1 / TAU;
   let w = u > 1 - before ? smooth(((u - (1 - before)) / before) ** 2) : u < hold + after ? 1 - smooth((u - hold) / after) : 0;
   w *= k * smooth((speed - 0.35) / 0.5);
-  D.w = w;
   if (w <= 0) { D.in = D.n > 1 ? 1 : 0; return 0; }                // (which part of the boot is chosen between touches)
-  if (B.z < 0.25 || B.z > 1.1 || Math.abs(B.x) > 0.3) return D.w = 0;   // only a ball in front of him
+  if (B.z < 0.25 || B.z > 1.1 || Math.abs(B.x) > 0.3) return 0;   // only a ball in front of him
   const st = D.in ? INSIDE : LACES;
   if (u < hold + after) B.z = Math.min(B.z, D.z0 + TOUCH.follow);          // it goes with the ball a little way, then the ball runs on
   // the foot turns to the ball as it comes, and the ankle goes where that part of the boot, turned as it is

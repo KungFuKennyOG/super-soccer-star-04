@@ -8,6 +8,8 @@
 // swings forward through phase pi, so a touch in the sim is the right boot's moment. Only a walk or a
 // shuffle steps at its own quicker rate (the sim's is a runner's: at walking pace its steps are a metre
 // long); the gait's phase (g.ph) drifts off the sim's then and is pulled back as he breaks into a run.
+// On the ball the legs keep time with the sim's touches, two turns to a touch when he is slow
+// (game/dribblecap.js dribbleCadence).
 //
 // The body turns at a body's pace (faceBody): the sim's facing snaps round with the velocity, the model
 // eases after it, and a defender moving slowly near the ball keeps his chest to it and side-steps or

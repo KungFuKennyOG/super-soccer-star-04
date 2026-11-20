@@ -8,8 +8,8 @@
 //             know what's coming, so there everyone gets the full swing.
 //             Knock-ons and nutmegs are toe-pokes, the standing flick-up a scoop, a volley the laces
 //             wherever the ball is in the air; the rainbow's heel rolls it up behind you and flicks it over.
-//   touches   dribbling: the feet run either side of the ball and, once a stride (rules/dribble.js), the
-//             right boot comes in and taps it on.
+//   touches   dribbling: once a stride of the sim's (rules/dribble.js) the right boot's own swing is steered
+//             onto the ball and taps it on (game/dribblecap.js).
 //   holds     the sole on top of the ball, pulling it in (drag-back, roulette: the sim moves the ball,
 //             HOLD in rules/tuning.js), and the step-over's boot circling round the front of it.
 //
