@@ -115,7 +115,7 @@ function dive(m, sv, dt, ball) {
   const step = ease((tt - 0.04 * T) / (tP - 0.04 * T));
   for (const n of [near, far]) {
     const isN = n === near, foot = sv.feet[n], at = toModel(sv, foot.x, 0, foot.z, V(0, 0, 0));
-    if (isN) { at.x += s * 0.26 * step; at.z += 0.16 * step; }
+    if (isN) { at.x += s * 0.38 * step; at.z += 0.16 * step; }   // the step toward the ball: his stance opens to about 90% of leg length between the two pushes (Ibrahim et al. 2019)
     const lift = isN ? Math.sin(Math.PI * step) * 0.05 : 0, toes = isN ? 0 : ease((tt - 0.6 * tF) / (0.4 * tF));
     reachLeg(bn, n, at.setY(ankleFor(toes * 0.7) + lift + toes * 0.03));
     aimFoot(bn, n, qa.setFromEuler(e1.set(toes * 0.7, isN ? s * 0.5 * step : 0, 0)));
@@ -148,7 +148,8 @@ function dive(m, sv, dt, ball) {
     } else {
       // pushed on and wide (a parry) or past the hands (beaten); then the arms give, toward the grass
       const push = V(s * 0.28, 0.05, 0.1).multiplyScalar(ease(a / 0.12)), drop = ease((a - 0.12) / (Tl + 0.1));
-      const c2 = r.clone().add(push); c2.y = mix(c2.y, Math.max(0.16, c2.y - 0.6), drop);
+      // (down to the grass beyond his head as he lands: left where a high ball was they stood straight up in the air)
+      const c2 = r.clone().add(push).lerp(V(keys[4][1].x + s * 0.8, 0.15, pc.z + 0.18), drop);
       g = grip(sv.grip, c2, s);
       if (sv.kind === 'parry' && a < 0.05 && ball && ball.vz !== undefined) m.held = r.clone();
     }

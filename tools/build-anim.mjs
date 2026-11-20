@@ -37,7 +37,7 @@ export const CLIPS = {
   // the keeper (game/keepercap.js): getting up off the grass after a dive, from sitting on his hip with his legs to
   // one side, up through a crouch (140_03 'get up laying on side'; its lying still before 3.4 s is not used). 'once'
   // plays a stretch one time through (below). Looked at and not used: 140_04 (lies on his back, sits up), 77_03
-  // 'ready stance' (hips only 2 cm down: not a keeper's set), subject 83's side-steps (single big steps from standing).
+  // 'ready stance' (hips only 2 cm down: not a keeper's set), subject 83's side-steps (single big steps from standing). 102_28 (a basketball 'defensive move side to side', the same as 78_30) is not baked: it was measured for the shuffle's numbers (docs/notes-keeper-anim.md).
   getup: ['140_03', 'once', { from: 3.4, to: 6.6 }],
   // a 'loop' is [from, to] seconds of a capture played round and round, e.g. stand: ['137_28', 'loop', { from: 2, to: 12 }].
   // None is baked: the library's standing takes (113_21, 77_02, 141_20, 137_28) have a tilted or bowed head, fidgeting or hands on hips.

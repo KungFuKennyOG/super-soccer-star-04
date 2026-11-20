@@ -25,7 +25,7 @@ const ease = x => { x = clamp(x, 0, 1); return x * x * (3 - 2 * x); };
 export const SET = {
   hips: 0.8, hipsFar: 0.9, pitch: 0.3, width: 0.46, ahead: 0.05, heel: 0.12, toeOut: 0.14,   // the set position (m, rad)
   hands: [0.2, 0.15, 0.36],                                                                // palms: out, above the hips, ahead (m)
-  step: { thr: 0.07, still: 0.11, time: [0.2, 0.12], lift: 0.045 },                        // when a foot steps, how quick (slow, fast), how high
+  step: { thr: 0.07, still: 0.11, time: [0.22, 0.17], lift: 0.05, gap: 0.27, rise: 0.05 },   // (lift, gap, rise and the quick time: measured from a recorded defensive slide, see the notes)                        // when a foot steps, how quick (slow, fast), how high
   split: { hop: 0.07, land: 0.17, up: 0.03, wide: 0.08, sink: 0.04 },                       // s, s, m, m, m
   recover: 1.8, run: 4.2,                                                                  // m/s back to his spot after a save; faster than this he runs
 };
@@ -133,17 +133,17 @@ function stance(m, p, dt, t, ball) {
     if (f.air) {
       f.air.t += dt;
       const u = Math.min(1, f.air.t / f.air.T), to = tmp.copy(home[n]).addScaledVector(v, (f.air.T - f.air.t) * 0.5 + 0.04);
-      f.p.copy(f.air.from).lerp(to, ease(u)); lift = Math.sin(Math.PI * u) * (S.lift + 0.008 * sp);
+      f.p.copy(f.air.from).lerp(to, ease(u)); lift = Math.sin(Math.PI * u) * (S.lift + 0.02 * Math.min(sp, 3));
       if (u >= 1) f.air = null;
     }
     if (up) lift += up;
     at[n] = toLocal(m, f.p, V(0, 0, 0));
     // feet never cross: the left stays on his left
-    if (n === 'R' && at.R.x > at.L.x - 0.16) at.R.x = at.L.x - 0.16;
+    if (n === 'R' && at.R.x > at.L.x - S.gap) at.R.x = at.L.x - S.gap;
     at[n].y = ankleFor(lift > 0.015 ? 0.35 : SET.heel * (1 - hold)) + lift;
   }
-  // hips: low in the set, lower while he shuffles, up and loose when the ball is far; never higher than the legs reach
-  const H = mix(mix(SET.hips, SET.hipsFar, far), 0.9, hold) - sink - Math.min(0.04, sp * 0.015) + up + 0.005 * Math.sin(t * 2.3 + (m.phase || 0) * 0.1);
+  // hips: low in the set, riding up a little as he pushes across (the recorded slide rises 10 cm and more between its stops), up and loose when the ball is far; never higher than the legs reach
+  const H = mix(mix(SET.hips, SET.hipsFar, far), 0.9, hold) - sink + Math.min(S.rise, sp * 0.022) + up + 0.005 * Math.sin(t * 2.3 + (m.phase || 0) * 0.1);
   const mid = at.L.clone().add(at.R).multiplyScalar(0.5);
   bn.hips.position.set(mid.x * 0.6, H, mid.z * 0.4 - 0.03);
   const reach = 0.86;
