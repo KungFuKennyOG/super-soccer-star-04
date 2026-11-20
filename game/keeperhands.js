@@ -109,12 +109,14 @@ export function underGrass(m) {
 }
 // how high the ankle must be for a boot turned toes-down by `pitch` (rad) to stand on the grass
 export const ankleFor = pitch => Math.max(0.08 * Math.cos(pitch) + 0.19 * Math.sin(pitch), 0.085 * Math.cos(pitch) - 0.09 * Math.sin(pitch)) + 0.002;
-// Lifts the whole body (the hips) clear of the grass.
-export function keepAboveGrass(m) {
+// Lifts the whole body (the hips) clear of the grass; settle: he is lying or getting up, so whatever is lowest is put
+// down on the grass (lowered as well as lifted: no floating). Returns how far he was moved up (m).
+export function keepAboveGrass(m, settle = false, ball = null) {
   m.root.updateMatrixWorld(true);
-  const d = underGrass(m);
-  if (d > 0) { m.bone.hips.position.y += d; m.root.updateMatrixWorld(true); }
-  return Math.max(0, d);
+  let d = underGrass(m);
+  if (ball) d = Math.max(d, BALL_R - ball.y);                         // a ball in his hands (model space) stays on the grass too
+  if (d > 0 || (settle && d < 0)) { m.bone.hips.position.y += d; m.root.updateMatrixWorld(true); return d; }
+  return 0;
 }
 
 // Turns the neck and head toward a point (model space), sharing the turn between them; k: how much.

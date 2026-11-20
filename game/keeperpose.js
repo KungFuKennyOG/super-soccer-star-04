@@ -188,7 +188,8 @@ function finish(m, state, dt, p) {
   const bn = m.bone;
   m.kState = state;
   applyBlend(m, dt);
-  keepAboveGrass(m);
+  const up = keepAboveGrass(m, !!(m.sv && m.sv.ground), m.held);
+  if (m.held) m.held.y += up;                                          // the ball goes with his hands
   remember(m);
   // his shadow goes where his body is
   const h = bn.hips.getWorldPosition(tmp);

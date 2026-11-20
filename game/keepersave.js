@@ -101,6 +101,7 @@ function dive(m, sv, dt, ball) {
   const keys = [[0, sv.h0], [tP, V(s * 0.17, 0.7, 0.08)], [tN, V(s * 0.42, mix(0.78, 0.6, low * low), 0.1)], [T, pc],
     [tL, V(pc.x + s * mix(0.12, 0.3, h), 0.17, pc.z - 0.04)], [tL + 0.3, V(pc.x + s * mix(0.14, 0.33, h), 0.17, pc.z - 0.05)]];
   const tt = Math.min(t, tG);
+  sv.ground = t >= tL;                                     // landed: something of him is on the grass from now till he stands
   pathAt(keys, tt, bn.hips.position);
   const roll = keyAt([[0, 0], [tP, 0.12], [tN, 0.45], [T, Math.PI / 2 - th], [tL, 1.45]], tt);
   const pitch = keyAt([[0, sv.p0], [tP, 0.34], [tN, 0.2], [T, 0.05], [tL, 0.18]], tt);
