@@ -154,7 +154,7 @@ function dive(m, sv, dt, ball) {
       m.held = b.clone();
     } else {
       // pushed on and wide (a parry) or past the hands (beaten); then the arms give, toward the grass
-      const push = V(s * 0.28, 0.05, 0.1).multiplyScalar(ease(a / 0.12)), drop = ease((a - 0.12) / (Tl + 0.1));
+      const push = V(s * 0.28, 0.05, 0.1).multiplyScalar(ease(a / 0.12)), drop = ease((a - 0.08) / Math.max(0.1, Tl - 0.1));   // down by the time he lands
       // (and down onto the grass in front of his chest as he lands, to take his weight)
       const c2 = r.clone().add(push).lerp(V(land.x + s * 0.42, 0.14, pc.z + 0.34), drop);
       g = grip(sv.grip, c2, s);
