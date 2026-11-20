@@ -78,10 +78,12 @@ const VIEWS = {
   front: { fov: 17, cam: [-GOAL.z - 18.5, 1.75, MZ - 1.1], at: [33, 1.0, MZ + 0.3] },
   near: { fov: 30, cam: [28.5, 1.15, MZ - 0.6], at: [33, 0.85, MZ] },
   side: { fov: 42, cam: [32.6, 1.1, MZ - 6.5], at: [32.6, 0.9, MZ + 1] },
+  dive: { fov: 36, cam: [29.0, 0.9, MZ + 1.0], at: [33, 0.7, MZ + 1.0] },      // square on to a dive to his left, close
+  top: { fov: 36, cam: [32.2, 4.6, MZ + 1.0], at: [32.9, 0, MZ + 1.0] },       // looking down on it
 };
-export const KEEP_SHOTS = Object.keys(SETUPS).flatMap(n => ['', 'front', 'side', 'near'].map(v => 'keep' + n + v));
+export const KEEP_SHOTS = Object.keys(SETUPS).flatMap(n => ['', 'front', 'side', 'near', 'dive', 'top'].map(v => 'keep' + n + v));
 export function parseKeepShot(name) {
-  const m = /^keep(ready|shuffle|low|high|stand|hold)(front|side|near)?$/.exec(name);
+  const m = /^keep(ready|shuffle|low|high|stand|hold)(front|side|near|dive|top)?$/.exec(name);
   return m && { setup: m[1], view: VIEWS[m[2] || 'diag'] };
 }
 export const toPage = { P, MZ };

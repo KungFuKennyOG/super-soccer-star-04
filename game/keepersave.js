@@ -96,10 +96,12 @@ function dive(m, sv, dt, ball) {
   // timing: loaded on the stepped-out near foot, far foot off, near foot off (take-off), contact, landing, settled.
   // He falls from the contact as a body falls (Tl); the hips' path runs smoothly through its keys and never past
   // them: down into the load, out and (for a high ball) up through the take-off, then down onto his side.
-  const th = mix(-0.08, 0.7, h), L = 1.08;
-  const pc = V(r.x - s * Math.cos(th) * L, clamp(r.y - Math.sin(th) * L, 0.3, 1.45), r.z - 0.12);
+  // (L: hips to palms at full stretch, so his arms are long to the ball, not cocked at the elbow; for a low ball he is
+  // all but down on his side as he gets to it: left at 0.3 m and above he hung in the air flat as a plank)
+  const th = mix(0.02, 0.7, h), L = 1.06;
+  const pc = V(r.x - s * Math.cos(th) * L, clamp(r.y - Math.sin(th) * L, 0.22, 1.45), r.z - 0.06);
   if (s * pc.x < 0.3) pc.x = s * 0.3;
-  const tP = 0.38 * T, tF = 0.5 * T, tN = 0.66 * T, Tl = clamp(Math.sqrt(2 * Math.max(0.02, pc.y - 0.2) / 9.8), 0.14, 0.5), tL = T + Tl, tG = tL + SAVE.hold[sv.kind] + (sv.grip === 'low' ? 0.1 : 0);
+  const tP = 0.38 * T, tF = 0.5 * T, tN = 0.66 * T, Tl = clamp(Math.sqrt(2 * Math.max(0.005, pc.y - 0.19) / 9.8), 0.07, 0.5), tL = T + Tl, tG = tL + SAVE.hold[sv.kind] + (sv.grip === 'low' ? 0.1 : 0);
   const ax = Math.abs(pc.x), xN = Math.min(0.62, ax * 0.5), yP = Math.min(sv.h0.y - 0.06, mix(0.62, 0.66, h)), yN = Math.max(Math.min(pc.y, yP), mix(0.58, 0.84, h));
   const land = V(pc.x + s * mix(0.1, 0.24, h), 0.19, pc.z - 0.04);
   const tt = Math.min(t, tG);
@@ -108,7 +110,7 @@ function dive(m, sv, dt, ball) {
     s * mono([[0, s * sv.h0.x], [tP, Math.min(0.3, ax * 0.3)], [tN, xN], [T, ax], [tL, s * land.x], [tL + 0.3, s * land.x + 0.03]], tt),
     mono([[0, sv.h0.y], [tP, yP], [tN, yN], [T, pc.y], [tL, land.y]], tt),
     mono([[0, sv.h0.z], [tP, 0.02], [tN, 0.08], [T, pc.z], [tL, land.z]], tt));
-  const roll = mono([[0, 0], [tP, 0.3], [tN, 0.8], [T, Math.PI / 2 - th], [tL, 1.5]], tt);
+  const roll = mono([[0, 0], [tP, 0.3], [tN, 0.8], [T, Math.min(1.45, Math.PI / 2 - th)], [tL, 1.5]], tt);   // on his side, chest to the pitch: never past it onto his front
   const pitch = mono([[0, sv.p0], [tP, 0.4], [tN, 0.25], [T, 0.05], [tL, 0.1]], tt);
   bn.hips.quaternion.setFromAxisAngle(w1.set(0, 0, 1), -s * roll).multiply(qa.setFromAxisAngle(w1.set(1, 0, 0), pitch));
   const reachK = ease((tt - tP) / (T - tP)) * (1 - ease((tt - T) / 0.25));
@@ -128,7 +130,10 @@ function dive(m, sv, dt, ball) {
     // landed: the bottom leg a little bent, the top knee up and its foot down in front, ready to rock up
     const off = ease((tt - (isN ? tN : tF)) / 0.08), down = ease((tt - (T + Tl * 0.4)) / (Tl * 0.7));
     if (off <= 0) continue;
-    const air = isN ? [[mix(0.5, 0.12, h), 0, s * 0.06], [mix(1.0, 0.18, h)], [0.55]] : [[mix(-0.35, -1.05, h), 0, -s * 0.05], [mix(1.35, 1.45, h)], [0.5]];   // (the far leg trails folded: straight, it went through the grass and he was hoisted up to clear it)
+    // (folded as they leave the grass so they clear it, then trailing long behind him by the time he is at the ball)
+    const fl = ease((tt - tN) / Math.max(0.05, T - tN));
+    const air = isN ? [[mix(mix(0.5, 0.12, h), 0.1, fl), 0, s * 0.06], [mix(mix(1.0, 0.18, h), 0.25, fl)], [0.55]]
+      : [[mix(mix(-0.35, -1.05, h), mix(-0.25, -1.05, h), fl), 0, -s * 0.05], [mix(mix(1.35, 1.45, h), mix(0.6, 1.45, h), fl)], [0.5]];
     const land = isN ? [[-0.3, 0, s * 0.05], [0.65], [0.3]] : [[-1.0, 0, -s * 0.15], [1.35], [0.2]];
     LEGS.forEach((b, i) => {
       const a = air[i], l = land[i];
