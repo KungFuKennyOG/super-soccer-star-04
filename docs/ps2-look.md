@@ -42,7 +42,6 @@ Status, 20 Nov 2026. This repo began as a copy of `KungFuKennyOG/super-soccer-st
 ## Still short (told to Kenny)
 
 - Cuts have no plant-and-push on the outside foot; a stop ends with the feet easing into place.
-- **Running with the ball is on the captured strides now** (`game/dribblecap.js`: quick short steps when slow, the boot steered onto the ball for every touch, laces at pace and the inside at a walk; details and what is still short in CLAUDE.md, "Running with the ball"). The kicking leg and every trick are still the earlier hand-built poses, laid over that stride.
 - **The step-over is not a real one**: the sim moves you and the ball on the frame the move starts, so the ball is never still for the boot to go round. Needs a short hold in the rules, like the rainbow's wind-up.
 - Kicks: every shot is the same take; with no wind-up (teammates) the kicking leg snaps to the ball; after a strike at a run he hangs in a long stride for a moment; the shot's foot flicks from the inside of the instep to the laces just before contact.
 - Dribbling at 3 to 4.5 m/s is a long slow stride (the sim's step rate; Kenny was asked whether that one number may change, no answer yet).
