@@ -6,6 +6,7 @@
 // The cut (collar, side panels, piping, cuffs) is generic early-2000s, picked per kit from its colors. Marks are invented
 // (a plain shield with a star, a made-up wordmark): no real crests, sponsors or makers' logos.
 import { clamp01, gauss, hex, css, lum, hash } from './paint.js';
+import { FLAGS, paintFlag } from './flags.js';
 import { shirtShade, sleeveShade, shortsShade, seatShade, sockShade, bootShade, limbs } from './cloth.js';
 
 export const ATLAS = { w: 512, h: 512 };
@@ -78,10 +79,17 @@ function number(ctx, text, x, y, h, sx, color, outline) {
   }
   ctx.restore();
 }
-// The invented badge: a plain shield with a star.
-function badge(ctx, x, y, s, ink, field, star) {
-  const sh = k => { ctx.beginPath(); ctx.moveTo(x - 11 * k, y - 10 * k); ctx.lineTo(x + 11 * k, y - 10 * k); ctx.lineTo(x + 11 * k, y + 2 * k); ctx.quadraticCurveTo(x + 9 * k, y + 11 * k, x, y + 14 * k); ctx.quadraticCurveTo(x - 9 * k, y + 11 * k, x - 11 * k, y + 2 * k); ctx.closePath(); ctx.fill(); };
-  ctx.fillStyle = lum(hex(field)) > 0.45 ? '#161618' : PALE; sh(s * 1.12); ctx.fillStyle = ink; sh(s); ctx.fillStyle = field; sh(s * 0.8);
+// The badge: a plain shield. A nation's has its flag on it (flags.js; Kenny: the countries' shields for the
+// international teams; never a federation's own crest); everyone else's is the invented one with a star.
+function badge(ctx, x, y, s, ink, field, star, flag) {
+  const sh = k => { ctx.beginPath(); ctx.moveTo(x - 11 * k, y - 10 * k); ctx.lineTo(x + 11 * k, y - 10 * k); ctx.lineTo(x + 11 * k, y + 2 * k); ctx.quadraticCurveTo(x + 9 * k, y + 11 * k, x, y + 14 * k); ctx.quadraticCurveTo(x - 9 * k, y + 11 * k, x - 11 * k, y + 2 * k); ctx.closePath(); };
+  ctx.fillStyle = lum(hex(field)) > 0.45 ? '#161618' : PALE; sh(s * 1.12); ctx.fill();
+  if (flag && FLAGS[flag]) {
+    ctx.save(); sh(s * 0.94); ctx.clip(); paintFlag(ctx, flag, x - 11 * s, y - 10 * s, 22 * s, 24 * s * 0.8); ctx.restore();
+    // (the flag sits in the shield's square upper part and its last band runs on down into the point)
+    return;
+  }
+  ctx.fillStyle = ink; sh(s); ctx.fill(); ctx.fillStyle = field; sh(s * 0.8); ctx.fill();
   ctx.fillStyle = ink; ctx.fillRect(x - 9 * s, y - 8.2 * s, 18 * s, 2.6 * s);
   ctx.fillStyle = star; ctx.beginPath();
   for (let i = 0; i < 10; i++) { const a = -Math.PI / 2 + i * Math.PI / 5, q = (i % 2 ? 2.3 : 5.6) * s; ctx.lineTo(x + Math.cos(a) * q * 1.25, y + 2.4 * s + Math.sin(a) * q); }
@@ -142,7 +150,7 @@ function shirtFlat(ctx, k, num, st) {
     }
     // the badge on his left chest (no wordmark across it: Kenny)
     const field = plain ? k.shirt : PALE, busy = k.pattern === 'stripes' || k.pattern === 'hoops' || k.pattern === 'checks';
-    badge(ctx, 174, Y(1.392), 1, inkOn(field, k.trim), field, inkOn(field, k.trim2 === k.trim ? k.trim : k.trim2, 0.15));
+    badge(ctx, 174, Y(1.392), 1, inkOn(field, k.trim), field, inkOn(field, k.trim2 === k.trim ? k.trim : k.trim2, 0.15), k.flag);
     if (busy) { ctx.fillStyle = k.shirt; ctx.fillRect(384 - 66, Y(1.445), 132, Y(1.155) - Y(1.445)); }   // and behind the number
     number(ctx, num, 384, Y(1.3), 92, 1.15, k.number, k.outline || (lum(hex(k.number)) > 0.5 ? '#161618' : null));
   });
@@ -181,7 +189,7 @@ function shortsFlat(ctx, k, num, st) {
     }
     if (st.cut === 0 && k.trim2 !== k.trim) { ctx.fillStyle = inkOn(k.shorts, k.trim2); ctx.fillRect(0, r.h - 5, r.w, 2); }   // tipping round the hem
     if (r === R.shortsR) number(ctx, num, r.w * 0.5 - 14, row(SPAN.shorts, 0.685, r.h), 26, 0.85, ink, null);
-    else badge(ctx, r.w * 0.5 + 16, row(SPAN.shorts, 0.675, r.h), 0.62, pipe, k.shorts, k.trim2 === k.trim ? pipe : inkOn(k.shorts, k.trim2, 0.15));
+    else badge(ctx, r.w * 0.5 + 16, row(SPAN.shorts, 0.675, r.h), 0.62, pipe, k.shorts, k.trim2 === k.trim ? pipe : inkOn(k.shorts, k.trim2, 0.15), k.flag);
   });
 }
 

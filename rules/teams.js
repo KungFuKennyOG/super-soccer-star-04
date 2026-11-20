@@ -186,8 +186,11 @@ export function matchKit(opp, home) {
 }
 
 // Goalkeeper kit: green, or yellow if the team plays in green.
+// A nation's kits carry its id as `flag`: the shield on the shirt and shorts shows its flag (game/ps2/flags.js).
+for (const t of NATIONS) { t.kit.flag = t.id; if (t.away) t.away.flag = t.id; }
+
 export function keeperKit(teamKit) {
   const greenish = colorDist(teamKit.shirt, '#1b7a3a') < 120;
   const shirt = greenish ? '#e8c820' : '#29a35a';
-  return { pattern: 'solid', shirt, alt: shirt, shorts: '#151515', socks: shirt, band: '#111111', trim: '#111111', trim2: '#e8e050', number: '#111111', gloves: true };
+  return { pattern: 'solid', shirt, alt: shirt, shorts: '#151515', socks: shirt, band: '#111111', trim: '#111111', trim2: '#e8e050', number: '#111111', gloves: true, flag: teamKit.flag };
 }

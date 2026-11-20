@@ -22,7 +22,7 @@ function fields(id, what, kit) {
   for (const f of OPTIONAL) if (kit[f] !== undefined && !HEX.test(kit[f])) { err(id, `${what}: ${f} is '${kit[f]}', not a color like #1a2b3c`); ok = false; }
   if (kit.cut !== undefined && ![0, 1, 2].includes(kit.cut)) { err(id, `${what}: cut is ${kit.cut}, must be 0, 1 or 2`); ok = false; }
   if (kit.hoops !== undefined && ![0, 1].includes(kit.hoops)) { err(id, `${what}: hoops is ${kit.hoops}, must be 0 or 1`); ok = false; }
-  for (const f of Object.keys(kit)) if (![...COLORS, ...OPTIONAL, 'pattern', 'cut', 'hoops', 'gloves'].includes(f)) { err(id, `${what}: unknown field '${f}'`); ok = false; }
+  for (const f of Object.keys(kit)) if (![...COLORS, ...OPTIONAL, 'pattern', 'cut', 'hoops', 'gloves', 'flag'].includes(f)) { err(id, `${what}: unknown field '${f}'`); ok = false; }
   return ok;
 }
 function readable(id, what, kit) {
