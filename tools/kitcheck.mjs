@@ -31,7 +31,8 @@ function readable(id, what, kit) {
   const best = Math.max(contrast(kit.number, kit.shirt), outline ? contrast(outline, kit.shirt) : 0);
   if (best < 2.5) err(id, `${what}: the number (${kit.number}${kit.outline ? ', outline ' + kit.outline : ''}) can't be read on the shirt (${kit.shirt}): contrast ${best.toFixed(1)}, needs 2.5. Change number or add an outline`);
   if (colorDist(kit.trim, kit.shirt) < 60 && colorDist(kit.trim2, kit.shirt) < 60) warn(id, `${what}: trim (${kit.trim}) and trim2 (${kit.trim2}) are nearly the shirt's color (${kit.shirt}): collar, cuffs and piping won't show`);
-  if (kit.pattern !== 'solid' && kit.pattern !== 'sleeves' && colorDist(kit.shirt, kit.alt) < 60) warn(id, `${what}: the pattern's two colors (${kit.shirt}, ${kit.alt}) are too alike for '${kit.pattern}' to show`);
+  const second = kit.pattern === 'band' ? kit.band : kit.alt;                  // (a band is painted in `band`, every other pattern in `alt`)
+  if (kit.pattern !== 'solid' && kit.pattern !== 'sleeves' && colorDist(kit.shirt, second) < 60) warn(id, `${what}: the pattern's two colors (${kit.shirt}, ${second}) are too alike for '${kit.pattern}' to show`);
 }
 
 for (const t of ALL) {

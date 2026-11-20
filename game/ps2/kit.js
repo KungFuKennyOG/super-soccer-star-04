@@ -140,14 +140,9 @@ function shirtFlat(ctx, k, num, st) {
       ctx.fillStyle = shade(k.shirt, dark ? 1.14 : 0.72); ctx.fillRect(127, scoop(128, st) + BAND, 2.4, 17);
       ctx.fillStyle = k.trim; ctx.fillRect(124.6, scoop(128, st) + BAND - 1, 2.4, 17);
     }
-    // the badge on his left chest, the wordmark across it
+    // the badge on his left chest (no wordmark across it: Kenny)
     const field = plain ? k.shirt : PALE, busy = k.pattern === 'stripes' || k.pattern === 'hoops' || k.pattern === 'checks';
     badge(ctx, 174, Y(1.392), 1, inkOn(field, k.trim), field, inkOn(field, k.trim2 === k.trim ? k.trim : k.trim2, 0.15));
-    ctx.save(); ctx.translate(128, Y(1.275)); ctx.scale(1.25, 1); ctx.transform(1, 0, -0.18, 1, 0, 0);
-    ctx.font = '900 17px Arial, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    if (busy) { ctx.fillStyle = k.shirt; ctx.fillRect(-46, -11, 92, 22); }                         // a plain panel behind it where the pattern would swallow it
-    ctx.fillStyle = plain || busy ? inkOn(k.shirt, k.trim) : lum(hex(k.shirt)) + lum(hex(k.alt)) < 0.9 ? PALE : '#161618'; ctx.fillText('STAR·96', 0, 0);
-    ctx.restore();
     if (busy) { ctx.fillStyle = k.shirt; ctx.fillRect(384 - 66, Y(1.445), 132, Y(1.155) - Y(1.445)); }   // and behind the number
     number(ctx, num, 384, Y(1.3), 92, 1.15, k.number, k.outline || (lum(hex(k.number)) > 0.5 ? '#161618' : null));
   });
