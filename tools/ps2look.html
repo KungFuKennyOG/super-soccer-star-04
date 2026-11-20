@@ -19,6 +19,7 @@
      strikeyou, passfront ...); &wind=0 strikes with no
      wind-up, &power=0..1 sets how hard; kickraw / kickrawfront with &raw=kickShot|kickPass play a
      recorded kick alone, as baked.
+     trophies: see tools/trophylook.js (worldheld, clubspin, pair ...).
      tools/ps2shots.mjs renders them all to files. -->
 <style>html,body{margin:0;background:#101830;overflow:hidden}canvas{display:block}#i{position:fixed;left:8px;top:8px;font:12px monospace;color:#fff;text-shadow:0 0 3px #000}
 .bar{position:fixed;bottom:6%;width:27%;display:none;font:600 2.3vw 'Trebuchet MS',Arial,sans-serif;color:#fff}.bar b{display:block;padding:.25em .9em;border-radius:.6em;background:linear-gradient(#3a4250e6,#151a22e6);box-shadow:0 0 0 2px #0006}.bar i{display:block;height:.5vw;margin:.5vw .4em 0;background:repeating-linear-gradient(90deg,#f2f2f2 0 1.5vw,#0000 1.5vw 1.9vw)}</style>
@@ -43,6 +44,7 @@ import { buildStand, buildSky } from '../game/ps2/stand.js';
 import { CLIPS, sampleStride, applyPose, newPose } from '../game/mocap.js';
 import { createWorld, stepSim } from '../rules/sim.js';
 import { sampleKick } from '../game/kickcap.js';
+import { trophyShots } from './trophylook.js';
 
 const q = new URLSearchParams(location.search);
 let shot = q.get('shot') || 'duel';
@@ -197,6 +199,7 @@ for (const name of Object.keys(TRICKS)) {
   SHOTS[name] = side; SHOTS[name + 'front'] = { ...side, cam: t => [at(t).x + 4.8, 1.05, at(t).z + 0.7], at: t => [at(t).x, 0.9, at(t).z] };
 }
 const val = (v, t) => (typeof v === 'function' ? v(t) : v);
+const TROPHY = trophyShots(scene, q); Object.assign(SHOTS, TROPHY.shots);   // the trophies (tools/trophylook.js lists the shots)
 // the carrier's stride and his touches are the sim's own (strides: a 'dribble' event on the touch frame); the ball is where the sim's carry puts it
 const DW = { players: [], owner: 'you', dead: false, wind: null }, rollQ = new THREE.Quaternion(), rollAxis = new THREE.Vector3();
 let touchAt = -9;
@@ -232,6 +235,7 @@ let time = +(q.get('t') || 0);
 const RAW = CLIPS[q.get('raw')], rawPose = Object.assign(newPose(), { a: new Float32Array(6) });
 function pose(t, dt) {
   const s = SHOTS[shot], set = s.set(t), b = s.trick ? [0, 0] : val(s.ball, t);
+  if (s.tick) s.tick(t); else TROPHY.hide();
   if (b) { bp.x = b[0]; bp.z = b[1]; bp.y = b[2] ?? 0.11; ball.position.set(bp.x, bp.y, bp.z); ball.rotation.set(t * 9, 0.4, t * 3); }
   if (s.trick) {
     // every sim step since the last frame is played to the model (its events), then he is posed once as he is now
@@ -283,7 +287,7 @@ function frame(dt) {
 window.__look = {
   ready: false, step: frame, note: () => (SHOTS[shot].drib !== undefined ? `ph ${(players[SHOTS[shot].drib].p.stride % (Math.PI * 2)).toFixed(2)}${time - touchAt < 1e-6 ? ' TOUCH' : ''}` : ''),
   shot(name, t = 0) { shot = name; time = t; warm(); frame(0); },
-  info: () => ({ calls: renderer.info.render.calls, triangles: renderer.info.render.triangles, textures: renderer.info.memory.textures, buildMs, playerTris: players[0].m.mesh.geometry.index.count / 3 }),
+  info: () => ({ calls: renderer.info.render.calls, triangles: renderer.info.render.triangles, textures: renderer.info.memory.textures, buildMs, playerTris: players[0].m.mesh.geometry.index.count / 3, trophies: TROPHY.info }),
   sheet: (i, k = 0) => players[i].m.mesh.material[k].map.image.toDataURL('image/png'),
 };
 addEventListener('keydown', e => { const n = Object.keys(SHOTS)[+e.key - 1]; if (n) { shot = n; time = 0; } });
