@@ -72,3 +72,22 @@ how the arms come down after a parry, the head.
 - The low dive's hands were 0.43 m under the grass at the touch; nothing goes under the pitch now (tested).
 - After a high parry his arms stood straight up in the air while he lay on the grass; they come down beyond his
   head as he lands.
+
+## Later the same day (Kenny's review of the videos)
+
+- "broken wrist", "the stance doesn't look right", "the dive looked broken": the set position is now the coached one
+  (feet shoulder width, knees a little bent, nose in front of the toes, elbows narrow, hands in front a ball's width
+  apart); a wrist bends at most about 30 degrees off the forearm; the dive's body path is smooth (it bounced 20 to
+  30 cm), he sinks and leans into it with his hands in front of his chest, drives off, and is long and low on his
+  side with his arms stretched to the ball; for a low ball he is down by the time he gets to it.
+- "his arms still go through his body": a palm asked to be across his chest is brought to the front of it and the
+  elbow goes forward, the shoulder rolls forward when an arm reaches across, palms keep off his head
+  (`placeHand` in keeperhands.js, all smooth: a search for a clear elbow was tried and made the arms flicker).
+  `armInside` measures it (trunk, thighs, shins, head) and the tests hold it under 10 cm and 26 frames a save.
+- "why not put this in?" (the coached get-up): done. `poseUp` in keepersave.js is the pendulum leg: the top leg
+  swings up and forward and is driven down to post its foot, the bottom leg is shot under his seat, he rocks up over
+  that knee and drives off the posted foot, no hands, about 0.9 s. Built from coaching points, not recorded. The
+  recorded get-up (140_03) is no longer used (keepercap.js and the clip are still there).
+- "whys the inside transparent?": the kit is drawn on both sides (game/ps2/player.js), the inside in shade, so you
+  can't see through a sleeve or a short's leg.
+- Gloves: merged in from the `gloves` branch.

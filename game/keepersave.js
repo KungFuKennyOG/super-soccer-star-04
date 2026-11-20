@@ -1,5 +1,5 @@
 // The keeper's saves: dives and standing saves, built from goalkeeping coaching and one biomechanics study
-// (docs/notes-keeper-anim.md), with getting up off the grass from a motion capture (game/keepercap.js).
+// (docs/notes-keeper-anim.md).
 // The sim says a shot is coming his way (p.save { y, kind, id, eta }, p.dive -1 / 0 / 1); the save is latched
 // and played out here in a frame of its own (where he stood and the way he faced when it began), so the body
 // goes where the hands need it whatever the sim does with his spot in the meantime.
@@ -10,7 +10,7 @@
 //             catch: the bottom hand behind it, the top hand on top, and the ball pinned to the grass; high
 //             catch: palms behind it, then into the chest; parry: the near palm's heel on the inside of the ball,
 //             pushed on, wide; landing on the side (calf, thigh, hip, then the side of the trunk), the top knee
-//             drawn up; then up from the grass (captured)
+//             drawn up; then up from the grass on the pendulum leg, without his hands
 //   standing  a ball at him: scooped from the grass (stoop, palms to it, fingers down), a basket at the waist
 //             (palms up, into the stomach), W at the chest (thumbs together, behind it), or overhead off both
 //             feet; feet first: a quick step across behind the line of the ball
@@ -18,13 +18,12 @@ import * as THREE from 'three';
 import { stepBall } from '../rules/ball.js';
 import { reachLeg, aimFoot } from './legik.js';
 import { grip, placeHands, lookAt, pathAt, keyAt, mono, ankleFor, BALL_R } from './keeperhands.js';
-import { getupPose, GETUP } from './keepercap.js';
 
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v)), mix = (a, b, k) => a + (b - a) * k;
 const ease = x => { x = clamp(x, 0, 1); return x * x * (3 - 2 * x); };
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
 const ZD = 0.12, ZS = 0.36;                  // the plane he meets the ball in, in front of where he stood: diving, standing
-export const SAVE = { zDive: ZD, zStand: ZS, getupRate: 2.1, hold: { catch: 0.45, parry: 0.25, beaten: 0.3, wide: 0.3 } };
+export const SAVE = { zDive: ZD, zStand: ZS, hold: { catch: 0.45, parry: 0.25, beaten: 0.3, wide: 0.3 } };
 
 // world ↔ the save's frame (origin O, turned Y): x his left, z the way he faced
 const toModel = (sv, x, y, z, out) => { const dx = x - sv.O.x, dz = z - sv.O.z, c = Math.cos(sv.Y), s = Math.sin(sv.Y); return out.set(dx * c - dz * s, y, dx * s + dz * c); };
@@ -169,22 +168,51 @@ function dive(m, sv, dt, ball) {
   placeHands(bn, g, 1, 1, 0.35);
   lookAt(bn, tt < T + 0.3 ? r : m.held || V(pc.x + s * 2, 0.4, 2), 0.8);
 
-  // up off the grass: a recorded get-up (game/keepercap.js), sped up; the ball, if he has it, held to his chest.
-  // While he lies there he comes round to the recording's first pose (propped on his hip), so the get-up starts
-  // from where he is and not across a blend of two different bodies (that blend threw him 30 cm into the air).
-  if (t > tL + 0.06) {
-    const gt = Math.max(0, t - tG) * SAVE.getupRate;
-    if (gt > GETUP.length) return false;
-    getupPose(bn, gt, s, land, ease((t - tL - 0.06) / Math.max(0.15, tG - tL - 0.06)));
+  // up off the grass, the way keepers are coached to (no hands, so the ball can stay in them): the "pendulum leg"
+  if (t > tG) {
+    const gt = t - tG;
+    if (gt > UP.T) return false;
+    poseUp(bn, gt, s, land);
     if (sv.kind === 'catch') {
       chestPoint(bn, hp);
-      const b = sv.ballAt.clone().lerp(hp, ease((t - tG) / 0.4));
-      bn.clavicleL.quaternion.identity(); bn.clavicleR.quaternion.identity();   // (the recording rolls a shoulder in: with the ball in his arms that put an upper arm inside his chest)
+      const b = sv.ballAt.clone().lerp(hp, ease(gt / 0.3));
       placeHands(bn, grip('sides', b, s), 1, 1.8, 0.05);    // elbows well out: tucked in, his upper arms sat in his sides
       m.held = b;
-    }
+    } else placeHands(bn, readyGrip(bn), ease(gt / 0.45), 1, 0.75);
   }
   return true;
+}
+
+/* ---------- getting up: the pendulum leg ---------- */
+
+// Coaching: "use the momentum of the dive like a pendulum and rock and explode back up": the top leg swings up and
+// forward and is driven down to post its foot on the grass in front of him, the bottom leg is shot underneath his
+// seat, and he rocks up over that bottom knee and drives off the posted foot to standing, without his hands (so a
+// ball he has caught stays in them). swing: the top leg up; post: its foot down, on his bottom knee; T: standing.
+export const UP = { swing: 0.2, post: 0.45, T: 0.9 };
+const uq = new THREE.Quaternion(), ue = new THREE.Euler(), up0 = new THREE.Vector3(), keep = {};
+const slerpTo = (bone, x, y, z, k) => bone.quaternion.slerp(uq.setFromEuler(ue.set(x, y, z)), k);
+function poseUp(bn, gt, s, land) {
+  const near = s > 0 ? 'L' : 'R', far = s > 0 ? 'R' : 'L', sdF = -s;                 // lying on his near side: the far leg is the top one
+  const a = ease(gt / UP.swing), b = ease((gt - UP.swing) / (UP.post - UP.swing)), c = ease((gt - UP.post) / (UP.T - UP.post));
+  // hips: from lying on his side, rocked up onto the bottom knee (still tipped a little, bent well forward), then up
+  const stand = V(land.x - s * 0.16, 0.85, land.z + 0.02);
+  bn.hips.quaternion.slerp(uq.setFromEuler(ue.set(0.55, 0, -s * 0.3)), b).slerp(uq.setFromEuler(ue.set(0.36, 0, 0)), c);
+  up0.copy(bn.hips.position).lerp(V(stand.x, 0.35, stand.z), b).lerp(stand, c);
+  bn.hips.position.copy(up0);
+  bn.spine.rotation.x += 0.22 * b * (1 - c); bn.chest.rotation.x += 0.1 * b * (1 - c);
+  // the top leg: swung up and forward (the pendulum), then its foot posted on the grass in front of him
+  slerpTo(bn['upperLeg' + far], -0.6, 0, sdF * 0.8, a); slerpTo(bn['lowerLeg' + far], 0.5, 0, 0, a);
+  // the bottom leg: shot underneath him, knee on the grass, shin back under his seat; then it steps out under him
+  slerpTo(bn['upperLeg' + near], -0.95, 0, 0, b); slerpTo(bn['lowerLeg' + near], 2.05, 0, 0, b); slerpTo(bn['foot' + near], 0.7, 0, 0, b);
+  for (const [n, k, x, z0, z1] of [[far, b, stand.x - s * 0.22, 0.34, 0.07], [near, c, stand.x + s * 0.22, 0.05, 0.05]]) {
+    if (k <= 0) continue;
+    const U = bn['upperLeg' + n], L = bn['lowerLeg' + n], F = bn['foot' + n];
+    keep.u = U.quaternion.clone(); keep.l = L.quaternion.clone(); keep.f = F.quaternion.clone();
+    reachLeg(bn, n, V(x, ankleFor(0) + Math.sin(Math.PI * k) * 0.06, land.z + mix(z0, z1, c)));
+    aimFoot(bn, n, qa.setFromEuler(e1.set(0, (n === 'L' ? 1 : -1) * 0.12, 0)));
+    U.quaternion.copy(keep.u.slerp(U.quaternion, k)); L.quaternion.copy(keep.l.slerp(L.quaternion, k)); F.quaternion.copy(keep.f.slerp(F.quaternion, k));
+  }
 }
 
 /* ---------- standing saves ---------- */

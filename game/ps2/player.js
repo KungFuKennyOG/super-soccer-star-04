@@ -26,6 +26,9 @@ export function kitSheet({ kit, num, skinI = 0, boots = 0 }) {
   paintKit(ctx, { kit, num, skin: skinOf(skinI), boots });
   if (kit.gloves) paintGloves(ctx, kit, +num || 0);                   // a keeper's kit (rules/teams.js keeperKit): his gloves go where the unused neck patch was
   const m = new THREE.MeshPhongMaterial({ map: smoothTex(c), vertexColors: true, specular: 0x2b2a27, shininess: 10 });   // a low, broad highlight: the soft sheen
+  // both sides are drawn: sleeves and the legs of the shorts are open at their hems, and with an arm raised you looked
+  // up a sleeve and straight through it (Kenny: "whys the inside transparent?"). The inside is the cloth in shade.
+  m.side = THREE.DoubleSide;
   // loose cloth (the legs of the shorts and the sleeves toward their hems, `aLoose` on the geometry) is pushed
   // about by game/sway.js: uCloth is where the air and his own jolts carry it (m, his own space), uFlap how far
   // it flutters and where in the flutter it is. Only the side facing away from the push moves, and only outward,
@@ -39,6 +42,7 @@ export function kitSheet({ kit, num, skinI = 0, boots = 0 }) {
         float flap = 0.5 + 0.5 * sin(uFlap.y + position.y * 37.0 + position.x * 19.0 + position.z * 13.0);
         transformed += aLoose * (uCloth * lee + objectNormal * uFlap.x * flap * (0.35 + 0.65 * lee));
       }`);
+    sh.fragmentShader = sh.fragmentShader.replace('#include <dithering_fragment>', '#include <dithering_fragment>\n  if (!gl_FrontFacing) gl_FragColor.rgb *= 0.42;');
   };
   sheets.set(key, m);
   return m;
