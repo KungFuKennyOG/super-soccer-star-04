@@ -17,7 +17,8 @@
 <body>
 <script type="module">
 import * as THREE from 'three';
-import { buildPlayer, buildYou, animate, placeModel, handsOf } from '../game/actors.js';
+import { buildPlayer, buildYou, animate, placeModel } from '../game/actors.js';
+import { heldBall } from '../game/keeperpose.js';
 import { startStrike, struck } from '../game/strike.js';
 import { dribbleLead, strideRate } from '../rules/dribble.js';
 import { DRIBBLE, STRIKE } from '../rules/tuning.js';
@@ -90,9 +91,10 @@ else if (times) {
     for (let tt = 0; tt < (times[i] ?? times[times.length - 1]); tt += 1 / 60) poseOne(m, p, 1 / 60, tt);
     placeModel(m, p);
     // a caught ball sits in his gloves (as game/main.js draws it)
-    if (saveKind === 'catch' && m.save && m.save.t > m.save.touch) {
+    const at = heldBall(m, new THREE.Vector3());
+    if (at) {
       const b = new THREE.Mesh(new THREE.SphereGeometry(0.12, 8, 6), new THREE.MeshLambertMaterial({ color: '#ffffff' }));
-      scene.add(b); handsOf(m, b.position);
+      scene.add(b); b.position.copy(at);
     }
   });
 }
