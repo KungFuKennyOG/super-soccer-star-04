@@ -10,6 +10,10 @@
 //   scoop   a ball along the ground taken standing: palms facing it, fingers down to the grass
 //   basket  waist high: palms up under it, elbows in, into the stomach
 //   sides   carried: a palm either side
+//   w       the contour catch, chest to head high: thumbs behind it, fingers spread up over its top half
+//   over    the same above his head; tip: one open palm under and behind it, pushing it up over the bar
+//   hug     held to the chest: hands wrapped round the front of it from below; block / lowblock: both palms behind
+//           it and turned to push it wide (fingers up / down)
 //   parry   the near hand's palm and heel on the inside back of the ball (to push it wide), the other hand short of it
 import * as THREE from 'three';
 import { reachArm } from './legik.js';
@@ -43,11 +47,19 @@ function spot(kind, c, side, lo, s) {
   else if (kind === 'parry') {
     if (sd === s) { d = n(-s * 0.45, 0.05, -0.9); f = n(s * 0.2, 1, 0.1); }
     else { d = n(-s * 0.45, -0.3, -0.85); f = n(s * 0.2, 1, 0.1); }
+  } else if (kind === 'w') { d = n(sd * 0.42, 0.25, -0.87); f = n(sd * 0.22, 1, 0.3); }
+  else if (kind === 'over') { d = n(sd * 0.42, 0.3, -0.86); f = n(sd * 0.2, 0.85, -0.45); }
+  else if (kind === 'hug') { d = n(sd * 0.5, -0.5, 0.7); f = n(-sd * 0.75, 0.6, 0.25); }
+  else if (kind === 'block') { d = n(sd * 0.4 - s * 0.22, -0.05, -0.9); f = n(sd * 0.22, 1, 0.15); }
+  else if (kind === 'lowblock') { d = n(sd * 0.4 - s * 0.2, -0.1, -0.9); f = n(sd * 0.12, -1, 0.3); }
+  else if (kind === 'tip') {
+    if (sd === s) { d = n(0, -0.5, -0.87); f = n(s * 0.1, 0.9, -0.4); } else { d = n(sd * 0.5, -0.6, -0.6); f = n(sd * 0.2, 0.9, -0.2); }
   } else throw new Error('grip ' + kind);
   out.palm.copy(c).addScaledVector(d, R);
   out.N.copy(d).negate();                           // the palm faces the ball's centre
   out.F.copy(f).addScaledVector(out.N, -f.dot(out.N)).normalize();
   if (kind === 'parry' && sd !== s) out.palm.addScaledVector(d, 0.1);   // the far hand doesn't get there
+  if (kind === 'tip' && sd !== s) out.palm.addScaledVector(d, 0.3).y -= 0.25;
   return out;
 }
 export function grip(kind, c, s) { return { L: spot(kind, c, null, 'L', s), R: spot(kind, c, null, 'R', s) }; }
@@ -137,7 +149,7 @@ export function armInside(bn, lo, out = null) {
 const cq = new THREE.Quaternion(), cqi = new THREE.Quaternion(), cpos = new THREE.Vector3(), lp = new THREE.Vector3(), spT = { palm: new THREE.Vector3(), N: null, F: null }, pl = new THREE.Vector3();
 const hq = new THREE.Quaternion(), hc = new THREE.Vector3();
 const sm = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
-export function placeHand(bn, lo, sp, pole, w = 1, lim = WRIST) {
+export function placeHand(bn, lo, sp, pole, w = 1, lim = WRIST, free = false) {
   const up = bn['upperArm' + lo], fa = bn['foreArm' + lo], hd = bn['hand' + lo], sd = lo === 'L' ? 1 : -1;
   if (w < 1) { held.u = up.quaternion.clone(); held.f = fa.quaternion.clone(); held.h = hd.quaternion.clone(); }
   // the chest's frame (model space)
@@ -145,7 +157,7 @@ export function placeHand(bn, lo, sp, pole, w = 1, lim = WRIST) {
   cq.multiply(bn.spine.quaternion); cpos.add(lp.copy(bn.chest.position).applyQuaternion(cq)); cq.multiply(bn.chest.quaternion); cqi.copy(cq).invert();
   lp.copy(sp.palm).sub(cpos).applyQuaternion(cqi);                       // the palm as the chest sees it: x toward this arm's side is sd * x
   const across = sm(0.24, 0.06, sd * lp.x), level = sm(-0.5, -0.36, lp.y) * sm(0.54, 0.4, lp.y);   // how far over his body it is, and whether it is at the trunk's height at all
-  const k = across * level, front = 0.17 + 0.17 * sm(0.02, -0.28, sd * lp.x);   // further forward the further past his middle it is: the whole arm has to clear his chest
+  const k = free ? 0 : across * level, front = 0.17 + 0.17 * sm(0.02, -0.28, sd * lp.x);   // further forward the further past his middle it is: the whole arm has to clear his chest
   if (k > 0 && lp.z < front) lp.z += (front - lp.z) * k;                  // (by how far over him it is: a palm well clear of him is left exactly where it was asked)
   spT.palm.copy(lp).applyQuaternion(cq).add(cpos); spT.N = sp.N; spT.F = sp.F;
   // and off his head: a palm asked to be nearer than 16.5 cm to its middle is moved straight out from it, to the front
@@ -164,10 +176,12 @@ export function placeHand(bn, lo, sp, pole, w = 1, lim = WRIST) {
   if (w < 1) { up.quaternion.copy(held.u.slerp(up.quaternion, w)); fa.quaternion.copy(held.f.slerp(fa.quaternion, w)); hd.quaternion.copy(held.h.slerp(hd.quaternion, w)); }
 }
 // both hands; poles out to each side and a little down and back, in the hips' frame
-export function placeHands(bn, g, w = 1, poleOut = 1, poleDown = 0.4) {
+// (free: the elbows go where the pole says even with the palms in front of his chest: a catch in both hands, where
+// the arms come round a ball from either side, not across him)
+export function placeHands(bn, g, w = 1, poleOut = 1, poleDown = 0.4, free = false, lim = WRIST) {
   for (const lo of ['L', 'R']) {
     const sd = lo === 'L' ? 1 : -1, pole = new THREE.Vector3(sd * poleOut, -poleDown, -0.35).applyQuaternion(bn.hips.quaternion);
-    placeHand(bn, lo, g[lo], pole, w);
+    placeHand(bn, lo, g[lo], pole, w, lim, free);
   }
 }
 
@@ -239,4 +253,33 @@ export function keyAt(keys, t) {
   if (t <= keys[0][0]) return keys[0][1];
   for (let i = 1; i < keys.length; i++) if (t <= keys[i][0]) { const [a, va] = keys[i - 1], [b, vb] = keys[i], u = (t - a) / (b - a), e = u * u * (3 - 2 * u); return va + (vb - va) * e; }
   return keys[keys.length - 1][1];
+}
+
+// Where his hands are carried through a save before they go to the ball: in front of his chest off bent elbows,
+// fingers forward, palms turned in and half to the ball, wrists straight. Carried with the chest, not the hips: as
+// he sinks into the load his thighs come up, and hands hung off the hips went into his lap and his stomach.
+const rq = new THREE.Quaternion(), rI = new THREE.Quaternion(), rp = new THREE.Vector3(), rw = new THREE.Vector3();
+export function readyGrip(bn) {
+  const out = {};
+  rq.copy(bn.hips.quaternion); rp.copy(bn.spine.position).applyQuaternion(rq).add(bn.hips.position);
+  rq.multiply(bn.spine.quaternion); rp.add(rw.copy(bn.chest.position).applyQuaternion(rq)); rq.multiply(bn.chest.quaternion);
+  // (hung from the chest but only a third turned with it: bent well forward, hands that followed the chest all the
+  // way came down onto his knees)
+  rq.slerp(rI, 0.65);
+  for (const [lo, sd] of [['L', 1], ['R', -1]]) {
+    const palm = new THREE.Vector3(sd * 0.17, -0.2, 0.36).applyQuaternion(rq).add(rp);
+    const N = n(-sd * 0.75, -0.25, 0.6).applyQuaternion(rq), F = n(sd * 0.12, -0.3, 1).applyQuaternion(rq);
+    out[lo] = { palm, N, F: F.addScaledVector(N, -F.dot(N)).normalize() };
+  }
+  return out;
+}
+export function lerpGrip(a, b, k) {
+  const out = {};
+  for (const lo of ['L', 'R']) out[lo] = { palm: a[lo].palm.clone().lerp(b[lo].palm, k), N: a[lo].N.clone().lerp(b[lo].N, k).normalize(), F: a[lo].F.clone().lerp(b[lo].F, k).normalize() };
+  return out;
+}
+// in front of his chest, where a caught ball is held (carried with the trunk)
+export function chestPoint(bn, out) {
+  rq.copy(bn.hips.quaternion).multiply(bn.spine.quaternion);
+  return out.set(0, 0.34, 0.26).applyQuaternion(rq).add(bn.hips.position);
 }

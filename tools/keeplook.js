@@ -6,8 +6,11 @@
 //   keephigh      a high shot to his left: a high dive
 //   keepstand     a shot straight at him, chest high (&y=0.3 a low one he scoops, &y=2 one over his head)
 //   keephold      a soft one at him that he catches and holds, then the seconds after
-// Each also ...front (from behind the shooter: the striker's view), ...side (along the goal line, his profile) and
-// ...near (5 m in front of him, low).
+//   keepscoop / keepcup / keepw / keephead / keepover / keepjump   standing catches by height; keepwside, keepcupside a
+//                 step to one side first; keepblock / keeplowblock / keeptip   the same too hot to hold
+//   keeplrl, keepcreep, keepinout, keepsplit   the feet: a long shuffle left-right-left, small steps, out and back, the split step
+// Each also ...front (from behind the shooter: the striker's view), ...side (along the goal line, his profile),
+// ...near (5 m in front of him, low), and going with him, close: ...cfront, ...cside, ...cq, ...chigh, ...chighside.
 // Overrides: &tx= &ty= (where the shot is aimed, m from the middle of the goal / the grass), &hold= (s charged:
 // how hard), &from= (m out), &fx= (m across). The shot is struck about t = 1.08 s (let go at 1.0 s).
 // Sim → page: the sim's goal (z = -34, facing +z) sits on the page's goal line at x = 34, the middle at z = 7.
@@ -24,6 +27,15 @@ const SETUPS = {
   high: { tx: 2.4, ty: 1.95, hold: 0.5 },
   stand: { tx: 0.15, ty: 1.15, hold: 0.45 },
   hold: { tx: 0.1, ty: 1.0, hold: 0.35, secs: 5 },
+  // standing saves by height (a catch unless it says parry), the feet, and the split step
+  scoop: { tx: 0.15, ty: 0.25, hold: 0.4, kind: 'catch' }, cup: { tx: -0.1, ty: 0.85, hold: 0.4, kind: 'catch' }, w: { tx: 0.15, ty: 1.2, hold: 0.4, kind: 'catch' },
+  head: { tx: 0.1, ty: 1.65, hold: 0.4, kind: 'catch' }, over: { tx: 0.1, ty: 2.15, hold: 0.4, kind: 'catch' }, jump: { tx: 0.1, ty: 2.4, hold: 0.4, kind: 'catch' },
+  wside: { tx: 0.45, ty: 1.2, hold: 0.4, kind: 'catch' }, cupside: { tx: -0.45, ty: 0.8, hold: 0.4, kind: 'catch' },
+  block: { tx: 0.15, ty: 1.2, hold: 0.8, kind: 'parry' }, lowblock: { tx: 0.15, ty: 0.25, hold: 0.9, kind: 'parry' }, tip: { tx: 0.1, ty: 2.15, hold: 0.8, kind: 'parry' },
+  lrl: { secs: 7, from: 15, fx: 0, sprint: true, move: t => ({ x: t < 1.5 ? 1 : t < 4 ? -1 : t < 6 ? 1 : 0, z: 0 }) },     // a long shuffle left, right, left
+  creep: { secs: 6, from: 17, fx: -3, move: t => ({ x: t < 3 ? 0.3 : -0.3, z: 0 }) },                                 // small adjusting steps
+  inout: { secs: 6, from: 24, fx: -2, move: t => ({ x: 0.1, z: t < 3 ? -0.7 : 0.7 }) },                               // off his line and back
+  split: { tx: 3.4, ty: 2.2, hold: 1.0, from: 22, secs: 2.5 },                                                         // the split step, then a dive
 };
 const LET_GO = 1.0;
 
@@ -33,7 +45,7 @@ export function keeperLog(name, q) {
   for (const k of ['tx', 'ty', 'hold', 'from', 'fx']) if (q.get(k) !== null) S[k] = +q.get(k);
   if (q.get('y') !== null) S.ty = +q.get('y');
   if (q.get('side') === '-1' && S.tx) S.tx = -S.tx;
-  const w = createWorld(() => 0.5), kind = q.get('kind');
+  const w = createWorld(() => 0.5), kind = q.get('kind') || S.kind;
   if (kind) w.tune = { ...w.tune, ai: { ...w.tune.ai, gkCatchBelow: kind === 'catch' ? 99 : 0, gkCatchAtHim: kind === 'catch' ? 99 : 0 } };
   for (const id of ['d1', 'd2', 'd3', 'm1', 'm2']) { const p = w.byId[id]; p.x = 25 + p.x; p.z = 20; if (p.role === 'def') p.stun = 99; }
   const from = S.from ?? 16, fx = S.fx ?? 0;
@@ -44,7 +56,8 @@ export function keeperLog(name, q) {
     let move = { x: 0, z: 0 };
     if (S.walk) move = S.walk;
     if (S.across) move = { x: t < 3 ? 0.55 : -0.55, z: 0 };
-    const it = { move, facing: { x: 0, z: -1 } };
+    if (S.move) move = S.move(t);
+    const it = { move, sprint: !!S.sprint, facing: { x: 0, z: -1 } };
     if (S.tx !== undefined && Math.abs(t - LET_GO) < DT / 2) {
       const eye = { x: w.you.x, y: 1.7, z: w.you.z }, d = [S.tx - eye.x, S.ty - eye.y, GOAL.z - eye.z], l = Math.hypot(...d);
       it.shot = { eye, dir: { x: d[0] / l, y: d[1] / l, z: d[2] / l }, holdT: S.hold };
@@ -81,9 +94,21 @@ const VIEWS = {
   dive: { fov: 36, cam: [29.0, 0.9, MZ + 1.0], at: [33, 0.7, MZ + 1.0] },      // square on to a dive to his left, close
   top: { fov: 36, cam: [32.2, 4.6, MZ + 1.0], at: [32.9, 0, MZ + 1.0] },       // looking down on it
 };
-export const KEEP_SHOTS = Object.keys(SETUPS).flatMap(n => ['', 'front', 'side', 'near', 'dive', 'top'].map(v => 'keep' + n + v));
+// ...and three that go with him, close: from the front (the striker's side), along the goal line, and three-quarter
+const CLOSE = { cfront: { fov: 26, off: [-5.6, 1.25, 0], y: 1.0 }, cside: { fov: 26, off: [0, 1.15, -5.6], y: 1.0 }, cq: { fov: 26, off: [-4.2, 1.5, 3.6], y: 1.0 }, cup: { fov: 34, off: [-5.6, 1.25, 0], y: 1.35 }, cupside: { fov: 34, off: [0, 1.15, -5.6], y: 1.35 } };
+const VNAMES = ['front', 'side', 'near', 'dive', 'top', 'cfront', 'cside', 'cq', 'chigh', 'chighside'];
+CLOSE.chigh = CLOSE.cup; CLOSE.chighside = CLOSE.cupside; delete CLOSE.cup; delete CLOSE.cupside;
+export const KEEP_SHOTS = Object.keys(SETUPS).flatMap(n => ['', ...VNAMES].map(v => 'keep' + n + v));
 export function parseKeepShot(name) {
-  const m = /^keep(ready|shuffle|low|high|stand|hold)(front|side|near|dive|top)?$/.exec(name);
-  return m && { setup: m[1], view: VIEWS[m[2] || 'diag'] };
+  if (!name.startsWith('keep')) return null;
+  const rest = name.slice(4), v = VNAMES.filter(x => rest.endsWith(x) && SETUPS[rest.slice(0, -x.length)]).sort((a, b) => b.length - a.length)[0] || '';
+  const setup = v ? rest.slice(0, -v.length) : rest;
+  return SETUPS[setup] ? { setup, view: VIEWS[v || 'diag'] || { close: CLOSE[v] } } : null;
+}
+// the camera for a view: { fov, cam, at }; root: the keeper's (a close view goes with him)
+export function keepView(view, root) {
+  if (!view.close) return view;
+  const c = view.close, p = root.position;
+  return { fov: c.fov, cam: [p.x + c.off[0], c.off[1], p.z + c.off[2]], at: [p.x, c.y, p.z] };
 }
 export const toPage = { P, MZ };
