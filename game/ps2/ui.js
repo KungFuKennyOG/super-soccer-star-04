@@ -216,7 +216,7 @@ export function header(ctx, W, top, s, right = null) {
   const cy = top * 0.56, r = top * 0.28;
   mark(ctx, W * 0.075, cy, r);
   const tx = W * 0.075 + r + W * 0.025;
-  title(ctx, s, tx, cy, top * 0.42, (right ? W * 0.62 : W * 0.88) - tx);
+  title(ctx, s, tx, cy, top * 0.38, (right ? W * 0.62 : W * 0.88) - tx);
   if (right) text(ctx, right, W - W * 0.04, cy, { size: top * 0.24, align: 'right', color: PAL.muted, max: W * 0.3 });
 }
 // The bottom band: button hints in a row (glyph + plain label), a status line under them.

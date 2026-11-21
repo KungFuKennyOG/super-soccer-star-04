@@ -62,9 +62,9 @@ export function renderBackdrop(renderer, kit, key, w = 1024, h = 492) {
   // out of focus, washed out a little, a touch darker so white type reads over it
   const out = document.createElement('canvas'); out.width = w; out.height = h;
   const o = out.getContext('2d');
-  o.filter = `blur(${Math.max(1, Math.round(w / 400))}px) saturate(0.62) contrast(0.88) brightness(1.04)`;
+  o.filter = `blur(${Math.max(1, Math.round(w / 400))}px) saturate(0.6) contrast(0.85) brightness(1.1)`;
   o.drawImage(raw, 0, 0); o.filter = 'none';
-  o.fillStyle = 'rgba(225,228,232,0.12)'; o.fillRect(0, 0, w, h);     // the hazy, high-key wash of a daylight front end
+  o.fillStyle = 'rgba(225,228,232,0.16)'; o.fillRect(0, 0, w, h);     // the hazy, high-key wash of a daylight front end
   cache.set(id, out);
   return out;
 }
