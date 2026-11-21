@@ -1,6 +1,7 @@
 // Dresses the players on the pitch for a match: your team's kit on you and your teammates, the
 // opponent's kit (or their change kit on a clash) on the defenders, and a keeper kit that stands out.
-import { buildPlayer, buildYou } from './actors.js';
+import { buildYou } from './actors.js';
+import { buildPlayer2 } from './ps2/player.js';
 import { matchKit, keeperKit } from '../rules/teams.js';
 import { pickSquad } from '../rules/looks.js';
 
@@ -18,9 +19,9 @@ export function squadLooks(world, home, away, seed = null) {
 }
 
 // One model per sim player. fullYou: you as a whole player (the replay camera sees you), not just boots.
-// look: the locker's { boots, heads } (your boot color, big heads on everyone). make: the body (buildPlayer, or
+// look: the locker's { boots, heads } (your boot color, big heads on everyone). make: the body (the '04 one, game/ps2/player.js; the old PS1 one is buildPlayer in actors.js, or
 // game/ps2/player.js's buildPlayer2). seed: the looks' seed (default: one per world, above).
-export function buildSet(world, home, away, { fullYou = false, look: lk = {}, make = buildPlayer, seed = null } = {}) {
+export function buildSet(world, home, away, { fullYou = false, look: lk = {}, make = buildPlayer2, seed = null } = {}) {
   const awayK = matchKit(away, home), gkK = keeperKit(awayK), models = {}, aps = squadLooks(world, home, away, seed);
   for (const p of world.players) {
     const look = p.num * 7 + seedOf(p.team === 'home' ? home.id : away.id), ap = aps[p.id];   // (look still picks the left-footers)

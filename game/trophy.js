@@ -5,74 +5,19 @@ import * as THREE from 'three';
 import { BTN } from '../engine/input.js';
 import { ps1, pixelTex, canvasTex } from './ps1.js';
 import { drawText, textWidth } from './tex.js';
-import { buildPlayer, animate } from './actors.js';
+import { animate } from './actors.js';
+import { buildPlayer2 as buildPlayer } from './ps2/player.js';
 import { sfx } from './audio.js';
-import { buildHand } from './hands.js';
+import { buildHand } from './ps2/hands.js';
+import { buildTrophy2, buildPlinth2 } from './ps2/trophies.js';
 import { playMusic } from './music.js';
 
-// Trophies the PS1 way: few sides, flat shading, metal from a tiny dithered texture, and an engraved band.
-function metalTex(base, hi, lo) {
-  return pixelTex(canvasTex(16, 16, c => {
-    for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) {
-      const band = (x + (y >> 2)) % 8;                         // slanted streaks, like a cheap reflection
-      c.fillStyle = band < 2 ? hi : band > 5 ? lo : base;
-      if ((x * 7 + y * 3) % 11 === 0) c.fillStyle = hi;       // sparkle pixels
-      c.fillRect(x, y, 1, 1);
-    }
-  }), [3, 2]);
-}
-const GOLD = () => ps1({ map: metalTex('#d8a428', '#fff1a0', '#8a5a10'), emissive: '#2a1a00', flatShading: true });
-const SILVER = () => ps1({ map: metalTex('#c4c8d4', '#ffffff', '#6a6e7c'), emissive: '#16181e', flatShading: true });
-
-function plate(text, color, bg) {
-  const w = 128;
-  return ps1({ map: pixelTex(canvasTex(w, 12, c => {
-    c.fillStyle = bg; c.fillRect(0, 0, w, 12);
-    drawText(c, text, Math.round((w - textWidth(text)) / 2), 3, color);
-  })), flatShading: true });
-}
-
-// Where your hands go on each cup (trophy-local): the big ears of the club cup, or round the column
-// under the globe of the world cup.
-// Index 0 is on the cup's +x side (your left as it faces you) for your left hand, index 1 for your right.
-const GRIPS = { club: [[0.25, 0.39, 0], [-0.25, 0.39, 0]], world: [[0.07, 0.24, 0], [-0.07, 0.24, 0]] };
+// Where your hands go on each cup comes with the cup (game/ps2/trophies.js: userData.grips, index 0 on the cup's
+// +x side, your left as it faces you, for your left hand).
 // How a posed hand (in grip space, see hands.js) sits on a hand-hold: knuckles away from you, thumb up,
 // palm toward the cup. The same basis works for both hands because the left mesh is mirrored.
 const HOLD = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(
   new THREE.Vector3(-1, 0, 0), new THREE.Vector3(0, 0, -1), new THREE.Vector3(0, -1, 0)));
-
-function buildTrophy(kind) {
-  const g = new THREE.Group();
-  const lathe = (pts, mat, seg) => new THREE.Mesh(new THREE.LatheGeometry(pts.map(([r, y]) => new THREE.Vector2(r, y)), seg), mat);
-  const add = (m, y = 0) => { m.position.y = y; g.add(m); return m; };
-  if (kind === 'world') {
-    const gold = GOLD();
-    add(new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.11, 0.035, 6), gold));                       // foot
-    add(new THREE.Mesh(new THREE.CylinderGeometry(0.092, 0.092, 0.05, 6, 1, true), plate("WORLD CUP '96", '#f2c21a', '#1b6b3a')), 0.04);
-    add(new THREE.Mesh(new THREE.CylinderGeometry(0.095, 0.1, 0.02, 6), gold), 0.075);
-    g.add(lathe([[0.075, 0.085], [0.06, 0.12], [0.038, 0.19], [0.032, 0.25], [0.05, 0.3], [0.072, 0.34], [0.078, 0.375], [0.07, 0.385]], gold, 6));
-    // the globe sits down in the cradle at the top of the column (an icosahedron's faces sit well
-    // inside its corner radius, so it goes lower than the radius suggests)
-    add(new THREE.Mesh(new THREE.IcosahedronGeometry(0.085, 0), gold), 0.425);
-  } else {
-    const silver = SILVER();
-    silver.side = THREE.DoubleSide;
-    add(new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.12, 0.04, 8), silver));
-    add(new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 0.05, 8, 1, true), plate('CHAMPIONS CUP', '#ffffff', '#20264a')), 0.045);
-    g.add(lathe([[0.1, 0.07], [0.06, 0.09], [0.035, 0.17], [0.045, 0.23], [0.11, 0.3], [0.165, 0.42], [0.175, 0.52], [0.16, 0.53]], silver, 8));
-    // the big ears: a loop of chunky boxes on each side
-    for (const side of [-1, 1]) {
-      for (let i = 0; i <= 6; i++) {
-        const a = -0.4 + i / 6 * Math.PI * 1.2;
-        const seg = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.06, 0.03), silver);
-        seg.position.set(side * (0.19 + Math.cos(a) * 0.1), 0.39 + Math.sin(a) * 0.13, 0);
-        seg.rotation.z = side * a;
-        g.add(seg);
-      }
-    }
-  }
-  return g;
-}
 
 // hands: from game/hands.js, so the cup is held by your real grips.
 // how far in front of you the plinth stands: the hand-holds are in reach without a step (0.9 m was
@@ -81,10 +26,7 @@ const NEAR = 0.6;
 
 export function createCeremony(scene, camera, hands) {
   const root = new THREE.Group(); root.visible = false; scene.add(root);
-  const plinth = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.34, 1.0, 12), ps1({ color: '#20264a' }));
-  plinth.position.set(0, 0.5, NEAR); root.add(plinth);
-  const cloth = new THREE.Mesh(new THREE.CylinderGeometry(0.31, 0.31, 0.04, 12), ps1({ color: '#c8102e' }));
-  cloth.position.set(0, 1.0, NEAR); root.add(cloth);
+  const plinth = buildPlinth2(); plinth.position.set(0, 0, NEAR); root.add(plinth);   // the '04 plinth and cups (game/ps2/trophies.js)
 
   // the hint card over the plinth
   const cv = canvasTex(192, 40, () => {}), ctx = cv.getContext('2d'), tex = pixelTex(cv);
@@ -139,11 +81,11 @@ export function createCeremony(scene, camera, hands) {
     // kind: 'world' | 'club'; team: your team (for the squad's kit and the confetti colors)
     start(kind, team) {
       if (trophy) root.remove(trophy);
-      trophy = buildTrophy(kind); trophy.position.copy(rest); root.add(trophy);
+      trophy = buildTrophy2(kind); trophy.position.copy(rest); root.add(trophy);
       // posed hands that hold the cup properly: they replace your controller hands while you grip it
       // (and are your hands in the browser). Left hand on your left (+x here), fingers wrapping in.
-      deskHands = [buildHand('left', 'fist', team.kit), buildHand('right', 'fist', team.kit)];
-      anchors = GRIPS[kind].map(a => new THREE.Vector3(...a));
+      deskHands = ['left', 'right'].map(sd => buildHand(sd, 'hold', team.kit, undefined, { d: trophy.userData.holdD }));   // closed round what that cup is held by
+      anchors = trophy.userData.grips.map(a => new THREE.Vector3(...a));
       deskHands.forEach((h, i) => { h.position.copy(anchors[i]); h.quaternion.copy(HOLD); h.visible = false; trophy.add(h); });
       for (const m of squad) root.remove(m.root);
       squad = [];

@@ -4,7 +4,7 @@
 import * as THREE from 'three';
 import { ps1, pixelTex, canvasTex } from './ps1.js';
 import { drawText, textWidth } from './tex.js';
-import { buildPlayer } from './actors.js';
+import { buildPlayer2 as buildPlayer } from './ps2/player.js';
 import { pickSquad } from '../rules/looks.js';
 import { byId, nationToward } from '../rules/teams.js';
 import { drawWorldMap } from './worldmap.js';

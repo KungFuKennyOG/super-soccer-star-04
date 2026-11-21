@@ -24,7 +24,7 @@ import { startStrike, struck } from './strike.js';
 import { createSquads } from './squad.js';
 import { createMenus, LENGTHS } from './menus.js';
 import { createCeremony } from './trophy.js';
-import { createHands } from './hands.js';
+import { createHands } from './ps2/hands.js';
 import { venueFor } from './grounds.js';
 import { CLUBS } from '../rules/teams.js';
 import { buildHud, buildRadar } from './hud.js';
