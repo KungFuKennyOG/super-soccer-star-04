@@ -102,7 +102,7 @@ export class Crowd {
   fan(p, band, role, shade, ultra, packed, k, t) {
     const R = this.rand, mine = R() < this.share[band] ? 1 : 0, w = this.wear[mine], base = mine ? 0 : 4;
     const W = TOP_W.slice(); if (!w.stripes) W[1] = 0;
-    const top = pick(W, R()), neutral = !ultra && R() < 0.05;
+    const top = pick(W, R()), neutral = band === 0 && R() < 0.05;            // a few plain jackets, only in ordinary stands
     const shirt = neutral ? 8 + Math.floor(R() * 6) : base + (top === 1 ? w.top[0][0] : w.top[pick(w.top.map(q => q[1]), R())][0]);
     let acc = base + w.acc[pick(w.acc.map(q => q[1]), R())][0];
     if (acc === shirt) { const o = w.top.map(q => q[0]).find(i => base + i !== shirt); if (o !== undefined) acc = base + o; }

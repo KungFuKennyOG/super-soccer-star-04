@@ -11,9 +11,9 @@ export const SHOULDER = [17.5, 55];                     // the arms' joints (cm 
 // The poses: [elbow, wrist] of the arm on the right of the picture (cm), l: the other when it isn't the
 // mirror; hand: 'open' | 'fist' | 'flat'; scarf: held between the hands.
 export const POSES = [
-  ['sit', { r: [[21, 33], [11, 12]], hand: 'flat' }],
+  ['sit', { r: [[19.5, 31], [8, 9]], hand: 'flat' }],
   ['sitLean', { r: [[18, 26], [4, 22]], l: [[-18, 26], [-3, 20]], hand: 'fist' }],
-  ['sitChat', { r: [[24, 33], [21, 50]], l: [[-21, 33], [-11, 12]], hand: 'open', lhand: 'flat' }],
+  ['sitChat', { r: [[24, 33], [21, 50]], l: [[-19.5, 31], [-8, 9]], hand: 'open', lhand: 'flat' }],
   ['stand', { r: [[22, 31], [23, 6]], hand: 'flat' }],
   ['folded', { r: [[20, 35], [-9, 41]], l: [[-20, 35], [9, 37]], hand: 'fist' }],
   ['clapO', { r: [[21, 34], [11, 47]], hand: 'open' }],
@@ -97,11 +97,11 @@ export function paintArms(p, pose, long, ox, oy) {
     // forearm: sleeve or skin, a cuff at the wrist; upper arm: the sleeve, short ones ending above the elbow
     if (long) { limb(p, 'shirt', 0.8, E, Wr, 10, 8); limb(p, 'shirt', 0.62, [E[0] + (Wr[0] - E[0]) * 0.86, E[1] + (Wr[1] - E[1]) * 0.86], Wr, 7.6, 7.6); }
     else limb(p, 'skin', 0.88, E, Wr, 9, 6.8);
-    if (long) limb(p, 'shirt', 0.84, S, E, 12.5, 10.5, false);
+    if (long) { limb(p, 'shirt', 0.84, S, E, 12.5, 10.5, false); p.fill('shirt', 0.84, c => { c.arc(S[0], S[1] + 0.5, 5, 0, 7); }, [S[0] - 4, S[1] - 4], [S[0] + 4, S[1] + 4]); }
     else {
       limb(p, 'skin', 0.86, [S[0] + (E[0] - S[0]) * 0.4, S[1] + (E[1] - S[1]) * 0.4], E, 10.5, 9);
       const k = 0.5, H = [S[0] + (E[0] - S[0]) * k, S[1] + (E[1] - S[1]) * k];
-      limb(p, 'shirt', 0.86, S, H, 12, 11.5, false);
+      limb(p, 'shirt', 0.86, S, H, 12, 11.5, false); p.fill('shirt', 0.86, c => { c.arc(S[0], S[1] + 0.5, 5, 0, 7); }, [S[0] - 4, S[1] - 4], [S[0] + 4, S[1] + 4]);
       p.stroke('shade', 0.25, 1.2, [[H[0] - 5, H[1]], [H[0] + 5, H[1]]].map(([x, y]) => [x, y]));   // the hem's shadow
     }
     p.stroke('shade', 0.22, 1, [[E[0] - 2.5, E[1] - 1.5], [E[0] + 1.5, E[1] + 1]]);       // the crease at the elbow
