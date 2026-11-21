@@ -3,7 +3,7 @@
 import * as THREE from 'three';
 import { createDance, stepDance, poseFromHands, DANCE, beatLen } from '../rules/dance.js';
 import { controllers } from '../engine/input.js';
-import { uiPlane, PAL, text, panel, gloss } from './ps2/ui.js';
+import { uiPlane, PAL, text, box, maroon } from './ps2/ui.js';
 import { playMusic, stopMusic, musicPlaying, musicTime } from './music.js';
 import { sfx } from './audio.js';
 
@@ -28,14 +28,13 @@ export function createCelebration(scene, camera) {
 
   function draw() {
     ctx.clearRect(0, 0, W, H);
-    panel(ctx, 0, 30, W, 106, { r: 14, alpha: 0.8 });
-    gloss(ctx, 6, 2, 130, 38, { kind: 'amber', r: 10, glow: 'rgba(255,170,40,0.6)' });
-    text(ctx, 'DANCE!', 71, 21, { size: 28, align: 'center', italic: true, weight: 900, color: PAL.deep, shadow: false });
+    box(ctx, 0, 30, W, 106, { r: 5, fill: 'rgba(8,8,10,0.8)' });
+    maroon(ctx, 4, 2, 130, 36, 4); box(ctx, 4, 2, 130, 36, { r: 4, fill: null, lw: 1.5 });
+    text(ctx, 'Dance!', 69, 20, { size: 26, align: 'center', weight: 900 });
     text(ctx, `+${dance.score}`, W - 10, 21, { size: 30, align: 'right', weight: 900 });
     // hit zone, pulsing on the beat
     const beat = clock / beatLen(), pulse = 1 - (beat - Math.floor(beat));
-    ctx.save(); ctx.lineWidth = 5; ctx.strokeStyle = pulse > 0.75 ? PAL.accent : 'rgba(150,180,230,0.7)';
-    if (pulse > 0.75) { ctx.shadowColor = 'rgba(255,190,40,0.9)'; ctx.shadowBlur = 14; }
+    ctx.save(); ctx.lineWidth = 5; ctx.strokeStyle = pulse > 0.75 ? PAL.gold : 'rgba(220,220,220,0.6)';
     ctx.beginPath(); ctx.roundRect ? ctx.roundRect(HIT_X - 34, 46, 68, 74, 12) : ctx.rect(HIT_X - 34, 46, 68, 74); ctx.stroke(); ctx.restore();
     for (const m of dance.moves) {
       const x = HIT_X + (m.t - clock) * PX_PER_S;
@@ -44,8 +43,8 @@ export function createCelebration(scene, camera) {
       icon(ctx, m.move, Math.round(x), 83, m.grade === 'miss' ? PAL.bad : PAL.ink);
     }
     if (judge && judgeT < 0.5) {
-      const col = judge === 'perfect' ? PAL.good : judge === 'good' ? PAL.accent : PAL.bad;
-      text(ctx, judge.toUpperCase(), HIT_X + 52, 66, { size: 40, italic: true, weight: 900, color: col, glow: col });
+      const col = judge === 'perfect' ? PAL.good : judge === 'good' ? PAL.gold : PAL.bad;
+      text(ctx, judge.charAt(0).toUpperCase() + judge.slice(1), HIT_X + 52, 66, { size: 38, weight: 900, color: col });
     }
     tex.needsUpdate = true;
   }

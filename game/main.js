@@ -56,7 +56,7 @@ const stadium = buildStadium(scene);
 const hud = buildHud(scene, camera);
 const radar = buildRadar();
 const celebration = createCelebration(scene, camera);
-const menus = createMenus(scene, camera);
+const menus = createMenus(scene, camera, renderer);
 const squads = createSquads(scene);
 const hands = createHands(renderer, rig);
 const ceremony = createCeremony(scene, camera, hands);
@@ -116,6 +116,7 @@ function openMenu(screen, data, at = 0) {
   training.stop(world); weather.set('clear');
   if (!renderer.xr.isPresenting) { desk.pitch = 0; if (document.pointerLockElement) document.exitPointerLock(); }
   playMusic('menu');
+  menus.backdrop(game.picked ? game.team : byId('MUN'));   // the picture behind the menus wears your team's kit once you've picked one
   menus.open(screen, ['mode', 'settings'].includes(screen) ? { settings } : data, at);
 }
 const teamsForMode = kind => (kind === 'attack' ? ALL : teamsFor(kind));
@@ -127,7 +128,7 @@ function onMenu(act) {
   else if (act.mode === 'settings') openMenu(act.mode);
   else if (act.mode) { game.kind = act.mode; openMenu('team', { mode: act.mode, teams: teamsForMode(act.mode), start: teamsForMode(act.mode).some(t => t.id === game.team.id) ? game.team.id : null }); }
   else if (act.team) {
-    game.team = act.team;
+    game.team = act.team; game.picked = true;
     if (game.kind === 'attack') {
       game.fixture = null;
       const rivals = ALL.filter(t => t.id !== act.team.id && t.s >= 4 && (t.id.length === 3) && teamsFor(NATIONS.includes(act.team) ? 'world' : 'club').includes(t));

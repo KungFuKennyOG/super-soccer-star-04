@@ -4,6 +4,7 @@
 import * as THREE from 'three';
 import { ps1 } from './ps1.js';
 import { YEAR, uiPlane } from './ps2/ui.js';
+import { renderBackdrop } from './ps2/menuscene.js';
 import { MW, MH, paintMode, paintSettings, paintTeam, paintHub, paintMessage } from './ps2/menudraw.js';
 import { buildPlayer } from './actors.js';
 import { pickSquad } from '../rules/looks.js';
@@ -37,7 +38,7 @@ export const ROWS = [
   { key: 'weather', name: 'WEATHER', opts: WEATHER_SETTING },
   ...Object.entries(LOCKER).map(([k, l]) => ({ key: k, name: l.name, opts: l.options, locker: true })),
 ];
-export function createMenus(scene, camera) {
+export function createMenus(scene, camera, renderer = null) {
   const { ctx, t: tex, m: panel } = uiPlane(MW, MH, 2.2, 1.65);
   panel.renderOrder = 12; panel.visible = false;
   const root = new THREE.Group(); root.visible = false; scene.add(root); root.add(panel);
@@ -72,24 +73,29 @@ export function createMenus(scene, camera) {
 
   /* ---------- drawing (game/ps2/menudraw.js paints, here only when something changed) ---------- */
 
-  let shown = '';
+  let shown = '', back = null, backFor = null;
   function draw() {
     const cupName = CUP_NAMES[screen === 'hub' ? data.cup.kind : data.mode];
-    const blinkKey = screen === 'team' && data.mode === 'world' ? Math.floor(blink * 4) : Math.floor(blink * 2) % 2;
+    const blinkKey = screen === 'team' && data.mode === 'world' ? Math.floor(blink * 4) : 0;   // only the map's pulse moves
     const key = `${screen}|${sel}|${blinkKey}|${screen === 'settings' ? JSON.stringify(data.settings) : ''}`;
     if (key === shown) return;
     shown = key;
-    if (screen === 'mode') paintMode(ctx, { modes: MODES, sel });
-    else if (screen === 'settings') paintSettings(ctx, { rows: ROWS, settings: data.settings, sel });
-    else if (screen === 'team') { paintTeam(ctx, { mode: data.mode, teams: data.teams, sel, blink, cupName }); showModel(data.teams[sel]); }
-    else if (screen === 'hub') paintHub(ctx, { cup: data.cup, blink, cupName });
-    else paintMessage(ctx, { ...data, blink });
+    if (screen === 'mode') paintMode(ctx, { modes: MODES, sel, back });
+    else if (screen === 'settings') paintSettings(ctx, { rows: ROWS, settings: data.settings, sel, back });
+    else if (screen === 'team') { paintTeam(ctx, { mode: data.mode, teams: data.teams, sel, blink, cupName, back }); showModel(data.teams[sel]); }
+    else if (screen === 'hub') paintHub(ctx, { cup: data.cup, blink, cupName, back });
+    else paintMessage(ctx, { ...data, blink, back });
     tex.needsUpdate = true;
   }
 
   return {
     get screen() { return screen; },
     get sel() { return sel; },
+    // the picture behind the menus (game/ps2/menuscene.js), wearing this team's kit; rendered once per team
+    backdrop(team) {
+      if (!renderer || backFor === team.id) return;
+      try { back = renderBackdrop(renderer, team.kit, team.id); backFor = team.id; shown = ''; } catch (e) { console.warn('menu backdrop', e); }
+    },
     // screen: 'mode' | 'settings' | 'team' | 'hub' | 'message'. data depends on the screen:
     // mode {}, settings { settings }, team { mode, teams, start? },
     // hub { cup }, message { title, lines: [{ text, big?, color? }], ok? }

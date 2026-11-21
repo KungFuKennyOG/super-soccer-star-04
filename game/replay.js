@@ -4,7 +4,7 @@
 // its own copies of the players (built per match) so the live ones are never disturbed.
 import * as THREE from 'three';
 import { ps1 } from './ps1.js';
-import { uiPlane, text, gloss } from './ps2/ui.js';
+import { uiPlane, text, box } from './ps2/ui.js';
 import { buildBall, animate, placeModel } from './actors.js';
 import { startStrike, struck } from './strike.js';
 import { buildSet } from './squad.js';
@@ -48,13 +48,12 @@ export function createReplay(scene, renderer) {
   body.position.z = -0.32; tv.add(body);
   const screen = new THREE.Mesh(new THREE.PlaneGeometry(1.44, 0.81), ps1({ map: rt.texture, lit: false, fog: false }));
   screen.position.z = 0.002; tv.add(screen);
-  // the REPLAY tag in the screen's corner: a red light and the word on a glossy blue tab
+  // the REPLAY tag in the screen's corner: a red light and the word on a dark outlined tab
   const tag = uiPlane(256, 64, 0.34, 0.085);
   tag.m.position.set(-0.52, 0.33, 0.004); tv.add(tag.m);
-  gloss(tag.ctx, 2, 4, 252, 56, { kind: 'blue', r: 14 });
-  tag.ctx.beginPath(); tag.ctx.arc(34, 32, 12, 0, Math.PI * 2); tag.ctx.fillStyle = '#ff3b30'; tag.ctx.shadowColor = '#ff3b30'; tag.ctx.shadowBlur = 10; tag.ctx.fill();
-  tag.ctx.shadowColor = 'transparent';
-  text(tag.ctx, 'REPLAY', 60, 32, { size: 40, italic: true, weight: 900 });
+  box(tag.ctx, 2, 4, 252, 56, { r: 4, fill: 'rgba(8,8,10,0.85)' });
+  tag.ctx.beginPath(); tag.ctx.arc(34, 32, 12, 0, Math.PI * 2); tag.ctx.fillStyle = '#d8382c'; tag.ctx.fill();
+  text(tag.ctx, 'Replay', 60, 32, { size: 38, weight: 900 });
   tv.visible = false; scene.add(tv);
   // and on the stadium's big screen, over the scoreboard
   const jumbo = new THREE.Mesh(new THREE.PlaneGeometry(12, 6.75), ps1({ map: rt.texture, lit: false, fog: false }));

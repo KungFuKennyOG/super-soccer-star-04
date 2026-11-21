@@ -10,6 +10,8 @@ import { createCup, playUser } from '../rules/cup.js';
 import { STEPS } from '../rules/tutorial.js';
 import { attackLines, cupLines } from '../game/results.js';
 import { YEAR } from '../game/ps2/ui.js';
+import * as THREE from 'three';
+import { renderBackdrop } from '../game/ps2/menuscene.js';
 
 const deg = (w, d) => 2 * Math.atan(w / 2 / d) * 180 / Math.PI;
 const PPD = 11, px = (w, d) => Math.round(deg(w, d) * PPD);
@@ -27,23 +29,29 @@ const fakeWorld = { players: [
   { x: 1, z: -27, role: 'def', team: 'away' }, { x: -5, z: -30, role: 'def', team: 'away' }, { x: 6, z: -31, role: 'def', team: 'away' }, { x: 0, z: -41, role: 'gk', team: 'away' },
 ], ball: { x: 0.2, z: -20.6 } };
 const GZ = -42;
+// the picture behind the menus, as the game renders it (?kit=TEAM for another team's shirt)
+const renderer = new THREE.WebGLRenderer({ canvas: document.createElement('canvas'), antialias: true });
+const kitTeam = byId(new URLSearchParams(location.search).get('kit') || 'MUN');
+const t0 = performance.now();
+const back = renderBackdrop(renderer, kitTeam.kit, kitTeam.id);
+const backMs = performance.now() - t0;
 const step = STEPS[3];
 
 // name: [w, h, paint(ctx), headset px across]
 export const SCREENS = {
   title: null,
-  mode: [MW, MH, c => paintMode(c, { modes: MODES, sel: 1 }), px(2.2, 2.6)],
-  settings: [MW, MH, c => paintSettings(c, { rows: ROWS, settings, sel: 2 }), px(2.2, 2.6)],
-  settingsLocker: [MW, MH, c => paintSettings(c, { rows: ROWS, settings, sel: 9 }), px(2.2, 2.6)],
-  worldmap: [MW, MH, c => paintTeam(c, { mode: 'world', teams: NATIONS, sel: NATIONS.findIndex(t => t.id === 'NED'), blink: 0.1, cupName: `WORLD CUP ${YEAR}` }), px(2.2, 2.6)],
-  worldmapFar: [MW, MH, c => paintTeam(c, { mode: 'world', teams: NATIONS, sel: NATIONS.findIndex(t => t.id === 'BRA'), blink: 0.4, cupName: `WORLD CUP ${YEAR}` }), px(2.2, 2.6)],
-  club: [MW, MH, c => paintTeam(c, { mode: 'club', teams: CLUBS, sel: 0, blink: 0.6, cupName: 'CHAMPIONS CUP' }), px(2.2, 2.6)],
-  clubHalves: [MW, MH, c => paintTeam(c, { mode: 'club', teams: CLUBS, sel: CLUBS.findIndex(t => t.kit.pattern === 'halves'), blink: 0.1, cupName: 'CHAMPIONS CUP' }), px(2.2, 2.6)],
-  group: [MW, MH, c => paintHub(c, { cup: world, blink: 0.6, cupName: `WORLD CUP ${YEAR}` }), px(2.2, 2.6)],
-  bracket: [MW, MH, c => paintHub(c, { cup: ko, blink: 0.6, cupName: `WORLD CUP ${YEAR}` }), px(2.2, 2.6)],
-  bracketClub: [MW, MH, c => paintHub(c, { cup: club, blink: 0.1, cupName: 'CHAMPIONS CUP' }), px(2.2, 2.6)],
-  fulltime: [MW, MH, c => paintMessage(c, { title: 'FULL TIME', lines: attackLines({ goals: 7, shots: 12, points: 14350 }, 12000, true), ok: 'PRESS A FOR THE MENU', blink: 0.6 }), px(2.2, 2.6)],
-  cupResult: [MW, MH, c => { const cp = createCup('club', 'MAD', rnd); const r = playUser(cp, 1, 2, rnd); paintMessage(c, { title: 'FULL TIME', lines: cupLines(cp, r, byId('MAD'), byId('MUN'), 1, 2, 'r16').lines, ok: 'PRESS A TO TRY AGAIN', blink: 0.1 }); }, px(2.2, 2.6)],
+  mode: [MW, MH, c => paintMode(c, { back, modes: MODES, sel: 1 }), px(2.2, 2.6)],
+  settings: [MW, MH, c => paintSettings(c, { back, rows: ROWS, settings, sel: 2 }), px(2.2, 2.6)],
+  settingsLocker: [MW, MH, c => paintSettings(c, { back, rows: ROWS, settings, sel: 9 }), px(2.2, 2.6)],
+  worldmap: [MW, MH, c => paintTeam(c, { back, mode: 'world', teams: NATIONS, sel: NATIONS.findIndex(t => t.id === 'NED'), blink: 0.1, cupName: `WORLD CUP ${YEAR}` }), px(2.2, 2.6)],
+  worldmapFar: [MW, MH, c => paintTeam(c, { back, mode: 'world', teams: NATIONS, sel: NATIONS.findIndex(t => t.id === 'BRA'), blink: 0.4, cupName: `WORLD CUP ${YEAR}` }), px(2.2, 2.6)],
+  club: [MW, MH, c => paintTeam(c, { back, mode: 'club', teams: CLUBS, sel: 0, blink: 0.6, cupName: 'CHAMPIONS CUP' }), px(2.2, 2.6)],
+  clubHalves: [MW, MH, c => paintTeam(c, { back, mode: 'club', teams: CLUBS, sel: CLUBS.findIndex(t => t.kit.pattern === 'halves'), blink: 0.1, cupName: 'CHAMPIONS CUP' }), px(2.2, 2.6)],
+  group: [MW, MH, c => paintHub(c, { back, cup: world, blink: 0.6, cupName: `WORLD CUP ${YEAR}` }), px(2.2, 2.6)],
+  bracket: [MW, MH, c => paintHub(c, { back, cup: ko, blink: 0.6, cupName: `WORLD CUP ${YEAR}` }), px(2.2, 2.6)],
+  bracketClub: [MW, MH, c => paintHub(c, { back, cup: club, blink: 0.1, cupName: 'CHAMPIONS CUP' }), px(2.2, 2.6)],
+  fulltime: [MW, MH, c => paintMessage(c, { back, title: 'FULL TIME', lines: attackLines({ goals: 7, shots: 12, points: 14350 }, 12000, true), ok: 'PRESS A FOR THE MENU', blink: 0.6 }), px(2.2, 2.6)],
+  cupResult: [MW, MH, c => { const cp = createCup('club', 'MAD', rnd); const r = playUser(cp, 1, 2, rnd); paintMessage(c, { back, title: 'FULL TIME', lines: cupLines(cp, r, byId('MAD'), byId('MUN'), 1, 2, 'r16').lines, ok: 'PRESS A TO TRY AGAIN', blink: 0.1 }); }, px(2.2, 2.6)],
   bugCup: [BW, BH, c => paintBug(c, { home: byId('ENG'), away: byId('ARG'), us: 1, them: 2, goals: 1, points: 2400, clock: '1:42' }), px(0.3, 0.72)],
   bugAttack: [BW, BH, c => paintBug(c, { home: byId('MAD'), away: byId('BAR'), goals: 4, points: 8250, clock: '0:57' }), px(0.3, 0.72)],
   bugGoal: [BW, BH, c => paintBug(c, { home: byId('LIV'), away: byId('TUR'), us: 2, them: 2, goals: 2, points: 5100, clock: '0:31', flash: 'GOAL!' }), px(0.3, 0.72)],
@@ -81,5 +89,6 @@ function shrink(name, w) {
 window.__ui = {
   ready: true, names: Object.keys(canvases),
   full: n => canvases[n].c.toDataURL(), headset: n => shrink(n, canvases[n].hp),
+  backMs: () => +backMs.toFixed(0),
   info: () => Object.fromEntries(Object.entries(canvases).map(([n, v]) => [n, { hp: v.hp, ms: +v.ms.toFixed(1) }])),
 };

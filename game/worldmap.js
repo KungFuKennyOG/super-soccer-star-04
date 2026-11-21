@@ -2,7 +2,7 @@
 // filled on a canvas; each nation is a dot. European nations are close together, so when one of them
 // is selected the map zooms in on Europe.
 import { NATIONS, NATION_POS } from '../rules/teams.js';
-import { PAL, text, measure, gloss, rr } from './ps2/ui.js';
+import { PAL, text, measure, box, maroon, rr } from './ps2/ui.js';
 
 const LAND = {
   northAmerica: [[-168, 66], [-140, 70], [-100, 72], [-80, 73], [-62, 60], [-55, 50], [-66, 44], [-75, 35], [-81, 25], [-90, 29], [-97, 26], [-97, 20], [-87, 21], [-84, 15], [-79, 8], [-83, 8], [-92, 14], [-105, 20], [-112, 30], [-118, 33], [-124, 40], [-124, 48], [-133, 56], [-150, 60], [-165, 61]],
@@ -31,23 +31,20 @@ export function drawWorldMap(ctx, x, y, w, h, selected, t) {
   const px = lon => ox + (lon - view.lon[0]) * s, py = lat => oy + (view.lat[1] - lat) * s;
 
   ctx.save();
-  rr(ctx, x, y, w, h, 6 * k); ctx.clip();
-  const sea = ctx.createRadialGradient(x + w / 2, y + h / 2, 0, x + w / 2, y + h / 2, w * 0.7);
-  sea.addColorStop(0, '#16407a'); sea.addColorStop(1, '#081a3a');
-  ctx.fillStyle = sea; ctx.fillRect(x, y, w, h);
-  ctx.strokeStyle = 'rgba(140,190,255,0.12)'; ctx.lineWidth = Math.max(1, k * 0.5);
+  rr(ctx, x, y, w, h, 6); ctx.clip();
+  ctx.fillStyle = 'rgba(14,18,24,0.84)'; ctx.fillRect(x, y, w, h);
+  ctx.strokeStyle = 'rgba(255,255,255,0.07)'; ctx.lineWidth = Math.max(1, k * 0.5);
   for (let lon = -150; lon <= 180; lon += 30) { ctx.beginPath(); ctx.moveTo(px(lon), y); ctx.lineTo(px(lon), y + h); ctx.stroke(); }
   for (let lat = -30; lat <= 60; lat += 30) { ctx.beginPath(); ctx.moveTo(x, py(lat)); ctx.lineTo(x + w, py(lat)); ctx.stroke(); }
   const land = ctx.createLinearGradient(0, y, 0, y + h);
-  land.addColorStop(0, '#5f9a6a'); land.addColorStop(1, '#2f6642');
+  land.addColorStop(0, '#6f7a70'); land.addColorStop(1, '#4a554b');
   ctx.lineJoin = 'round';
   for (const pts of Object.values(LAND)) {
     ctx.beginPath();
     pts.forEach(([lon, lat], i) => (i ? ctx.lineTo : ctx.moveTo).call(ctx, px(lon), py(lat)));
     ctx.closePath();
-    ctx.shadowColor = 'rgba(0,0,0,0.5)'; ctx.shadowBlur = 3 * k; ctx.shadowOffsetY = k;
     ctx.fillStyle = land; ctx.fill();
-    ctx.shadowColor = 'transparent'; ctx.lineWidth = 0.7 * k; ctx.strokeStyle = 'rgba(200,240,200,0.55)'; ctx.stroke();
+    ctx.lineWidth = 0.5 * k; ctx.strokeStyle = 'rgba(230,230,230,0.55)'; ctx.stroke();
   }
   // every nation as a pin in its shirt colour, then the selected one with a pulsing ring
   for (const n of NATIONS) {
@@ -57,15 +54,15 @@ export function drawWorldMap(ctx, x, y, w, h, selected, t) {
   }
   const [lon, lat] = NATION_POS[selected], cx = px(lon), cy = py(lat), pulse = (t * 1.5) % 1;
   ctx.beginPath(); ctx.arc(cx, cy, (4 + pulse * 8) * k, 0, Math.PI * 2);
-  ctx.lineWidth = 1.2 * k; ctx.strokeStyle = `rgba(255,201,51,${1 - pulse})`; ctx.stroke();
-  ctx.beginPath(); ctx.arc(cx, cy, 3.4 * k, 0, Math.PI * 2);
-  ctx.shadowColor = 'rgba(255,190,40,0.95)'; ctx.shadowBlur = 6 * k; ctx.fillStyle = PAL.accent; ctx.fill();
-  ctx.shadowColor = 'transparent'; ctx.lineWidth = 0.9 * k; ctx.strokeStyle = '#fff'; ctx.stroke();
+  ctx.lineWidth = 0.8 * k; ctx.strokeStyle = `rgba(255,255,255,${1 - pulse})`; ctx.stroke();
+  ctx.beginPath(); ctx.arc(cx, cy, 3.2 * k, 0, Math.PI * 2);
+  ctx.fillStyle = PAL.maroonHi; ctx.fill(); ctx.lineWidth = 0.7 * k; ctx.strokeStyle = '#fff'; ctx.stroke();
   // label, kept inside the map
   const size = 8 * k, lw = measure(ctx, selected, size, { weight: 900 }) + 6 * k, lh = 11 * k;
   const lx = Math.min(x + w - lw - 3 * k, Math.max(x + 3 * k, cx - lw / 2)), ly = cy - 9 * k - lh < y + 2 * k ? cy + 7 * k : cy - 9 * k - lh;
-  gloss(ctx, lx, ly, lw, lh, { kind: 'amber', r: 3 * k });
-  text(ctx, selected, lx + lw / 2, ly + lh / 2, { size, align: 'center', weight: 900, color: PAL.deep, shadow: false });
-  text(ctx, view === EUROPE ? 'EUROPE' : 'WORLD', x + 6 * k, y + h - 7 * k, { size: 7 * k, color: 'rgba(200,220,255,0.7)', italic: true, weight: 900 });
+  maroon(ctx, lx, ly, lw, lh, 2 * k); box(ctx, lx, ly, lw, lh, { r: 2 * k, fill: null, lw: 1.5 });
+  text(ctx, selected, lx + lw / 2, ly + lh / 2, { size, align: 'center' });
+  text(ctx, view === EUROPE ? 'Europe' : 'World', x + w - 6 * k, y + 8 * k, { size: 7 * k, align: 'right', color: PAL.muted });
   ctx.restore();
+  box(ctx, x, y, w, h, { fill: null });
 }

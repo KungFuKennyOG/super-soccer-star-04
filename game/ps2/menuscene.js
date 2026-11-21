@@ -35,13 +35,13 @@ export function renderBackdrop(renderer, kit, key, w = 1024, h = 492) {
   let m = set.players.get(key);
   if (!m) { m = buildPlayer2(kit, 10, 3); set.players.set(key, m); scene.add(m.root); }
   m.root.visible = true;
-  const p = { x: 0, z: 0, fx: Math.sin(-0.35), fz: Math.cos(-0.35), vx: 0, vz: 0, role: 'mate', stride: 0, id: 'menu' };
-  const ball = { x: -6, y: 0.11, z: -9 };
+  const p = { x: 0, z: 0, fx: Math.sin(-0.5), fz: Math.cos(-0.5), vx: 0, vz: 0, role: 'mate', stride: 0, id: 'menu' };
+  const ball = { x: -2.5, y: 0.11, z: 5 };     // (in front of him: a man left standing turns to face the ball)
   placeModel(m, p);
   for (let i = 0; i < 40; i++) animate(m, p, 1 / 30, i / 30, false, null, ball, false);
   m.root.updateMatrixWorld(true);
   cam.aspect = w / h; cam.updateProjectionMatrix();
-  cam.position.set(-0.75, 1.36, 1.3); cam.lookAt(-3.2, 1.05, -9);
+  cam.position.set(-0.32, 1.26, 1.05); cam.lookAt(-0.8, 1.5, -9);
   // render into a target with the headset off, then put everything back as it was (game/replay.js does the same)
   const rt = new THREE.WebGLRenderTarget(w, h, { samples: 0 });
   const xrOn = renderer.xr.enabled, prevRT = renderer.getRenderTarget();
@@ -62,8 +62,9 @@ export function renderBackdrop(renderer, kit, key, w = 1024, h = 492) {
   // out of focus, washed out a little, a touch darker so white type reads over it
   const out = document.createElement('canvas'); out.width = w; out.height = h;
   const o = out.getContext('2d');
-  o.filter = `blur(${Math.max(1, Math.round(w / 500))}px) saturate(0.72) contrast(0.92) brightness(0.86)`;
+  o.filter = `blur(${Math.max(1, Math.round(w / 400))}px) saturate(0.62) contrast(0.88) brightness(1.04)`;
   o.drawImage(raw, 0, 0); o.filter = 'none';
+  o.fillStyle = 'rgba(225,228,232,0.12)'; o.fillRect(0, 0, w, h);     // the hazy, high-key wash of a daylight front end
   cache.set(id, out);
   return out;
 }

@@ -103,8 +103,10 @@ export function buildHud(scene, camera) {
       if (bn.m.visible) {
         const yaw = Math.atan2(headDir.x, headDir.z);
         bnYaw = bnYaw === null || bnT < dt * 2 ? yaw : lerpAngle(bnYaw, yaw, Math.min(1, dt * 4));
-        bn.m.position.set(headPos.x + Math.sin(bnYaw) * 3, headPos.y + 0.35, headPos.z + Math.cos(bnYaw) * 3);
-        bn.m.lookAt(headPos.x, headPos.y + 0.35, headPos.z);
+        // a little above where you're looking (pitch clamped), so it sits under the stadium board, not on it
+        const lift = 3 * Math.tan(Math.max(-0.35, Math.min(0.12, Math.asin(headDir.y)))) + 0.3;
+        bn.m.position.set(headPos.x + Math.sin(bnYaw) * 3, headPos.y + lift, headPos.z + Math.cos(bnYaw) * 3);
+        bn.m.lookAt(headPos.x, headPos.y + lift, headPos.z);
         const pop = Math.min(1, bnT / 0.12);
         bn.m.scale.setScalar(pop * (1 + 0.15 * Math.max(0, 1 - bnT / 0.3)));
         if (bnT > bnLife) bn.m.visible = false;

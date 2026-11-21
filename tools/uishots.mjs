@@ -18,7 +18,7 @@ try {
   page.on('pageerror', e => console.log('[page error]', e.message));
   page.on('console', m => { if (m.type() === 'error') console.log('[page]', m.text()); });
   await page.route(THREE_URL, r => r.fulfill({ path: LOCAL_THREE, contentType: 'text/javascript' }));
-  await page.goto(`${server.url}/tools/uilook.html`);
+  await page.goto(`${server.url}/tools/uilook.html${process.env.KIT ? '?kit=' + process.env.KIT : ''}`);
   await page.waitForFunction(() => window.__ui && window.__ui.ready, null, { timeout: 60000 });
   const names = want.length ? want : await page.evaluate(() => window.__ui.names);
   const png = d => Buffer.from(d.split(',')[1], 'base64');
@@ -28,4 +28,5 @@ try {
   }
   const info = await page.evaluate(() => window.__ui.info());
   for (const n of names) console.log(n, JSON.stringify(info[n]));
+  console.log('backdrop render ms', await page.evaluate(() => window.__ui.backMs()));
 } finally { await browser.close(); await server.close(); }
