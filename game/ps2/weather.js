@@ -7,7 +7,7 @@ import * as THREE from 'three';
 
 const KINDS = {
   // count, box (m), fall (m/s), sway (m), half width / half length (m), colour, opacity, wind (m/s)
-  rain: { n: 3600, box: [24, 14, 24], fall: 10, sway: 0, w: 0.011, h: 0.5, color: '#d4dcea', opacity: 0.55, wind: 1.2, soft: 0 },
+  rain: { n: 3600, box: [24, 14, 24], fall: 10, sway: 0, w: 0.012, h: 0.42, color: '#dfe6f2', opacity: 0.45, wind: 1.2, soft: 0 },
   snow: { n: 1800, box: [22, 12, 22], fall: 1.0, sway: 0.5, w: 0.03, h: 0.03, color: '#ffffff', opacity: 0.95, wind: 0.3, soft: 1 },
 };
 
@@ -25,7 +25,7 @@ function particles(k) {
     uSize: { value: new THREE.Vector2(k.w, k.h) }, uWind: { value: k.wind }, uColor: { value: new THREE.Color(k.color) }, uOpacity: { value: k.opacity }, uBright: { value: 1 },
   };
   const m = new THREE.ShaderMaterial({
-    transparent: true, depthWrite: false, uniforms,
+    transparent: true, depthWrite: false, side: THREE.DoubleSide, uniforms,
     vertexShader: `attribute vec3 aSeed; uniform float uTime, uFall, uSway, uWind; uniform vec3 uCenter, uBox; uniform vec2 uSize; varying vec2 vC; varying float vFade;
 void main() {
   vec3 p = aSeed * uBox;
@@ -44,7 +44,7 @@ void main() {
 }`,
     fragmentShader: `uniform vec3 uColor; uniform float uOpacity, uBright; varying vec2 vC; varying float vFade;
 void main() {
-  float a = ${k.soft ? '1.0 - smoothstep(0.35, 1.0, length(vC))' : '(1.0 - abs(vC.x)) * smoothstep(-1.0, 0.4, vC.y) * (1.0 - smoothstep(0.6, 1.0, vC.y))'};
+  float a = ${k.soft ? '1.0 - smoothstep(0.35, 1.0, length(vC))' : '(1.0 - vC.x * vC.x) * smoothstep(-1.0, 0.4, vC.y) * (1.0 - smoothstep(0.6, 1.0, vC.y))'};
   gl_FragColor = vec4(uColor * uBright, a * uOpacity * vFade);
 }`,
   });

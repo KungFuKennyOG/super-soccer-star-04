@@ -91,6 +91,7 @@ export function buildStadium(scene) {
       if (ground) drop(ground);
       ground = buildGround2(recipe, ours, theirs, oursShare, light, jump, hype);
       ground.atlas = ground.meshes.structure.material.uniforms.uMap.value;
+      ground.uniforms = { uTime: light.uTime, uJumpOurs: jump.uJumpOurs, uJumpTheirs: jump.uJumpTheirs };   // as game/grounds.js hands them out
       scene.add(ground.group);
       time = TIMES2[recipe.time] || TIMES2.night; weather = 'clear';
       light2();
