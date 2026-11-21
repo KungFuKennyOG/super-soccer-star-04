@@ -17,7 +17,7 @@ test('every ground: the stands stand back from the pitch and the ad boards', () 
     assert.ok(p.endZ < GOAL.z - GOAL.depth - 1, `${id}: room behind the net`);
     assert.ok(p.sideX > PITCH.halfW + 1.5 && p.nearZ > 3, id);
     assert.equal(p.stands.length, 4);
-    assert.equal(p.corners.length, r.corners ? 4 : 0, id);
+    assert.equal(p.corners.length, r.corners === true ? 4 : Array.isArray(r.corners) ? r.corners.length : 0, id);
   }
 });
 
@@ -35,12 +35,12 @@ test('every tier has whole rows and every profile rises as it goes back (so a fa
   }
 });
 
-test('the scoreboard hangs where game/grounds.js hangs it', () => {
+test('the scoreboard hangs as game/grounds.js hangs it (under the end roof, or over an open end)', () => {
   for (const [id, r] of all) {
     const p = planGround(r), e = p.stands[0].p;
     // grounds.js: under the end roof's edge (top + 3.7 - 4.2, at its front + 0.6), or over an open end's back
     let want;
-    if (r.roof !== 'none') { const span = r.roof === 'full' ? e.depth + 2 : e.depth * 0.55; want = { y: e.top - 0.5, z: p.endZ - (e.depth + 0.6) + span + 0.6 }; }
+    if (e.roof) { const span = e.roof.span; want = { y: e.top - 0.5, z: p.endZ - (e.depth + 0.6) + span + 0.6 }; }
     else want = { y: e.top + 7, z: p.endZ - e.depth - 1 };
     assert.ok(Math.abs(p.board.y - want.y) < 1e-9 && Math.abs(p.board.z - want.z) < 1e-9, `${id}: ${JSON.stringify(p.board)} vs ${JSON.stringify(want)}`);
   }
@@ -50,7 +50,14 @@ test('pylons and towers stand outside the stands, a track between them and the p
   for (const [id, r] of all) {
     const p = planGround(r);
     assert.equal(p.lights.pylons.length, r.lights === 'pylons' ? 4 : 0, id);
-    for (const q of [...p.lights.pylons, ...p.towers]) assert.ok(Math.abs(q.x) > p.sideX + 5 && (q.z < p.endZ - 5 || q.z > p.nearZ + 5), `${id}: ${q.x}, ${q.z}`);
+    for (const q of [...p.lights.pylons, ...p.towers]) {
+      // outside every stand's back wall
+      const behind = [Math.abs(q.x) - (q.r || 0) > p.sideX - p.stands[1].p.back, q.z + (q.r || 0) < p.endZ + p.stands[0].p.back, q.z - (q.r || 0) > p.nearZ - p.stands[3].p.back];
+      // or in an open corner, or out beyond a corner's sweep
+      if (!p.corners.length && Math.abs(q.x) > p.sideX && (q.z < p.endZ || q.z > p.nearZ)) behind.push(true);
+      for (const c of p.corners) behind.push(Math.hypot(q.x - c.x, q.z - c.z) - (q.r || 0) > -c.p.back);
+      assert.ok(behind.some(Boolean), `${id}: ${q.x}, ${q.z}`);
+    }
     if (r.track) {
       const t = p.track;
       assert.ok(t.inX > PITCH.halfW + 1.6 && t.outX <= p.sideX && t.inZ0 < GOAL.z - GOAL.depth && t.outZ0 >= p.endZ, id);

@@ -10,6 +10,7 @@ import { structureAtlas, crowdTiles, region, adRegion } from './groundtex.js';
 import { structureMaterial, crowdMaterial, glowMaterial } from './groundmat.js';
 import { lightsAndBits } from './groundbits.js';
 import { buildUltras2 } from './ultras2.js';
+import { extras, cornerBlock, skyline, skylineTex, END_CORNER } from './groundextras.js';
 import { LIGHT_DIR } from './player.js';
 
 const PITCH_P = new THREE.Vector3(0, 3, -15);
@@ -67,7 +68,7 @@ function crowdStrip(CG, run, t0, t1, tier, band, ultra, roofFront) {
 // The whole cross-section of a stand along a run. bands(i): the crowd blocks on tier i as
 // [[t0, t1, band, ultra]]. ends: close the two ends with gable walls (straight stands only).
 function stand(G, L, CG, glow, run, p, colors, bands, ends) {
-  const club = colors.club, front = '#343841';
+  const club = colors.facade || colors.club, front = colors.front || '#343841';
   strip(G, run, 0, 1, [0.02, 0], [0.02, FRONT], { reg: region('paint'), color: front, tile: [4, 4], face: 'pitch' });
   strip(G, run, 0, 1, [0.02, FRONT], [-0.4, FRONT], { reg: region('concrete'), tile: [4, 4], face: 'up' });
   const roofFront = p.roof ? Math.max(p.roof.zFront, p.tiers[p.tiers.length - 1].z1) : null;
@@ -96,8 +97,8 @@ function stand(G, L, CG, glow, run, p, colors, bands, ends) {
   strip(G, run, 0, 1, [p.back - 0.3, 0.05], [0, 0.05], { reg: region('dark'), tile: [6, 6], face: 'up' });
   if (p.roof) {
     const r = p.roof, yB = p.wallTop + 0.4, yF = r.y + 0.6;
-    strip(G, run, 0, 1, [r.zBack, yB], [r.zFront, yF], { reg: region('roofTop'), tile: [4, 8], face: 'up' });
-    strip(G, run, 0, 1, [r.zBack, yB - 0.35], [r.zFront, yF - 0.35], { reg: region('roofUnder'), tile: [4, 4], color: [0.75, 0.75, 0.8], face: 'down' });
+    strip(G, run, 0, 1, [r.zBack, yB], [r.zFront, yF], { reg: region('roofTop'), tile: [4, 8], color: colors.roof || [1, 1, 1], face: 'up' });
+    strip(G, run, 0, 1, [r.zBack, yB - 0.35], [r.zFront, yF - 0.35], { reg: colors.roof ? region('paint') : region('roofUnder'), tile: [4, 4], color: colors.roof || [0.75, 0.75, 0.8], face: 'down' });
     strip(G, run, 0, 1, [r.zFront, yF - 0.95], [r.zFront, yF], { reg: region('paint'), color: '#e4e6ea', tile: [8, 1], face: 'pitch' });
     strip(G, run, 0, 1, [r.zFront, yF], [r.zFront - 0.3, yF], { reg: region('paint'), color: '#c8cacf', tile: [8, 1], face: 'up' });
     // the lattice beam along the front edge, and a cantilever truss every 8 m
@@ -116,7 +117,8 @@ function stand(G, L, CG, glow, run, p, colors, bands, ends) {
       }
     }
   }
-  if (ends && run.f) for (const sx of [-1, 1]) {
+  if (run.f) for (const sx of [-1, 1]) {
+    if (!ends[sx < 0 ? 0 : 1]) continue;
     const pts = gable(p).map(([z, y]) => run.f(sx * run.len / 2, y, z)), back = pts.pop();
     const uvs = [back, ...pts].map(q => { const l = v().copy(q); return [l.z * 0.25 + l.x * 0.25, l.y * 0.25]; });
     G.poly([back, ...pts], uvs, { reg: region('concrete'), color: [0.85, 0.85, 0.83], face: run.f(sx * (run.len / 2 + 20), 5, -5) });
@@ -129,16 +131,27 @@ export function buildGround2(recipe, ours, theirs, oursShare, light, jump, hype)
   const t0 = performance.now(), plan = planGround(recipe), group = new THREE.Group();
   const G = new Geo(), L = new Geo(), CG = new CrowdGeo(), glow = new GlowGeo();
   const curvaOurs = oursShare >= 0.5, home = curvaOurs ? ours : theirs, away = curvaOurs ? theirs : ours;
-  const colors = { club: recipe.seats[0], lights: recipe.lights };
+  const colors = { club: recipe.seats[0], facade: recipe.facade, front: recipe.front, roof: recipe.roofColor, lights: recipe.lights };
   const { curva, block } = plan, T = s => s + 0.5;              // fractions along the end stand, from -0.5..0.5 to 0..1
   for (const s of plan.stands) {
     const run = straightRun(s.x, s.z, s.yaw, s.len);
-    const bands = i => (s.isEnd ? (i === 0 ? [[0, T(curva.from), 0, 0], [T(curva.from), T(curva.to), 1, 1], [T(curva.to), T(block.from), 0, 0], [T(block.from), 1, 2, 1]] : [[0, T(block.from), 0, 0], [T(block.from), 1, 2, 0]]) : [[0, 1, 0, 0]]);
-    // gables close a stand's ends where nothing meets them: no corners, or a corner shaped differently
-    const ends = !recipe.corners || JSON.stringify(s.tiers) !== JSON.stringify(recipe.side);
+    const blockHere = block.on === s.id, B = blockHere ? (s.id === 'near' ? [1 - T(block.to), 1 - T(block.from)] : [T(block.from), T(block.to)]) : null;
+    const bands = i => {
+      if (s.isEnd && i === 0) return blockHere ? [[0, T(curva.from), 0, 0], [T(curva.from), T(curva.to), 1, 1], [T(curva.to), B[0], 0, 0], [B[0], 1, 2, 1]] : [[0, T(curva.from), 0, 0], [T(curva.from), T(curva.to), 1, 1], [T(curva.to), 1, 0, 0]];
+      if (blockHere) return B[0] > 0 ? [[0, B[0], 0, 0], [B[0], B[1], 2, i === 0 ? 1 : 0], ...(B[1] < 1 ? [[B[1], 1, 0, 0]] : [])] : [[0, B[1], 2, i === 0 ? 1 : 0], [B[1], 1, 0, 0]];
+      return [[0, 1, 0, 0]];
+    };
+    // gables close a stand's ends where nothing meets them: no corner there, or one shaped differently
+    const ends = [-1, 1].map(sx => { const k = END_CORNER[s.id][sx < 0 ? 0 : 1], c = plan.corners.find(q => q.id === k); return !c || c.block || JSON.stringify(c.tiers) !== JSON.stringify(s.tiers); });
     stand(G, L, CG, glow, run, s.p, colors, bands, ends);
+    extras(G, L, run, s.p, recipe, s.id);
   }
-  for (const c of plan.corners) stand(G, L, CG, glow, cornerRun(c.x, c.z, c.a0, c.a1), c.p, colors, () => [[0, 1, 0, 0]], false);
+  for (const c of plan.corners) {
+    const run = cornerRun(c.x, c.z, c.a0, c.a1);
+    if (c.block) cornerBlock(G, run, c.p); else { stand(G, L, CG, glow, run, c.p, colors, () => [[0, 1, 0, 0]], [false, false]); extras(G, L, run, c.p, recipe, c.id); }
+  }
+  const SK = new Geo();
+  if (recipe.skyline) skyline(SK, recipe.skyline, plan);
   const bits = lightsAndBits(G, L, glow, plan, recipe);
   // the crowd's three blocks: everyone (your share), the home curva, the away block
   const { tex, table } = crowdTiles([
@@ -146,12 +159,13 @@ export function buildGround2(recipe, ours, theirs, oursShare, light, jump, hype)
   ], ours, theirs);
   const atlas = structureAtlas();
   const meshes = { structure: G.mesh(structureMaterial(atlas, light)), lattice: L.mesh(structureMaterial(atlas, light, true)), crowd: CG.mesh(crowdMaterial(tex, table, light, jump)), glows: glow.mesh(glowMaterial(light)) };
-  const end = plan.stands[0], ultras = buildUltras2({ f: frameAt(end.x, end.z, end.yaw), len: end.len, tier: end.p.tiers[0] }, home, away, light, hype, recipe.name.length);
-  group.add(meshes.structure, meshes.lattice, meshes.crowd, meshes.glows, ultras.group);
+  if (SK.count) meshes.skyline = SK.mesh(structureMaterial(skylineTex(recipe.skyline), light, true));
+  const end = plan.stands[0], ultras = buildUltras2({ f: frameAt(end.x, end.z, end.yaw), len: end.len, tier: end.p.tiers[0], curva: plan.curva, block: plan.block }, home, away, light, hype, recipe.name.length);
+  group.add(...Object.values(meshes), ultras.group);
   const tris = Object.values(meshes).reduce((n, m) => n + m.geometry.index.count / 3, 0) + ultras.tris;
   return {
     group, recipe, plan, topY: plan.topY, endZ: plan.endZ, sideX: plan.sideX, ultras, curvaOurs, board: plan.board,
     lamps: meshes.glows.material, meshes, bits, crowdTex: tex,
-    stats: { draws: 4 + ultras.draws, tris, lamps: glow.pos.length / 12, ms: Math.round(performance.now() - t0) },
+    stats: { draws: Object.keys(meshes).length + ultras.draws, tris, lamps: glow.pos.length / 12, ms: Math.round(performance.now() - t0) },
   };
 }

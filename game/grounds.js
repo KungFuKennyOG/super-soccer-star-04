@@ -14,24 +14,29 @@ const TIGHT = { gap: 2, end: [[16, 14]], side: [[15, 13]], near: [[15, 12]], cor
 const TRACK = { gap: 10, end: [[14, 8], [8, 6]], side: [[14, 8]], near: [[14, 8]], corners: true, roof: 'half', lights: 'pylons', track: true };
 const OLD = { gap: 3, end: [[16, 13]], side: [[14, 10]], near: [[14, 9]], corners: false, roof: 'half', lights: 'pylons' };
 
+// Each club's ground is modelled on its city's real home ground as it stood around 2003-04 (layout,
+// tiers, roof, lights, colours only: no names, crests or lettering). docs/notes-stadium.md says which,
+// what was confirmed and what is a guess. Fields only the '04 look reads (game/ps2/groundplan.js and
+// groundextras.js): left / right (a side's own tiers), roofOn, corners as a list, cornerFill, kop,
+// towers as a count or 'access', masts, girders, ribs, arches, roofColor, facade, front, skyline.
 export const GROUNDS = {
-  default: { name: 'NATIONAL STADIUM', ...OLD, time: 'night', mow: 'stripes', seats: ['#3a3a4a', '#30303c'] },
-  MAD: { name: 'MADRID', ...BOWL, end: [[12, 9], [12, 11]], time: 'night', mow: 'checks', seats: ['#f2f1ea', '#2b2f6b'] },
-  BAR: { name: 'BARCELONA', ...BOWL, end: [[12, 8], [11, 9], [10, 9]], side: [[12, 8], [11, 9], [9, 8]], roof: 'none', time: 'night', mow: 'wide', seats: ['#1d3f94', '#9a1c3c'] },
-  MUN: { name: 'MUNICH', ...BOWL, roof: 'full', time: 'dusk', mow: 'stripes', seats: ['#d00027', '#e8e8e8'] },
-  MILAN: { name: 'MILAN', ...BOWL, end: [[10, 7], [10, 8], [9, 8]], side: [[10, 7], [10, 8], [9, 8]], roof: 'full', towers: true, time: 'night', mow: 'stripes', seats: ['#c4161c', '#0a3ea0'] },
-  MAN: { name: 'MANCHESTER', ...ENGLISH, time: 'night', mow: 'stripes', seats: ['#d0101e', '#a00c18'] },
-  LIV: { name: 'LIVERPOOL', ...ENGLISH, end: [[22, 17]], time: 'night', mow: 'wide', seats: ['#c8102e', '#e8e8e8'] },
-  LDR: { name: 'LONDON RED', ...ENGLISH, time: 'day', mow: 'stripes', seats: ['#db0007', '#f2f1ea'] },
-  LDB: { name: 'LONDON BLUE', ...ENGLISH, end: [[12, 9]], time: 'dusk', mow: 'stripes', seats: ['#034694', '#1a5ab0'] },
-  TUR: { name: 'TURIN', ...TRACK, time: 'night', mow: 'wide', seats: ['#161618', '#f2f1ea'] },
-  DOR: { name: 'DORTMUND', ...ENGLISH, end: [[26, 24]], time: 'night', mow: 'stripes', seats: ['#fde100', '#161618'] },
-  PAR: { name: 'PARIS', ...BOWL, roof: 'full', time: 'night', mow: 'checks', seats: ['#0b2a5b', '#c8102e'] },
-  AMS: { name: 'AMSTERDAM', ...BOWL, roof: 'full', time: 'day', mow: 'stripes', seats: ['#d2122e', '#f2f1ea'] },
-  PRT: { name: 'PORTO', ...BOWL, end: [[12, 8], [10, 9]], time: 'night', mow: 'wide', seats: ['#1f3e93', '#f2f1ea'] },
-  LIS: { name: 'LISBON', ...BOWL, time: 'day', mow: 'stripes', seats: ['#c8102e', '#f2f1ea'] },
-  GLA: { name: 'GLASGOW', ...TIGHT, time: 'night', mow: 'checks', seats: ['#1b7a3a', '#f2f1ea'] },
-  IST: { name: 'ISTANBUL', ...OLD, end: [[16, 15]], time: 'night', mow: 'stripes', seats: ['#b5121b', '#f6b81a'] }, // old, steep and loud
+  default: { name: 'NATIONAL STADIUM', ...BOWL, gap: 6, end: [[12, 8], [11, 9], [10, 10]], side: [[12, 8], [11, 9], [10, 10]], near: [[12, 8], [11, 9], [10, 10]], roof: 'full', roofColor: '#dfe4e8', lights: 'roof', time: 'night', mow: 'stripes', seats: ['#3a4a7a', '#30303c'] },
+  MAD: { name: 'MADRID', ...BOWL, gap: 2.5, end: [[11, 9], [10, 10], [9, 11]], side: [[11, 9], [10, 10], [9, 11]], near: [[11, 9], [10, 10], [9, 11]], roof: 'half', towers: 'access', skyline: 'city', time: 'night', mow: 'checks', seats: ['#f2f1ea', '#2b2f6b'] },
+  BAR: { name: 'BARCELONA', ...BOWL, gap: 5, end: [[13, 8], [12, 10], [11, 12]], side: [[13, 8], [12, 10], [11, 12]], near: [[13, 8], [12, 10], [11, 12]], roof: 'half', roofOn: ['left'], time: 'night', mow: 'wide', seats: ['#1d3f94', '#9a1c3c'] },
+  MUN: { name: 'MUNICH', ...TRACK, end: [[20, 10]], side: [[20, 10]], left: [[20, 11]], near: [[20, 10]], corners: true, roof: 'full', roofOn: ['left'], roofColor: '#d6dde2', masts: { color: '#b8bec6', per: 3, rise: 18 }, lights: 'roof', skyline: 'park', time: 'dusk', mow: 'stripes', seats: ['#d00027', '#e8e8e8'] },
+  MILAN: { name: 'MILAN', ...BOWL, gap: 2.5, end: [[10, 7], [10, 8], [9, 8]], side: [[10, 7], [10, 8], [9, 8]], near: [[10, 7], [10, 8], [9, 8]], roof: 'full', roofColor: '#c9ced4', towers: 11, girders: '#c4161c', time: 'night', mow: 'stripes', seats: ['#c4161c', '#0a3ea0'] },
+  MAN: { name: 'MANCHESTER', ...ENGLISH, end: [[12, 8], [11, 9]], left: [[12, 8], [11, 9], [10, 10]], right: [[11, 6]], near: [[12, 8], [11, 9]], lights: 'roof', skyline: 'city', time: 'night', mow: 'stripes', seats: ['#d0101e', '#a00c18'] },
+  LIV: { name: 'LIVERPOOL', ...ENGLISH, gap: 2, end: [[24, 17]], left: [[12, 6]], right: [[11, 7], [9, 8]], near: [[11, 7], [8, 7]], kop: true, lights: 'roof', skyline: 'houses', time: 'night', mow: 'wide', seats: ['#c8102e', '#e8e8e8'] },
+  LDR: { name: 'LONDON RED', ...ENGLISH, gap: 1.5, end: [[10, 7], [8, 7]], side: [[9, 6], [8, 7]], near: [[9, 6]], facade: '#ece8dc', lights: 'roof', skyline: 'houses', time: 'day', mow: 'stripes', seats: ['#db0007', '#f2f1ea'] },
+  LDB: { name: 'LONDON BLUE', ...ENGLISH, end: [[12, 9]], side: [[11, 7], [9, 8], [8, 8]], near: [[12, 8], [10, 9]], corners: ['endL', 'endR'], cornerFill: 'block', lights: 'roof', time: 'dusk', mow: 'stripes', seats: ['#034694', '#1a5ab0'] },
+  TUR: { name: 'TURIN', ...TRACK, end: [[14, 8], [8, 6]], side: [[14, 8], [8, 6]], near: [[14, 8], [8, 6]], roof: 'full', masts: { color: '#d8dade', per: 3, rise: 16 }, lights: 'roof', time: 'night', mow: 'wide', seats: ['#161618', '#f2f1ea'] },
+  DOR: { name: 'DORTMUND', ...ENGLISH, gap: 2, end: [[26, 24]], side: [[12, 9], [10, 10]], near: [[12, 9], [10, 10]], kop: true, masts: { color: '#f0c419', per: 2, rise: 12 }, lights: 'roof', time: 'night', mow: 'stripes', seats: ['#fde100', '#161618'] },
+  PAR: { name: 'PARIS', ...BOWL, gap: 2.5, end: [[12, 9], [11, 10]], side: [[12, 9], [11, 10]], near: [[12, 9], [11, 10]], roof: 'full', ribs: true, time: 'night', mow: 'checks', seats: ['#0b2a5b', '#c8102e'] },
+  AMS: { name: 'AMSTERDAM', ...BOWL, gap: 3, end: [[12, 8], [11, 10]], side: [[12, 8], [11, 10]], near: [[12, 8], [11, 10]], roof: 'full', arches: { kind: 'long', color: '#c8ccd2' }, time: 'day', mow: 'stripes', seats: ['#d2122e', '#f2f1ea'] },
+  PRT: { name: 'PORTO', ...BOWL, end: [[12, 8], [10, 9]], side: [[12, 8], [12, 10]], near: [[12, 8], [10, 9]], roof: 'full', roofColor: '#e6eaee', time: 'night', mow: 'wide', seats: ['#1f3e93', '#f2f1ea'] },
+  LIS: { name: 'LISBON', ...BOWL, gap: 3, end: [[11, 7], [10, 9], [9, 10]], side: [[11, 7], [10, 9], [9, 10]], near: [[11, 7], [10, 9], [9, 10]], roof: 'full', roofColor: '#e8ecee', arches: { kind: 'four', color: '#c8102e' }, time: 'day', mow: 'stripes', seats: ['#c8102e', '#f2f1ea'] },
+  GLA: { name: 'GLASGOW', ...TIGHT, end: [[13, 9], [11, 10]], side: [[13, 9], [11, 10]], left: [[14, 10], [12, 12]], right: [[12, 6]], near: [[13, 9], [11, 10]], corners: ['endL', 'nearL'], time: 'night', mow: 'checks', seats: ['#1b7a3a', '#f2f1ea'] },
+  IST: { name: 'ISTANBUL', ...OLD, gap: 2.5, end: [[16, 15]], side: [[14, 10]], roofOn: ['left'], skyline: 'city', front: '#5a5a60', time: 'night', mow: 'stripes', seats: ['#b5121b', '#f6b81a'] }, // old, steep and loud
 };
 export const groundFor = id => GROUNDS[id === 'MRB' || id === 'MBB' ? 'MILAN' : id] || GROUNDS.default;
 

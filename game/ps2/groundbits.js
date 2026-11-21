@@ -31,7 +31,8 @@ export function lightsAndBits(G, L, glow, plan, recipe) {
     glow.add(f(0, hy, 1.5), 11);
   }
   // an open stand with lamps along its top: poles every 8 m, a lamp box on each
-  if (plan.lights.kind === 'roof' && recipe.roof === 'none') for (const s of plan.stands) {
+  if (plan.lights.kind === 'roof') for (const s of plan.stands) {
+    if (s.p.roof) continue;
     const run = straightRun(s.x, s.z, s.yaw, s.len), p = s.p, n = Math.max(2, Math.round(s.len / 8));
     for (let k = 0; k < n; k++) {
       const lx = -s.len / 2 + (k + 0.5) * s.len / n, top = p.wallTop;

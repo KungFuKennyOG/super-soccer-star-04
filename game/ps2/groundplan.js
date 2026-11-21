@@ -52,35 +52,49 @@ export function gable(p) {
   return pts;
 }
 
-// The whole ground. Stands: end (behind the goal), left and right sides, near (behind you), and with
-// corners: true four quarter-round corners swept round the meeting point of the stands either side.
+// The whole ground. Stands: end (behind the goal), left and right sides, near (behind you), and
+// corner sweeps round the meeting point of the stands either side. Fields the PS1 builder doesn't read
+// (all optional): left / right (a side's own tiers), roofOn (which stands have a roof), corners as a
+// list ('endL', 'endR', 'nearL', 'nearR'), cornerFill: 'block' (buildings instead of seats), kop
+// (the home end packed end to end; the away fans move behind you), towers as a count (ramp towers
+// round the outside) or 'access' (four corner stair towers).
+export const CORNERS = { endL: [-1, 'end', 0, Math.PI / 2, 'left'], endR: [1, 'end', 0, -Math.PI / 2, 'right'], nearL: [-1, 'near', Math.PI / 2, Math.PI, 'left'], nearR: [1, 'near', -Math.PI / 2, -Math.PI, 'right'] };
 export function planGround(recipe) {
   const W = PITCH.halfW, gap = recipe.gap;
   const endZ = GOAL.z - 3.4 - gap, sideX = W + 1.8 + gap, nearZ = 7 + gap, midZ = (GOAL.z + 7) / 2;
-  const stand = (id, len, x, z, yaw, tiers, o = {}) => ({ id, len, x, z, yaw, tiers, p: profile(tiers, recipe.roof), ...o });
+  const roofed = id => !recipe.roofOn || recipe.roofOn.includes(id);
+  const tiersOf = id => (id === 'left' || id === 'right' ? recipe[id] || recipe.side : recipe[id]);
+  const stand = (id, len, x, z, yaw, o = {}) => ({ id, len, x, z, yaw, tiers: tiersOf(id), p: profile(tiersOf(id), roofed(id) ? recipe.roof : 'none'), ...o });
   const stands = [
-    stand('end', 2 * sideX, 0, endZ, 0, recipe.end, { isEnd: true }),
-    stand('left', nearZ - endZ, -sideX, midZ, Math.PI / 2, recipe.side),
-    stand('right', nearZ - endZ, sideX, midZ, -Math.PI / 2, recipe.side),
-    stand('near', 2 * sideX, 0, nearZ, Math.PI, recipe.near),
+    stand('end', 2 * sideX, 0, endZ, 0, { isEnd: true }),
+    stand('left', nearZ - endZ, -sideX, midZ, Math.PI / 2),
+    stand('right', nearZ - endZ, sideX, midZ, -Math.PI / 2),
+    stand('near', 2 * sideX, 0, nearZ, Math.PI),
   ];
-  // corner sweeps: centre, and the yaw at which a stand's frame there faces each neighbour
-  const corners = !recipe.corners ? [] : [[-1, endZ, 0, Math.PI / 2], [1, endZ, 0, -Math.PI / 2], [-1, nearZ, Math.PI / 2, Math.PI], [1, nearZ, -Math.PI / 2, -Math.PI]]
-    .map(([sx, z, a0, a1]) => ({ x: sx * sideX, z, a0, a1, tiers: recipe.side, p: profile(recipe.side, recipe.roof) }));
+  const which = recipe.corners === true ? Object.keys(CORNERS) : Array.isArray(recipe.corners) ? recipe.corners : [];
+  const corners = which.map(k => { const [sx, at, a0, a1, side] = CORNERS[k]; return { id: k, x: sx * sideX, z: at === 'end' ? endZ : nearZ, a0, a1, side, block: recipe.cornerFill === 'block', tiers: tiersOf(side), p: profile(tiersOf(side), roofed(side) ? recipe.roof : 'none') }; });
   const topY = Math.max(...stands.map(s => s.p.top), ...corners.map(c => c.p.top));
-  // the scoreboard (and big screen) hangs where game/grounds.js hangs it, so the HUD and replays stay put
+  // the scoreboard (and big screen) hangs as game/grounds.js hangs it: under the end's roof edge, or over an open end
   const e = stands[0].p;
   let board;
   if (e.roof) board = { y: e.top + 3.7 - 4.2, z: endZ + e.roof.zFront + 0.6 };
   else board = { y: e.top + 7, z: endZ + e.back - 0.7 };
   const lights = { kind: recipe.lights, pylons: [], aim: [0, 0, GOAL.z + 16] };
   if (recipe.lights === 'pylons') for (const [x, z] of [[-sideX - 12, endZ - 10], [sideX + 12, endZ - 10], [-sideX - 12, nearZ + 6], [sideX + 12, nearZ + 6]]) lights.pylons.push({ x, z, h: topY + 16 });
-  const towers = recipe.towers ? [[-sideX - 8, endZ - 8], [sideX + 8, endZ - 8], [-sideX - 8, nearZ + 8], [sideX + 8, nearZ + 8]].map(([x, z]) => ({ x, z, r: 3, h: topY + 8 })) : [];
+  // towers outside the stands: the four corners, then along the sides and ends
+  let towers = [];
+  if (recipe.towers === 'access') towers = [[-1, -1], [1, -1], [-1, 1], [1, 1]].map(([a, b]) => { const d = (-stands[1].p.back + 5) * Math.SQRT1_2; return { x: a * (sideX + d), z: b < 0 ? endZ - d : nearZ + d, r: 4.5, h: topY - 2 }; });
+  else if (recipe.towers) {
+    const n = recipe.towers === true ? 4 : recipe.towers, ox = sideX - stands[1].p.back + 4, z0 = endZ + e.back - 4, z1 = nearZ - stands[3].p.back + 4;
+    const ring = [[-ox, z0], [ox, z0], [-ox, z1], [ox, z1], [0, z0 - 2], [-ox - 2, (z0 + z1) / 2], [ox + 2, (z0 + z1) / 2], [-ox * 0.5, z0 - 1], [ox * 0.5, z0 - 1], [-ox * 0.5, z1 + 1], [ox * 0.5, z1 + 1]];
+    towers = ring.slice(0, n).map(([x, z], i) => ({ x, z, r: 3, h: topY + (i < 4 ? 9 : 1) }));
+  }
   // a running track: the band between the pitch's surround and the stands (a rounded oval)
   const track = recipe.track ? { inX: W + 4, inZ0: GOAL.z - 6, inZ1: 3, outX: sideX - 0.3, outZ0: endZ + 0.3, outZ1: nearZ - 0.3 } : null;
   // ad boards round the half pitch, as game/stadium.js stands them
   const boards = { x: W + 1.6, z: GOAL.z - 3.2, len: 6, h: 0.9 };
-  // the home end's curva and the away block, as fractions along the end stand (game/grounds.js)
-  const curva = { from: -0.36, to: 0.1 }, block = { from: 0.15, to: 0.5 };
+  // the home end's curva and the away block, as fractions along the end stand (game/grounds.js); a kop
+  // end is home fans end to end, and the away fans are in the stand behind you
+  const curva = recipe.kop ? { from: -0.47, to: 0.47 } : { from: -0.36, to: 0.1 }, block = { from: 0.15, to: 0.5, on: recipe.kop ? 'near' : 'end' };
   return { W, gap, endZ, sideX, nearZ, midZ, stands, corners, topY, board, lights, towers, track, boards, curva, block };
 }

@@ -31,13 +31,13 @@ function flagGeo() {
 // end: { f: the end stand's frame, len, tier: its lower tier (groundplan profile) }. home: the curva's
 // colours, away: the block's. light, hype: shared uniforms (hype: { uHypeH, uHypeA }).
 export function buildUltras2(end, home, away, light, hype, seed = 1) {
-  const group = new THREE.Group(), rand = seeded(seed), { f, len, tier } = end, depth = tier.z0 - tier.z1;
+  const group = new THREE.Group(), rand = seeded(seed), { f, len, tier, curva = { from: -0.36, to: 0.1 }, block = { from: 0.15, to: 0.5, on: 'end' } } = end, depth = tier.z0 - tier.z1;
   const yAt = d => tier.y0 + (tier.y1 - tier.y0) * d / depth;
   const H = pal(home), A = pal(away);
   const spots = [];
   for (let d = 1.2; d < depth - 0.8; d += 1.7) {
-    for (let x = -len * 0.34; x < len * 0.08; x += 2.3) if (rand() < 0.42) spots.push([x + (rand() - 0.5), d, 0]);
-    for (let x = len * 0.24; x < len * 0.46; x += 3.0) if (rand() < 0.4) spots.push([x + (rand() - 0.5), d, 1]);
+    for (let x = len * (curva.from + 0.02); x < len * (curva.to - 0.02); x += 2.3) if (rand() < (block.on === 'end' ? 0.42 : 0.26)) spots.push([x + (rand() - 0.5), d, 0]);
+    if (block.on === 'end') for (let x = len * (block.from + 0.09); x < len * (block.to - 0.04); x += 3.0) if (rand() < 0.4) spots.push([x + (rand() - 0.5), d, 1]);
   }
   const geo = flagGeo(), n = spots.length;
   const design = new Float32Array(n), side = new Float32Array(n), phase = new Float32Array(n);
@@ -56,7 +56,7 @@ export function buildUltras2(end, home, away, light, hype, seed = 1) {
   mesh.frustumCulled = false;
   group.add(mesh);
   // banners over the front wall, facing the pitch, tied at their ends and sagging a little between
-  const spans = [[-0.36, -0.18, 0], [-0.16, 0.06, 1], [0.25, 0.44, 4]], bp = [], buv = [], sag = [], bidx = [], segs = 12, h = 1.15;
+  const spans = block.on === 'end' ? [[-0.36, -0.18, 0], [-0.16, 0.06, 1], [0.25, 0.44, 4]] : [[-0.4, -0.16, 0], [-0.12, 0.12, 1], [0.16, 0.4, 3]], bp = [], buv = [], sag = [], bidx = [], segs = 12, h = 1.15;
   spans.forEach(([a, b, row], k) => {
     const [u0, v0, u1, v1] = bannerUV(row + (k === 1 ? Math.floor(rand() * 3) : 0)), base = bp.length / 3;
     for (let i = 0; i <= segs; i++) {
