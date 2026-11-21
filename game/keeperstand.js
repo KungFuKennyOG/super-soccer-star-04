@@ -46,7 +46,7 @@ export function standing(m, sv, dt, ball) {
   const F = sv.f0 ??= feetIn(sv);                                   // where his feet were when it began (the save's frame)
   // feet first: his body goes behind the ball, a side-step if it's wide of him (never more than the sim lets a standing save be)
   const hx = clamp(r.x, -0.5, 0.5) * 0.92, mid = (F.L.x + F.R.x) / 2, shift = hx - mid, stepK = ease((Math.abs(shift) - 0.04) / 0.06);
-  const lead = s > 0 ? 'L' : 'R', trail = s > 0 ? 'R' : 'L';
+  const lead = s > 0 ? 'L' : 'R';
   const J = mode === 'over' ? Math.max(0, r.y - STAND.reach) : 0, tU = Math.sqrt(2 * J / 9.8), tTO = T - tU;   // a jump: how high, how long going up, when he leaves the grass
   const deep = mode === 'scoop' ? ease((T - 0.26) / 0.2) * (held ? 1 : 0.3) * clamp((0.66 - r.y) / 0.25, 0.3, 1) : 0;   // how far down into the K he gets
   // hips: where and how high at the ball, the give after it, and stood up at the end (with the ball: taller)
