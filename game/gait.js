@@ -23,6 +23,7 @@ import { ankleOf, footOf, reachLeg, aimFoot } from './legik.js';
 import { strideRate } from '../rules/dribble.js';
 import { DRIBBLE } from '../rules/tuning.js';
 import { dribbleCadence } from './dribblecap.js';
+import { inertialize } from './inertia.js';
 
 const TAU = Math.PI * 2, REACH = 0.84, LR = ['L', 'R'];   // REACH: hip joint to ankle, as straight as a leg gets (m)
 const TOUCH = { y: 0.23, z: DRIBBLE.near - 0.25 };            // where the right ankle is as its toe taps the ball on (game/strike.js TOUCH)
@@ -131,7 +132,12 @@ export function poseLegs(m, bn, p, dt) {
   const drib = k > 0.5 ? dribbleCadence(m, g.ph ?? m.phase, m.phase, s, dt) : 0;
   if (g.ph === null) g.ph = m.phase; else g.ph += dt * (drib || rate);
   // back in step with the sim: hurrying to catch it up, or easing off a little to let it come round
-  const off = wrap(m.phase - g.ph), pull = drib ? 0 : free < 0.02 && Math.abs(off) < 0.03 ? off : clamp(off * Math.min(1, dt * 10), -dt * 0.3 * rate, dt * 7) * (1 - free);
+  // (m.land: a strike has him coming down on the kicking foot in m.land.t seconds: the cycle is moved so that foot
+  // is landing then, and what shows of the old cycle is eased across)
+  if (m.land && dt > 0 && g.ph !== null) { g.ph = m.land.at - strideRate(s) * m.land.t; m.phOff = wrap(g.ph - m.phase); inertialize(m, m.land.ease); m.land = null; }
+  // (m.phOff: a strike left his legs out of step with the sim's stride, landing on the kicking foot: game/kickcap.js; it is let go slowly)
+  if (m.phOff && !m.strike) m.phOff -= clamp(m.phOff, -dt * 1.2, dt * 1.2);
+  const off = wrap(m.phase + (m.phOff || 0) - g.ph), pull = drib ? 0 : free < 0.02 && Math.abs(off) < 0.03 ? off : clamp(off * Math.min(1, dt * 10), -dt * 0.3 * rate, dt * 7) * (1 - free);
   g.ph += pull;
   const turn = drib || (dt > 0 ? Math.max(rate * 0.5, rate + pull / dt) : rate);      // how fast the legs really turn over (rad/s)
   const sph = Math.sin(g.ph), cph = Math.cos(g.ph);

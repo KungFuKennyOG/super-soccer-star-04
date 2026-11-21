@@ -107,7 +107,7 @@ export function touchBoot(m, bn, p, ball, k, dt = 0) {
   // (the sim's touch frame is the first one past the touch: the boot is still fully on the ball for that one)
   const hold = strideRate(speed) * Math.max(dt, 1 / 72) * 1.1 / TAU;
   let w = u > 1 - before ? smooth(((u - (1 - before)) / before) ** 2) : u < hold + after ? 1 - smooth((u - hold) / after) : 0;
-  w *= k * smooth((speed - 0.35) / 0.5);
+  w *= k * smooth((speed - 0.35) / 0.5) * (1 - smooth((B.y - BALL.r - 0.05) / 0.15));       // (a ball in the air isn't touched on: his own chip, dropping ahead of him as he runs)
   if (w <= 0) { D.in = D.n > 1 ? 1 : 0; return 0; }                // (which part of the boot is chosen between touches)
   if (B.z < 0.25 || B.z > 1.1 || Math.abs(B.x) > 0.3) return 0;   // only a ball in front of him
   const st = D.in ? INSIDE : LACES;

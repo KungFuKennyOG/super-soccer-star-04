@@ -14,10 +14,12 @@ import { faceBody, poseLegs, leanHips } from './gait.js';
 import { poseUpper, layerLean, layerReady, layerBreath, layerKick, layerLook, strikeSwing } from './carriage.js';
 import { specialPose, dancePose, celebratePose } from './poses.js';
 import { strideLegs, strideTrunk } from './mocap.js';
-import { kickTrunk } from './kickcap.js';
+import { kickTrunk, isKick } from './kickcap.js';
 import { sway } from './sway.js';
 import { layerDribble, dribbleGlance } from './dribblecap.js';
 import { trickHips, trickLegs, trickBody, trickHead } from './tricks.js';
+import { settle, remember } from './inertia.js';
+import { chargeLevel, chargeLegs, layerCharge } from './windup.js';
 
 const matCache = new Map();
 const mat = (key, make) => { if (!matCache.has(key)) matCache.set(key, make()); return matCache.get(key); };
@@ -88,6 +90,11 @@ function mirrorPose(bn) {
 }
 
 function pose(m, p, dt, t, celebrate, guide, ball, onBall) {
+  posed(m, p, dt, t, celebrate, guide, ball, onBall);
+  // a movement that took him over at once this frame (a kick's wind-up) has the old one eased into it (game/inertia.js)
+  settle(m, m.bone, dt); remember(m, m.bone, dt);
+}
+function posed(m, p, dt, t, celebrate, guide, ball, onBall) {
   const bn = m.bone;
   restPose(bn);
   if (m.bigHead) bn.head.scale.setScalar(1.65);           // the big-heads cheat (locker)
@@ -101,6 +108,8 @@ function pose(m, p, dt, t, celebrate, guide, ball, onBall) {
   // turn that the captured pelvis took the place of is put back, over the same footprints
   const cap = strideLegs(m, bn, g, dt, onBall ? ball : null);
   if (cap > 0 && !m.firstPerson) leanHips(bn, g, cap);
+  // holding the trigger (a shot charging) or the pass ring: he shapes up to strike it as he runs (game/windup.js)
+  if (chargeLevel(m, dt) > 0) chargeLegs(m, bn);
   if (m.special) { m.special.t += dt; if (m.special.t > 0.9) m.special = null; }
   const sp = m.special;
   // a skill move or a trick (game/tricks.js) is the whole body's: the hips first (the roulette's spin, how
@@ -110,7 +119,7 @@ function pose(m, p, dt, t, celebrate, guide, ball, onBall) {
   // hold on it (the sole of a drag-back or roulette, the step-over's circle)
   let kick = 0;
   const st = m.strike;
-  if (ball && st) kick = poseStrike(m, bn, ball, dt);
+  if (ball && st) { kick = poseStrike(m, bn, ball, dt); if (!onBall && isKick(st.kind)) m.onBallK = Math.max(0, (m.onBallK || 0) - dt * 8); }      // (a shot or a pass struck: he is off the ball, and his legs are no longer kept in time with touches)
   else if (ball) { poseTouch(m, bn, p, ball, onBall, dt); if (sp && HOLDS.includes(sp.kind)) poseHold(m, bn, sp, ball); }
   if (trk && ball) trickLegs(m, bn, trk, ball);
   if (sp && sp.kind === 'bicycle') { specialPose(bn, sp); if (m.firstPerson) bn.chest.scale.setScalar(0.001); return; }
@@ -128,6 +137,7 @@ function pose(m, p, dt, t, celebrate, guide, ball, onBall) {
   // on the ball: over it, arms wider, eyes on it for each touch and up for a look in between (game/dribblecap.js)
   const ob = (m.onBallK || 0) * (1 - m.kickK), up = ob > 0.5 && !st && dribbleGlance(m, p, dt);
   layerDribble(bn, g, ob, m.drive || 0);
+  layerCharge(m, bn);
   if (trk) trickBody(m, bn, trk);
   layerLook(m, bn, g, celebrate || up ? null : ball, dt, 0.22 * (m.drive || 0));
   if (trk) trickHead(bn, trk);

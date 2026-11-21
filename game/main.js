@@ -283,7 +283,9 @@ const loop = startLoop(renderer, (dt, t) => {
     if (raw.vr) { raw.hand = hands.highest(camera.position.y); raw.rightHand = hands.hand('right', handW); raw.leftHand = hands.hand('left', handL); }
     const intent = intents.build(raw, dt, world);
     const ev = stepSim(world, intent, simDt);
-    replay.record(world, ev, simDt);
+    // your hold on the trigger or the pass ring: you shape up to strike it (game/windup.js), in the replay too
+    if (models.you) models.you.charge = intents.shotHold ? { kind: 'shot', t: intents.shotHold.t } : intents.passHold ? { kind: 'pass', t: intents.passHold.t } : null;
+    replay.record(world, ev, simDt, models.you && models.you.charge);
     feedback(ev);
     const tr = training.update({ ev, intent, world, dt: simDt, vr: raw.vr, restart: raw.restart });
     if (tr === 'done') { sfx('perfect'); buzz('both', 0.5, 80); }
