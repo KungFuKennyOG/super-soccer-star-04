@@ -41,11 +41,11 @@ import { createTraining } from './training.js';
 import { createJuice } from './juice.js';
 import { LINE_IDS } from '../rules/commentary.js';
 
-const VR_SCALE = 0.7;       // headset framebuffer scale: soft retro, still sharp
+const VR_SCALE = 1.0;       // headset framebuffer scale: the Quest's full recommended resolution (was 0.7, the PS1 look's soft retro; Kenny: "up the resolution")
 
 const $ = id => document.getElementById(id);
 const canvas = $('c');
-const { renderer, scene, camera, rig } = createStage({ canvas, far: 260, antialias: false });
+const { renderer, scene, camera, rig } = createStage({ canvas, far: 260, antialias: true })   // 4x MSAA, in the headset too: the '04 look's crowd cards and nets crawl without it;
 renderer.xr.setFramebufferScaleFactor(VR_SCALE);
 
 const settings = loadSettings();

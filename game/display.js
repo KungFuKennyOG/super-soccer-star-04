@@ -2,7 +2,7 @@
 // PS1 vertex wobble, which depends on whether you're in the headset.
 import { PS1 } from './ps1.js';
 
-export const LINES = 480;          // browser render height: a little chunky, clearly readable
+export const LINES = 480;          // the PS1 wobble's grid in the browser (the picture itself is now drawn at full resolution)
 const SETTINGS_KEY = 'sss96.settings';
 
 // difficulty (0 normal, 1 hard, 2 legend: DIFFICULTY in rules/tuning.js; HARD by default since Kenny found
@@ -31,10 +31,11 @@ export function applyWobble(renderer, settings) {
   PS1.affine.value = w === 0 || (vr && w < 2) ? 0 : 1;
 }
 
-// The browser renders at LINES lines, scaled up with hard pixels.
+// The browser renders at the screen's own resolution (up to 2x pixel density). It was LINES lines scaled up
+// with hard pixels for the PS1 look; Kenny asked for more resolution with the '04 one.
 export function lowRes(renderer, settings) {
   if (renderer.xr.isPresenting) return;
-  renderer.setPixelRatio(LINES / innerHeight);
+  renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 2));
   renderer.setSize(innerWidth, innerHeight, false);
   applyWobble(renderer, settings);
 }
