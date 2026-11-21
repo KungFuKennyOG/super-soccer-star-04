@@ -155,7 +155,8 @@ step (5.5 cm), every timing after the ball is in his hands, the head.
   stance 44 to 52 cm.
 - Standing saves: both palms 0.4 to 0.5 cm from the ball's surface when they meet it and on the sim's save frame;
   hips 2.0 m/s at most, hands 6.6 m/s at most (before: a 23 cm jump in one frame in the scoop); wrists 30 degrees at
-  most, 40 for the W; no arm more than 3 cm inside his body in any of the eleven.
+  most, 41 for the W and 35 for the chest-high parry; no arm more than 3 cm inside his body in any of them (2.6 cm at
+  most, the low parry).
 
 ### Short of real
 
