@@ -6,7 +6,7 @@ import { ps1 } from './ps1.js';
 import { SKINS, HAIRS, blobTex, arrowTex } from './tex.js';
 import { playerAtlas } from './atlas.js';
 import { buildBody, restPose } from './body.js';
-import { animateKeeper } from './keeperpose.js';
+import { animateKeeper, keeperRuns, keeperRan } from './keeperpose.js';
 import { strideRate } from '../rules/dribble.js';
 import { poseStrike, poseTouch, poseHold } from './strike.js';
 import { faceBody, poseLegs, leanHips } from './gait.js';
@@ -52,7 +52,9 @@ export function buildYou(kit, boots = 0) {
 // ball: the sim ball, for the keeper and for the boot to meet; onBall: he has it at his feet.
 // The boot that does the work is the right one, or the left for a left-footed player (below).
 export function animate(m, p, dt, t, celebrate, guide = null, ball = null, onBall = false) {
-  if (m.foot !== 'L' || p.role === 'gk' || m.firstPerson) return pose(m, p, dt, t, celebrate, guide, ball, onBall);
+  // the keeper has his own (game/keeperpose.js), except when he runs off his line flat out
+  if (p.role === 'gk') { if (!keeperRuns(m, p)) animateKeeper(m, p, dt, t, ball); else { pose(m, p, dt, t, false, null, ball, false); keeperRan(m, dt); } return; }
+  if (m.foot !== 'L' || m.firstPerson) return pose(m, p, dt, t, celebrate, guide, ball, onBall);
   // A left-footed player (m.foot 'L', game/squad.js) is posed as his right-footed twin in a mirror standing
   // on the pitch's long axis (x → -x: his place, velocity, facing, the ball, a strike's direction), then the
   // pose is mirrored back onto him. So every touch, strike and pass is his left boot's, and nothing that puts
@@ -84,7 +86,6 @@ function mirrorPose(bn) {
 
 function pose(m, p, dt, t, celebrate, guide, ball, onBall) {
   const bn = m.bone;
-  if (p.role === 'gk') { animateKeeper(m, p, dt, t, ball); return; }
   restPose(bn);
   if (m.bigHead) bn.head.scale.setScalar(1.65);           // the big-heads cheat (locker)
   const s = Math.hypot(p.vx, p.vz);

@@ -9,6 +9,7 @@ import { ATLAS, HEAD_SHEET, R, paintKit } from './kit.js';
 import { paintHead } from './face.js';
 import { HAIR2 } from './headgeo.js';
 import { figureGeometry } from './figure.js';
+import { paintGloves } from './gloves.js';
 import { canvas, hex, smoothTex } from './paint.js';
 
 export const LIGHT_DIR = new THREE.Vector3(-0.45, 1, 0.35).normalize();   // toward the sun
@@ -23,7 +24,11 @@ export function kitSheet({ kit, num, skinI = 0, boots = 0 }) {
   const c = canvas(ATLAS.w, ATLAS.h), ctx = c.getContext('2d', { willReadFrequently: true });
   ctx.fillStyle = '#000'; ctx.fillRect(0, 0, ATLAS.w, ATLAS.h);
   paintKit(ctx, { kit, num, skin: skinOf(skinI), boots });
+  if (kit.gloves) paintGloves(ctx, kit, +num || 0);                   // a keeper's kit (rules/teams.js keeperKit): his gloves go where the unused neck patch was
   const m = new THREE.MeshPhongMaterial({ map: smoothTex(c), vertexColors: true, specular: 0x2b2a27, shininess: 10 });   // a low, broad highlight: the soft sheen
+  // both sides are drawn: sleeves and the legs of the shorts are open at their hems, and with an arm raised you looked
+  // up a sleeve and straight through it (Kenny: "whys the inside transparent?"). The inside is the cloth in shade.
+  m.side = THREE.DoubleSide;
   // loose cloth (the legs of the shorts and the sleeves toward their hems, `aLoose` on the geometry) is pushed
   // about by game/sway.js: uCloth is where the air and his own jolts carry it (m, his own space), uFlap how far
   // it flutters and where in the flutter it is. Only the side facing away from the push moves, and only outward,
@@ -37,6 +42,7 @@ export function kitSheet({ kit, num, skinI = 0, boots = 0 }) {
         float flap = 0.5 + 0.5 * sin(uFlap.y + position.y * 37.0 + position.x * 19.0 + position.z * 13.0);
         transformed += aLoose * (uCloth * lee + objectNormal * uFlap.x * flap * (0.35 + 0.65 * lee));
       }`);
+    sh.fragmentShader = sh.fragmentShader.replace('#include <dithering_fragment>', '#include <dithering_fragment>\n  if (!gl_FrontFacing) gl_FragColor.rgb *= 0.42;');
   };
   sheets.set(key, m);
   return m;
@@ -101,7 +107,7 @@ function looseness(geo) {
 // kit: a kit spec from rules/teams.js. look picks skin, hair color and (unless given) the hairstyle.
 export function buildPlayer2(kit, num, look = 0, { style = [0, 2, 1, 0, 4, 0, 3, 2][look % 8], boots = 0, skinI = look, hairI = look * 3 + 1 } = {}) {
   const mats = [kitSheet({ kit, num, skinI, boots }), headSheet({ look, style, skinI, hairI })];
-  const { bones, by } = buildSkeleton(), geo = figureGeometry(style);
+  const { bones, by } = buildSkeleton(), geo = figureGeometry(style, !!kit.gloves);
   if (!geo.attributes.aLoose) geo.setAttribute('aLoose', looseness(geo));
   const mesh = new THREE.SkinnedMesh(geo, mats);
   mesh.add(bones[0]); mesh.updateMatrixWorld(true); mesh.bind(new THREE.Skeleton(bones)); mesh.frustumCulled = false;

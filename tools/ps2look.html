@@ -43,6 +43,9 @@ import { buildStand, buildSky } from '../game/ps2/stand.js';
 import { CLIPS, sampleStride, applyPose, newPose } from '../game/mocap.js';
 import { createWorld, stepSim } from '../rules/sim.js';
 import { sampleKick } from '../game/kickcap.js';
+import { keeperLog, buildGoal, parseKeepShot, KEEP_SHOTS, toPage } from './keeplook.js';
+import { heldBall } from '../game/keeperpose.js';
+import { sampleOnce } from '../game/keepercap.js';
 
 const q = new URLSearchParams(location.search);
 let shot = q.get('shot') || 'duel';
@@ -196,6 +199,37 @@ for (const name of Object.keys(TRICKS)) {
   const at = t => rowAt(name, t).p, side = { trick: name, fov: 30, cam: t => [at(t).x + 0.9, 1.0, at(t).z + 4.6], at: t => [at(t).x + 0.3, 0.9, at(t).z], set: () => one(null) };
   SHOTS[name] = side; SHOTS[name + 'front'] = { ...side, cam: t => [at(t).x + 4.8, 1.05, at(t).z + 0.7], at: t => [at(t).x, 0.9, at(t).z] };
 }
+// keeper shots (tools/keeplook.js): the real sim plays a shot; the keeper (his own model) and the shooter are posed from it
+let keeper = null;
+const klogs = {};
+for (const n of KEEP_SHOTS) SHOTS[n] = { keep: parseKeepShot(n), warm: 4 };
+function keepPose(s, t, dt) {
+  if (!keeper) { keeper = buildPlayer2(keeperKit(MAD), 1, 6, { style: 0, skinI: 2, hairI: 0 }); scene.add(keeper.root, keeper.shadow, buildGoal()); }
+  const key = s.keep.setup + location.search, log = klogs[key] ??= keeperLog(s.keep.setup, q), now = Math.max(0, Math.min(log.length - 1, Math.round(t / SIM)));
+  if (now < played) { played = now - 1; keeper.sv = keeper.split = keeper.kf = keeper.off = keeper.kBlend = keeper.kLast = undefined; keeper.saveId = undefined; keeper.sway = null; }
+  const map = o => { const [x, z] = toPage.P(o.x, o.z), [vx, vz] = [-o.vz, o.vx]; return { x, z, vx, vz, fx: -(o.fz ?? 0), fz: o.fx ?? 1 }; };
+  const sh = players[0].m;
+  while (played < now) {
+    played++;
+    for (const e of log[played].ev) {
+      if (e.type === 'windup') { startStrike(sh, { kind: e.kind, wind: e.t, dir: { x: -e.dir.z, z: e.dir.x }, power: e.power }); if (e.kind === 'shot') keeper.split = 0; }
+      if (e.type === 'kick' && e.by === 'you') { const b = log[played].ball, l = Math.hypot(b.vx, b.vz) || 1; struck(sh, 'shot', { x: -b.vz / l, z: b.vx / l }, e.power || 0.8); }
+    }
+  }
+  const row = log[now], g = row.gk, gp = { ...map(g), role: 'gk', save: g.save, dive: g.dive, holding: g.holding }, b = row.ball;
+  bp.x = -b.z; bp.z = b.x + toPage.MZ; bp.y = b.y; bp.vx = -b.vz; bp.vz = b.vx; bp.vy = b.vy;
+  placeModel(keeper, gp); animate(keeper, gp, dt, t, false, null, bp, false);
+  keeper.shadow.position.set(keeper.root.position.x - LIGHT_DIR.x * 0.12, 0.01, keeper.root.position.z - LIGHT_DIR.z * 0.12);
+  const yp = { ...map(row.you), role: 'mate', stride: row.you.stride };
+  if (Math.hypot(yp.vx, yp.vz) < 0.3) { yp.fx = 1; yp.fz = 0; }
+  players.forEach(({ m }, i) => { m.root.visible = m.shadow.visible = i === 0; });
+  placeModel(sh, yp); animate(sh, yp, dt, t, false, null, bp, row.owner === 'you');
+  sh.shadow.position.set(yp.x - LIGHT_DIR.x * 0.12, 0.01, yp.z - LIGHT_DIR.z * 0.12);
+  const bw = new THREE.Vector3(bp.x, bp.y, bp.z);
+  heldBall(keeper, bw);                                       // in his gloves when he has it (as game/main.js draws it)
+  ball.position.copy(bw);
+  const v = s.keep.view; camera.fov = v.fov; camera.aspect = W / H; camera.updateProjectionMatrix(); camera.position.set(...v.cam); camera.lookAt(...v.at);
+}
 const val = (v, t) => (typeof v === 'function' ? v(t) : v);
 // the carrier's stride and his touches are the sim's own (strides: a 'dribble' event on the touch frame); the ball is where the sim's carry puts it
 const DW = { players: [], owner: 'you', dead: false, wind: null }, rollQ = new THREE.Quaternion(), rollAxis = new THREE.Vector3();
@@ -231,6 +265,7 @@ const bX = t => reelX(t, BURST, -9);
 let time = +(q.get('t') || 0);
 const RAW = CLIPS[q.get('raw')], rawPose = Object.assign(newPose(), { a: new Float32Array(6) });
 function pose(t, dt) {
+  if (SHOTS[shot].keep) return keepPose(SHOTS[shot], t, dt);
   const s = SHOTS[shot], set = s.set(t), b = s.trick ? [0, 0] : val(s.ball, t);
   if (b) { bp.x = b[0]; bp.z = b[1]; bp.y = b[2] ?? 0.11; ball.position.set(bp.x, bp.y, bp.z); ball.rotation.set(t * 9, 0.4, t * 3); }
   if (s.trick) {
@@ -267,7 +302,7 @@ function pose(t, dt) {
     else if (p.stride === null) p.stride = d[4] + t * strideRate(d[3]); else p.stride += dt * strideRate(d[3]);   // his stride turns over with his speed
     placeModel(m, p);
     animate(m, p, dt, t + i, !!(s.cheer && s.cheer(t)), null, i === k?.who ? at : bp, !!d[7]);
-    if (RAW) applyPose(m.bone, RAW.kind === 'kick' ? sampleKick(RAW, t - hitAt, rawPose) : sampleStride(RAW, RAW.kind === 'loop' ? (t + i * 1.7) / RAW.period * Math.PI * 2 : p.stride, rawPose));        // ?raw=clip: the captured stride alone, nothing over it
+    if (RAW) applyPose(m.bone, RAW.kind === 'kick' ? sampleKick(RAW, t - hitAt, rawPose) : RAW.kind === 'once' ? sampleOnce(RAW, t, rawPose) : sampleStride(RAW, RAW.kind === 'loop' ? (t + i * 1.7) / RAW.period * Math.PI * 2 : p.stride, rawPose));        // ?raw=clip: the captured stride alone, nothing over it
     m.shadow.position.set(p.x - LIGHT_DIR.x * 0.12, 0.01, p.z - LIGHT_DIR.z * 0.12);
   });
   for (const el of document.querySelectorAll('.bar')) el.style.display = shot === 'wide' ? 'block' : 'none';
@@ -275,7 +310,7 @@ function pose(t, dt) {
   camera.position.set(...val(s.cam, t)); camera.lookAt(...val(s.at, t));
 }
 // poses ease in over time (speed, lean, the head's turn), so a still is run up to, not jumped to (a shot's `warm`: for how many seconds)
-function warm() { for (const pl of players) { pl.p.stride = null; pl.m.gait = pl.m.strike = pl.m.special = pl.m.trick = null; pl.m.sway = null; pl.m.kickK = pl.m.onBallK = pl.m.cheerK = pl.m.driveT = 0; } for (let k = Math.round((SHOTS[shot].warm || 1.5) * 60); k >= 0; k--) pose(time - k / 60, 1 / 60); }   // (the last step is the moment itself: a still of the frame a ball is struck on is that frame)
+function warm() { for (const pl of players) { pl.p.stride = null; pl.m.gait = pl.m.strike = pl.m.special = pl.m.trick = null; pl.m.sway = null; pl.m.kickK = pl.m.onBallK = pl.m.cheerK = pl.m.driveT = 0; } played = 1e9; for (let k = Math.round((SHOTS[shot].warm || 1.5) * 60); k >= 0; k--) pose(time - k / 60, 1 / 60); }   // (the last step is the moment itself: a still of the frame a ball is struck on is that frame)
 function frame(dt) {
   time += dt; pose(time, dt); renderer.render(scene, camera);
   document.getElementById('i').textContent = q.get('info') ? `${shot}  calls ${renderer.info.render.calls}  tris ${renderer.info.render.triangles}` : '';

@@ -1,210 +1,238 @@
-// The goalkeeper's body. The sim says what he's doing (p.save { y, kind, id, eta } when he goes for a shot,
-// p.dive -1 / 0 / 1 for which way, p.holding); this poses it.
+// The goalkeeper's body (Nov 2026 rebuild, on goalkeeping coaching and a capture: docs/notes-keeper-anim.md).
+// The sim says what he's doing (p.save { y, kind, id, eta } when he goes for a shot, p.dive -1 / 0 / 1 for which
+// way, p.holding); this poses it, on the PS1 body and the '04 body alike (the same skeleton).
 //
-//   stance       crouched and square to the ball, weight forward, arms out; side-steps instead of
-//                running; stands taller and looser while the ball is far away
-//   split step   a little hop as the shot is struck, landing wide and ready (m.split, set on a kick)
-//   dive         load, spring, fly flat (low shots) or up and across (high ones) with the hands leading,
-//                land on his side, then a catch gathered into the chest or a parry pushed away, and
-//                back up through one knee
-//   standing     a shot straight at him: scoop it (low), take it into the chest, or catch it overhead
+//   set          feet a little wider than his shoulders, weight forward on the balls of the feet (heels just up),
+//                knees bent, trunk leaned so his nose is over his toes, hands out in front at waist height, palms
+//                to the ball, elbows narrow; taller and looser while the ball is far away
+//   shuffle      his feet grip the grass: each is planted where it lands (world space) and steps when the body has
+//                left it behind, the lead foot first, never crossing; low, short, quick steps
+//   split step   as a shot is struck: a small hop, landing wider and lower on the balls of his feet (m.split)
+//   saves        game/keepersave.js: dives and standing saves, and up off the grass afterwards
+//   holding      the ball held to his chest, a palm either side of it
+//   running      off his line flat out for a loose ball he runs like anyone else (keeperRuns: game/actors.js)
+// Springs for weight (game/sway.js) work on him as on the others. Nothing goes under the grass (keepAboveGrass).
+import * as THREE from 'three';
 import { restPose } from './body.js';
+import { reachLeg, aimFoot } from './legik.js';
+import { sway } from './sway.js';
+import { placeHands, lookAt, keepAboveGrass, grip, ankleFor } from './keeperhands.js';
+import { startSave, poseSave, chestPoint } from './keepersave.js';
+import { BONES } from './mocap.js';
 
-const D = { load: 0.1, fly: 0.48, land: 0.62, ground: 1.15, kneel: 1.5, end: 1.85 };
-const STAND = 0.95, STAND_TOUCH = 0.22;
-// the ball held against his chest: upper arms down and in, forearms folded up across
-const HUG = { up: -0.55, in: 0.32, fore: -1.7 };
-function hug(bn, k) {
-  bn.upperArmL.rotation.set(HUG.up * k, 0, -HUG.in * k); bn.upperArmR.rotation.set(HUG.up * k, 0, HUG.in * k);
-  bn.foreArmL.rotation.x = bn.foreArmR.rotation.x = HUG.fore * k;
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v)), mix = (a, b, k) => a + (b - a) * k;
+const ease = x => { x = clamp(x, 0, 1); return x * x * (3 - 2 * x); };
+export const SET = {
+  // the set position as it is coached (m, rad): feet shoulder width, knees a little bent, on the balls of the feet,
+  // weight forward (nose in front of the toes), chest to the ball, elbows narrow and bent, hands in front of the
+  // body a ball's width apart, open and relaxed. Not a deep or wide squat.
+  hips: 0.85, hipsFar: 0.9, pitch: 0.36, width: 0.44, ahead: 0.05, heel: 0.1, toeOut: 0.12, kneeOut: 0.08,
+  hands: [0.15, 0.2, 0.38],                                                                // palms: out, above the hips, ahead (m, in the hips' own tilted frame)
+  step: { thr: 0.07, still: 0.11, time: [0.22, 0.17], lift: 0.05, gap: 0.27, rise: 0.05 },   // (lift, gap, rise and the quick time: measured from a recorded defensive slide, see the notes)                        // when a foot steps, how quick (slow, fast), how high
+  split: { hop: 0.07, land: 0.17, up: 0.03, wide: 0.08, sink: 0.04 },                       // s, s, m, m, m
+  recover: 1.8, run: 4.2,                                                                  // m/s back to his spot after a save; faster than this he runs
+};
+const V = (x, y, z) => new THREE.Vector3(x, y, z), tmp = new THREE.Vector3(), tq = new THREE.Quaternion(), te = new THREE.Euler();
+
+// Whether he's running (off his line for a loose ball): then he's posed as any runner is (game/actors.js).
+export function keeperRuns(m, p) {
+  const run = !m.sv && !p.holding && Math.hypot(p.vx, p.vz) > SET.run;
+  if (run !== (m.kState === 'run')) blendFrom(m, run ? 0.2 : 0.25);
+  if (run) { m.kState = 'run'; m.kf = null; m.off = null; }
+  return run;
 }
-const clamp01 = x => Math.max(0, Math.min(1, x));
-const ease = x => { x = clamp01(x); return x * x * (3 - 2 * x); };
-const mix = (a, b, k) => a + (b - a) * k;
 
-// ball: the sim ball (for how alert he is). Call instead of the outfield animation.
+// ball: the sim ball. Call instead of the outfield animation (after placeModel).
 export function animateKeeper(m, p, dt, t, ball) {
   const bn = m.bone;
   restPose(bn);
   if (m.bigHead) bn.head.scale.setScalar(1.65);
   // a new save attempt: latch it so the move plays out even after the sim has moved on
-  if (p.save && !m.save && p.save.id !== m.saveId) {
-    // timed so his hands get there when the ball does (eta from the sim), within reason
-    const touch = p.dive ? D.fly - 0.06 : STAND_TOUCH, eta = p.save.eta ?? touch;
+  if (p.save && !m.sv && p.save.id !== m.saveId) {
+    placeRoot(m, p, 0);
+    if (!m.kf) plantFeet(m);
     m.saveId = p.save.id;
-    m.save = { ...p.save, dir: p.dive || 0, t: 0, stand: !p.dive, touch, rate: Math.max(0.55, Math.min(2.4, touch / Math.max(0.12, eta))) };
+    m.sv = startSave(m, p, ball, m.root);
+    blendFrom(m, 0.06);
+  } else if (p.holding && !m.wasHolding && !m.sv && ball) {
+    // he gathers a loose ball: a quick scoop from where it is
+    placeRoot(m, p, 0);
+    if (!m.kf) plantFeet(m);
+    m.sv = startSave(m, { save: { id: 'claim', kind: 'catch', y: ball.y, eta: 0.12 }, dive: 0 }, null, m.root);
+    m.sv.c = toLocal(m, ball, V(0, 0, 0)); m.sv.c.y = Math.max(0.13, m.sv.c.y); m.sv.reach = m.sv.c; m.sv.grip = 'scoop'; m.sv.T = 0.16;
+    blendFrom(m, 0.15);
   }
-  if (m.save) {
-    const s = m.save;
-    s.t += dt * (s.t < s.touch ? s.rate : 1);
-    const live = m.save.stand ? standSave(bn, m.save, p) : dive(bn, m.save, p);
-    if (live) return;
-    m.save = null;
+  m.wasHolding = !!p.holding;
+  if (m.sv) {
+    m.root.position.copy(m.sv.O); m.root.rotation.y = m.sv.Y;
+    if (poseSave(m, p, dt, ball)) { finish(m, 'save', dt, p); return; }
+    // done: from where he's got to back toward his spot, stepping
+    m.root.updateMatrixWorld(true);
+    const hw = bn.hips.getWorldPosition(V(0, 0, 0));
+    m.off = V(hw.x - p.x, 0, hw.z - p.z); m.yawOff = m.sv.Y - Math.atan2(p.fx, p.fz);
+    m.yawOff -= Math.round(m.yawOff / (Math.PI * 2)) * Math.PI * 2;
+    m.sv = null; m.kf = null;
+    blendFrom(m, 0.3);
     restPose(bn);
-    if (m.bigHead) bn.head.scale.setScalar(1.65);
   }
   stance(m, p, dt, t, ball);
+  finish(m, p.holding ? 'hold' : 'set', dt, p);
 }
+
+// His root: the sim's spot, plus what is left of the way back from a save, turned to the ball.
+function placeRoot(m, p, dt) {
+  if (m.off) {
+    const l = Math.hypot(m.off.x, m.off.z), k = l > 1e-4 ? Math.max(0, l - SET.recover * dt) / l : 0;
+    m.off.multiplyScalar(k); if (l * k < 0.01) m.off = null;
+  }
+  if (m.yawOff) { m.yawOff *= Math.exp(-dt * 5); if (Math.abs(m.yawOff) < 1e-3) m.yawOff = 0; }
+  m.root.position.set(p.x + (m.off ? m.off.x : 0), 0, p.z + (m.off ? m.off.z : 0));
+  m.root.rotation.y = Math.atan2(p.fx, p.fz) + (m.yawOff || 0);
+}
+const toLocal = (m, w, out) => { m.root.updateMatrixWorld(true); return m.root.worldToLocal(out.set(w.x, w.y, w.z)); };
+const toWorldPt = (m, v, out) => { m.root.updateMatrixWorld(true); return m.root.localToWorld(out.copy(v)); };
+// feet where the set position puts them, planted (world)
+function plantFeet(m) {
+  m.kf = {};
+  for (const [n, sd] of [['L', 1], ['R', -1]]) m.kf[n] = { p: toWorldPt(m, V(sd * SET.width / 2, 0, SET.ahead), V(0, 0, 0)), air: null };
+}
+
+// Swings a knee out (or in) round the line from hip to ankle, so the foot stays where it is.
+const kq = new THREE.Quaternion(), kv = new THREE.Vector3();
+function kneeOut(bn, n, a) {
+  const up = bn['upperLeg' + n], lo = bn['lowerLeg' + n], ft = bn['foot' + n];
+  kv.copy(ft.position).applyQuaternion(lo.quaternion).add(lo.position).applyQuaternion(up.quaternion).normalize();
+  up.quaternion.premultiply(kq.setFromAxisAngle(kv, -a));
+}
+
+/* ---------- the set position and the shuffle ---------- */
 
 function stance(m, p, dt, t, ball) {
   const bn = m.bone;
-  const rx = p.fz, rz = -p.fx;                                       // his right, from his facing
-  const lateral = p.vx * rx + p.vz * rz, fwd = p.vx * p.fx + p.vz * p.fz, side = Math.min(1, Math.abs(lateral));
-  const far = ball ? clamp01((Math.hypot(ball.x - p.x, ball.z - p.z) - 18) / 10) : 0;   // 1 = ball far away: relax
-  m.shuffle = (m.shuffle || 0) + dt * Math.abs(lateral) * 3.4;
-  const step = Math.sin(m.shuffle);
-  const crouch = mix(1, 0.35, far);
-  // split step as the shot is struck: up on the toes, down wide
-  let hop = 0, wide = 0;
-  if (m.split !== undefined && m.split < 0.32) { m.split += dt; const k = m.split / 0.32; hop = Math.sin(Math.PI * Math.min(1, k * 1.6)) * 0.06; wide = ease(k) * 0.08; }
-  bn.hips.position.y += -0.13 * crouch - 0.025 * Math.abs(Math.cos(m.shuffle)) * side + hop;
-  bn.hips.rotation.z = 0.05 * step * side;
-  bn.spine.rotation.x = 0.34 * crouch + 0.04; bn.neck.rotation.x = -0.27 * crouch;
-  // side-step: the leading leg opens, the trailing one closes up to it
-  const spread = 0.15 + wide + 0.16 * Math.max(0, step) * side;
-  const lead = Math.sign(lateral) || 1;
-  bn.upperLegL.rotation.set(-0.44 * crouch - fwd * 0.08, 0, spread * (lead > 0 ? 1.2 : 0.8));
-  bn.upperLegR.rotation.set(-0.44 * crouch - fwd * 0.08, 0, -spread * (lead < 0 ? 1.2 : 0.8));
-  bn.lowerLegL.rotation.x = bn.lowerLegR.rotation.x = 0.78 * crouch + 0.05;
-  bn.footL.rotation.x = bn.footR.rotation.x = -0.32 * crouch;
-  if (p.holding) {
-    hug(bn, 1);
-    bn.spine.rotation.x = 0.12; bn.hips.position.y += 0.09;
+  placeRoot(m, p, dt);
+  if (!m.kf) plantFeet(m);
+  const far = ball ? clamp((Math.hypot(ball.x - p.x, ball.z - p.z) - 18) / 10, 0, 1) : 0, hold = p.holding ? 1 : 0;
+  const v = V(p.vx, 0, p.vz), sp = v.length();
+  // split step: up off the grass a little, down wider and lower
+  let up = 0, wide = 0, sink = 0;
+  if (m.split !== undefined && m.split < SET.split.land + 0.25) {
+    m.split += dt;
+    const S = SET.split, a = m.split;
+    up = a < S.hop ? Math.sin(Math.PI * a / S.hop) * S.up : 0;
+    wide = ease((a - S.hop * 0.5) / (S.land - S.hop * 0.5)) * S.wide * (1 - ease((a - 0.5) / 0.4));
+    sink = Math.sin(Math.PI * clamp((a - S.hop) / (S.land + 0.2 - S.hop), 0, 1)) * S.sink;
+    if (a >= S.hop && a - dt < S.hop) for (const n of ['L', 'R']) m.kf[n].air = null;     // he lands: replanted below
+  }
+  // the feet: each stays where it is planted until the body has left it behind, then steps (the lead foot first)
+  const width = mix(SET.width, 0.3, hold) + wide, home = {}, lead = sp > 0.3 ? Math.sign(toLocal(m, { x: p.x + v.x, y: 0, z: p.z + v.z }, tmp).x - toLocal(m, { x: p.x, y: 0, z: p.z }, V(0, 0, 0)).x) : 0;
+  for (const [n, sd] of [['L', 1], ['R', -1]]) home[n] = toWorldPt(m, V(sd * width / 2, 0, SET.ahead), V(0, 0, 0));
+  const S = SET.step, T = mix(S.time[0], S.time[1], clamp(sp / 3, 0, 1));
+  const busy = m.kf.L.air || m.kf.R.air;
+  if (!busy || sp > 2.4) {
+    let pick = null, worst = sp > 0.2 ? S.thr : S.still;
+    for (const [n, sd] of [['L', 1], ['R', -1]]) {
+      const f = m.kf[n]; if (f.air) continue;
+      const e = f.p.distanceTo(tmp.copy(home[n]).addScaledVector(v, T * 0.5)) + (sd === lead ? 0.03 : 0);
+      if (e > worst) { worst = e; pick = n; }
+    }
+    if (pick) { const f = m.kf[pick]; f.air = { from: f.p.clone(), t: 0, T }; m.phase = (m.phase || 0) + Math.PI; }
+  }
+  const at = {};
+  for (const n of ['L', 'R']) {
+    const f = m.kf[n];
+    let lift = 0;
+    if (f.air) {
+      f.air.t += dt;
+      const u = Math.min(1, f.air.t / f.air.T), to = tmp.copy(home[n]).addScaledVector(v, (f.air.T - f.air.t) * 0.5 + 0.04);
+      f.p.copy(f.air.from).lerp(to, ease(u)); lift = Math.sin(Math.PI * u) * (S.lift + 0.02 * Math.min(sp, 3));
+      if (u >= 1) f.air = null;
+    }
+    if (up) lift += up;
+    at[n] = toLocal(m, f.p, V(0, 0, 0));
+    // feet never cross: the left stays on his left
+    if (n === 'R' && at.R.x > at.L.x - S.gap) at.R.x = at.L.x - S.gap;
+    at[n].y = ankleFor(lift > 0.015 ? 0.35 : SET.heel * (1 - hold)) + lift;
+  }
+  // hips: low in the set, riding up a little as he pushes across (the recorded slide rises 10 cm and more between its stops), up and loose when the ball is far; never higher than the legs reach
+  const H = mix(mix(SET.hips, SET.hipsFar, far), 0.9, hold) - sink + Math.min(S.rise, sp * 0.022) + up + 0.005 * Math.sin(t * 2.3 + (m.phase || 0) * 0.1);
+  const mid = at.L.clone().add(at.R).multiplyScalar(0.5);
+  bn.hips.position.set(mid.x * 0.6, H, mid.z * 0.4 - mix(0.09, 0.03, Math.max(hold, far)));   // sat back a little: bent forward, his weight stays over the balls of his feet
+  const reach = 0.86;
+  for (const [n, sd] of [['L', 1], ['R', -1]]) {
+    const dx = at[n].x - (bn.hips.position.x + sd * 0.09), dz = at[n].z - bn.hips.position.z, dh = Math.hypot(dx, dz);
+    bn.hips.position.y = Math.min(bn.hips.position.y, at[n].y + 0.02 + Math.sqrt(Math.max(0.01, reach * reach - dh * dh)));
+  }
+  const weight = clamp((at.L.y - at.R.y) * 4, -1, 1);                  // over the planted foot
+  bn.hips.rotation.set(mix(SET.pitch, 0.08, hold) * mix(1, 0.55, far), 0, -weight * 0.05);
+  bn.spine.rotation.set(mix(0.16, 0.02, hold) * mix(1, 0.5, far), 0, weight * 0.04); bn.chest.rotation.set(mix(0.1, 0.03, Math.max(hold, far)), 0, 0);
+  for (const [n, sd] of [['L', 1], ['R', -1]]) {
+    reachLeg(bn, n, at[n]);
+    kneeOut(bn, n, sd * SET.kneeOut * (1 - hold));
+    aimFoot(bn, n, tq.setFromEuler(te.set(m.kf[n].air || up > 0.015 ? 0.35 : SET.heel * (1 - hold), sd * SET.toeOut, 0)));
+  }
+  // weight: springs on the trunk and arms (before the hands are put where they go)
+  sway(m, bn, p, dt, { mv: 0.6, run: 0 });
+  if (hold) {
+    // the ball held to his chest
+    const b = chestPoint(bn, V(0, 0, 0)); b.y -= 0.04;
+    placeHands(bn, grip('sides', b, 1), 1, 1, 0.2);
+    m.held = b;
+    lookAt(bn, V(0, 1.6, 12), 0.6);
     return;
   }
-  // hands out in front, palms to the ball, a little alive; looser when it's far away
-  const twitch = 0.07 * Math.sin(t * 3.1 + m.phase);
-  bn.upperArmL.rotation.set(mix(-0.8, -0.15, far), 0, mix(0.38, 0.22, far) + twitch);
-  bn.upperArmR.rotation.set(mix(-0.8, -0.15, far), 0, -mix(0.38, 0.22, far) - twitch);
-  bn.foreArmL.rotation.x = bn.foreArmR.rotation.x = mix(-1.05, -0.35, far);
-  bn.handL.rotation.x = bn.handR.rotation.x = -0.3 * (1 - far);
+  m.held = null;
+  // hands out in front at waist height, palms to the ball, a little alive; lower and looser when it's far away
+  const tb = ball ? toLocal(m, ball, V(0, 0, 0)) : V(0, 1, 10), g = {};
+  for (const [n, sd] of [['L', 1], ['R', -1]]) {
+    const palm = V(sd * mix(SET.hands[0], 0.24, far), SET.hands[1] - 0.12 * far + 0.01 * Math.sin(t * 3.1 + sd), mix(SET.hands[2], 0.26, far)).applyQuaternion(bn.hips.quaternion).add(bn.hips.position);
+    // the hands hang ready off bent elbows: fingers forward and a little down, palms turned in toward each other and
+    // half to the ball, wrists straight (palms square to the ball with the fingers up folded the wrists right back)
+    const N = V(-sd * 0.75, -0.25, 0.6).lerp(V(-sd, -0.1, 0.1), far).normalize(), F = V(sd * 0.12, mix(-0.3, -0.75, far), 1).normalize();
+    g[n] = { palm, N, F: F.addScaledVector(N, -F.dot(N)).normalize() };
+  }
+  placeHands(bn, g, 1, 0.55, 0.9);                                      // elbows narrow
+  lookAt(bn, tb, 0.9);
 }
 
-// A dive. dir: which way (world x, his left when facing up the pitch), y: the height he goes for.
-// Returns false once he's back on his feet.
-function dive(bn, s, p) {
-  const t = s.t, dir = s.dir, high = clamp01((s.y - 0.55) / 1.4), catching = s.kind === 'catch';
-  const lead = dir > 0 ? 'L' : 'R', trail = dir > 0 ? 'R' : 'L', sz = dir > 0 ? 1 : -1;   // arm z sign: + raises the left arm
-  if (t > D.end) return false;
-  let roll, lift, reach, kneel = 0;
-  if (t < D.load) {
-    // load: sink and push off the near leg
-    // load: from his ready crouch, sink lower and push off the near leg
-    const f = t / D.load;
-    roll = -0.08 * f; lift = -0.13 - 0.07 * f; reach = 0;
-    bn.upperLegL.rotation.x = bn.upperLegR.rotation.x = -0.44 - 0.12 * f;
-    bn.lowerLegL.rotation.x = bn.lowerLegR.rotation.x = 0.83 + 0.2 * f;
-    bn.spine.rotation.x = 0.3;
-  } else if (t < D.fly) {
-    // flight: the body lays over toward the ball, higher and more upright for a high one
-    const f = (t - D.load) / (D.fly - D.load);
-    roll = mix(1.5, 1.05, high) * ease(f * 1.3);
-    lift = -0.16 + Math.sin(f * Math.PI) * mix(0.22, 0.7, high) + (mix(-0.72, -0.4, high)) * ease(f) * (1 - high * 0.6);
-    reach = ease(0.2 + f * 1.5);
-  } else if (t < D.land) {
-    // landing on his side, a small bounce
-    const f = (t - D.fly) / (D.land - D.fly);
-    roll = mix(mix(1.5, 1.05, high), 1.5, ease(f)); lift = mix(mix(-0.72, -0.4, high) * (1 - high * 0.6), -0.74, ease(f)) + Math.sin(f * Math.PI) * 0.05;
-    reach = 1 - 0.3 * f;
-  } else if (t < D.ground) {
-    roll = 1.5; lift = -0.74; reach = 0.7;
-  } else if (t < D.kneel) {
-    // roll up onto one knee
-    const f = ease((t - D.ground) / (D.kneel - D.ground));
-    roll = 1.5 * (1 - f); lift = mix(-0.74, -0.42, f); reach = 0.7 * (1 - f); kneel = f;
-  } else {
-    // and stand
-    const f = ease((t - D.kneel) / (D.end - D.kneel));
-    roll = 0; lift = -0.42 * (1 - f); reach = 0; kneel = 1 - f;
+/* ---------- moving from one thing to the next without a pop ---------- */
+
+const NB = BONES.length;
+function blendFrom(m, T) { if (m.kLast) m.kBlend = { from: m.kLast.slice(), t: 0, T }; }
+function finish(m, state, dt, p) {
+  const bn = m.bone;
+  m.kState = state;
+  applyBlend(m, dt);
+  const up = keepAboveGrass(m, !!(m.sv && m.sv.ground), m.held);
+  if (m.held) m.held.y += up;                                          // the ball goes with his hands
+  remember(m);
+  // his shadow goes where his body is
+  const h = bn.hips.getWorldPosition(tmp);
+  if (m.shadow) m.shadow.position.set(h.x + (m.shadow.position.x - p.x), m.shadow.position.y, h.z + (m.shadow.position.z - p.z));
+  m.heldW = m.held ? toWorldPt(m, m.held, m.heldW || V(0, 0, 0)) : null;
+}
+function applyBlend(m, dt) {
+  const bn = m.bone;
+  if (m.kBlend) {
+    const b = m.kBlend, k = ease((b.t += dt) / b.T);
+    for (let i = 0; i < NB; i++) { tq.fromArray(b.from, i * 4); bn[BONES[i]].quaternion.slerp(tq, 1 - k); }   // (from the old pose toward this one)
+    const hp = bn.hips.position; hp.set(mix(b.from[NB * 4], hp.x, k), mix(b.from[NB * 4 + 1], hp.y, k), mix(b.from[NB * 4 + 2], hp.z, k));
+    if (b.t >= b.T) m.kBlend = null;
   }
-  bn.hips.rotation.set(0, 0, -dir * roll);
-  bn.hips.position.y += lift;
-  bn.spine.rotation.z = -dir * 0.12 * reach; bn.neck.rotation.z = dir * 0.35 * reach;
-  if (t >= D.load) bn.spine.rotation.x = 0.1 * (1 - reach);
-  // arms: both lead along the dive, the near hand behind the ball; the high dive reaches higher
-  const up = 2.55 + 0.35 * high;
-  const lz = sz * (0.2 + up * reach), tz = sz * (0.2 + (up - 0.35) * reach);
-  // (blended from his ready hands-out pose while the dive is getting going)
-  const r = t < D.land ? ease(reach) : 1;
-  bn['upperArm' + lead].rotation.set(mix(-0.8, -0.15 * reach, r), 0, mix(sz * 0.38, lz, r));
-  bn['upperArm' + trail].rotation.set(mix(-0.8, -0.35 * reach, r), 0, mix(-sz * 0.38, tz, r));
-  bn['foreArm' + lead].rotation.x = mix(-1.05, -0.15 * (1 - reach), r);
-  bn['foreArm' + trail].rotation.x = mix(-1.05, -0.35, r);
-  // the touch: a catch gathers the ball in, a parry is a stiff-wristed push away
-  const touched = t > D.fly - 0.06;
-  if (touched && catching && t < D.kneel) {
-    // gather it in: the arms fold the ball into his chest as he lands
-    const g = ease((t - (D.fly - 0.06)) / 0.3);
-    bn['upperArm' + lead].rotation.set(mix(-0.15, HUG.up, g), 0, mix(lz, -sz * HUG.in, g));
-    bn['upperArm' + trail].rotation.set(mix(-0.35, HUG.up, g), 0, mix(tz, sz * HUG.in, g));
-    bn['foreArm' + lead].rotation.x = bn['foreArm' + trail].rotation.x = mix(-0.15, HUG.fore, g);
-    bn.spine.rotation.x += 0.25 * g;
-  } else if (catching && t >= D.kneel) hug(bn, 1);   // and keeps it there as he gets up
-  else if (touched && t < D.land + 0.1) {
-    bn['hand' + lead].rotation.z = sz * 0.6;
-    bn['hand' + lead].rotation.x = -0.5;
-  }
-  // legs: the take-off leg trails long, the other tucks a little; one knee down as he gets up
-  if (t >= D.load) {
-    const k = kneel, push = ease((t - D.load) / 0.16);           // the legs drive out of the crouch
-    bn['upperLeg' + trail].rotation.set(mix(-0.56, mix(0.05, 0.35, k), push), 0, -sz * (0.12 + 0.25 * reach));
-    bn['lowerLeg' + trail].rotation.x = mix(1.03, mix(0.18, 1.95, k), push);
-    bn['upperLeg' + lead].rotation.set(mix(-0.56, mix(-0.3 * reach, -1.45, k), push), 0, sz * 0.15 * reach);
-    bn['lowerLeg' + lead].rotation.x = mix(1.03, mix(0.5 * reach, 1.5, k), push);
-    bn['foot' + trail].rotation.x = 0.4 * k;
-  }
-  return true;
+}
+function remember(m) {
+  const bn = m.bone, last = m.kLast ??= new Float32Array(NB * 4 + 3);
+  for (let i = 0; i < NB; i++) bn[BONES[i]].quaternion.toArray(last, i * 4);
+  last[NB * 4] = bn.hips.position.x; last[NB * 4 + 1] = bn.hips.position.y; last[NB * 4 + 2] = bn.hips.position.z;
 }
 
-// A shot straight at him: scoop a low one, take a middle one into the chest, catch a high one above
-// his head. Returns false when it's done.
-function standSave(bn, s, p) {
-  const t = s.t;
-  if (t > STAND) return false;
-  const k = ease(t / 0.16) * (1 - ease((t - (STAND - 0.3)) / 0.3)), y = s.y;
-  // from his ready crouch to the save and back: pose the save fully, then blend from the ready pose by k
-  readyPose(bn);
-  const from = snapshot(bn);
-  restPose(bn);
-  if (y < 0.55) {
-    // down on one knee behind it, hands together scooping
-    bn.hips.position.y -= 0.38; bn.spine.rotation.x = 0.85; bn.neck.rotation.x = -0.6;
-    bn.upperLegL.rotation.x = -1.45; bn.lowerLegL.rotation.x = 1.5;
-    bn.upperLegR.rotation.x = 0.1; bn.lowerLegR.rotation.x = 1.9;
-    bn.upperArmL.rotation.set(-0.5, 0, -0.15); bn.upperArmR.rotation.set(-0.5, 0, 0.15);
-    bn.foreArmL.rotation.x = bn.foreArmR.rotation.x = -0.3;
-  } else if (y < 1.55) {
-    // into the chest: arms forward to meet it, then folding it in
-    const g = ease((t - (STAND_TOUCH - 0.04)) / 0.16);
-    bn.hips.position.y -= 0.08; bn.spine.rotation.x = 0.3 - 0.25 * g;
-    bn.upperLegL.rotation.x = bn.upperLegR.rotation.x = -0.3; bn.lowerLegL.rotation.x = bn.lowerLegR.rotation.x = 0.5;
-    bn.upperArmL.rotation.set(mix(-1.4, HUG.up, g), 0, -HUG.in * g); bn.upperArmR.rotation.set(mix(-1.4, HUG.up, g), 0, HUG.in * g);
-    bn.foreArmL.rotation.x = bn.foreArmR.rotation.x = mix(-0.3, HUG.fore, g);
-  } else {
-    // up for it: a spring off both feet, hands high in a W
-    bn.hips.position.y += 0.18 * Math.sin(Math.PI * clamp01(t / 0.5));
-    bn.upperLegL.rotation.x = bn.upperLegR.rotation.x = -0.15; bn.lowerLegL.rotation.x = bn.lowerLegR.rotation.x = 0.35;
-    bn.upperArmL.rotation.set(-2.7, 0, -0.15); bn.upperArmR.rotation.set(-2.7, 0, 0.15);
-    bn.foreArmL.rotation.x = bn.foreArmR.rotation.x = -0.25;
-    bn.neck.rotation.x = -0.35;
-  }
-  blendFrom(bn, from, k);
-  return true;
+// Where a ball he has hold of is drawn (world, into out): where the pose put it between his gloves; null if he
+// isn't holding one. For game/main.js holdInGloves and the look page.
+export function heldBall(m, out) {
+  if (!m.heldW) return null;
+  return out.copy(m.heldW);
 }
-
-// his ready crouch with hands out (what the stance draws close to the ball, standing still)
-function readyPose(bn) {
-  bn.hips.position.y -= 0.13; bn.spine.rotation.x = 0.38; bn.neck.rotation.x = -0.27;
-  bn.upperLegL.rotation.set(-0.44, 0, 0.18); bn.upperLegR.rotation.set(-0.44, 0, -0.18);
-  bn.lowerLegL.rotation.x = bn.lowerLegR.rotation.x = 0.83; bn.footL.rotation.x = bn.footR.rotation.x = -0.32;
-  bn.upperArmL.rotation.set(-0.8, 0, 0.38); bn.upperArmR.rotation.set(-0.8, 0, -0.38);
-  bn.foreArmL.rotation.x = bn.foreArmR.rotation.x = -1.05;
-}
-const snapshot = bn => Object.entries(bn).map(([k, b]) => [k, b.rotation.x, b.rotation.y, b.rotation.z, b.position.y]);
-function blendFrom(bn, from, k) {
-  for (const [key, x, y, z, py] of from) {
-    const b = bn[key];
-    b.rotation.set(mix(x, b.rotation.x, k), mix(y, b.rotation.y, k), mix(z, b.rotation.z, k));
-    b.position.y = mix(py, b.position.y, k);
-  }
+// called by game/actors.js after a running keeper is posed, so the next change blends from it
+export function keeperRan(m, dt) {
+  applyBlend(m, dt); remember(m);
+  m.held = m.heldW = null;
 }

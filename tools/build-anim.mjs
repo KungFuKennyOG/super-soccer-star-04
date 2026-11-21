@@ -34,6 +34,11 @@ export const CLIPS = {
   // most upright; 10_03 sits very low). Subject 74's "kick" takes are not football: front kicks at something off the ground
   // (knee chambered, toes up). 141_22 and 16_01 are not kicks at all.
   kickShot: ['11_01', 'kick'], kickPass: ['10_01', 'kick'],
+  // the keeper (game/keepercap.js): getting up off the grass after a dive, from sitting on his hip with his legs to
+  // one side, up through a crouch (140_03 'get up laying on side'; its lying still before 3.4 s is not used). 'once'
+  // plays a stretch one time through (below). Looked at and not used: 140_04 (lies on his back, sits up), 77_03
+  // 'ready stance' (hips only 2 cm down: not a keeper's set), subject 83's side-steps (single big steps from standing). 102_28 (a basketball 'defensive move side to side', the same as 78_30) is not baked: it was measured for the shuffle's numbers (docs/notes-keeper-anim.md).
+  getup: ['140_03', 'once', { from: 2.5, to: 6.6 }],
   // a 'loop' is [from, to] seconds of a capture played round and round, e.g. stand: ['137_28', 'loop', { from: 2, to: 12 }].
   // None is baked: the library's standing takes (113_21, 77_02, 141_20, 137_28) have a tilted or bowed head, fidgeting or hands on hips.
 };
@@ -219,6 +224,32 @@ function loop(name, bvh, { from, to }) {
   return { kind: 'loop', speed: 0, period: +((f1 - f0) * bvh.dt).toFixed(3), n, q, h };
 }
 
+/* ---------- once: a stretch of a capture played one time through ---------- */
+
+// [from, to] seconds at OHZ poses a second, not looped. Turned so he faces +z at `face` ('start' or 'end': the
+// pelvis's forward then), placed so the hips are over the origin then. The floor is the ankles' height over the
+// stretch's last quarter second, where he stands (the ankle, not the toe: our feet stand on it the same way).
+// The hips' path is kept (h), and so are both ankles (a: right then left, m).
+const OHZ = 30;
+function once(name, bvh, { from, to, face = 'end', floor }) {
+  const R = rig(bvh), src = newPose(bvh), f0 = Math.round(from / bvh.dt), f1 = Math.min(bvh.frames - 1, Math.round(to / bvh.dt)), fk = face === 'end' ? f1 : f0;
+  let lo = Infinity;
+  for (let f = Math.max(f0, f1 - Math.round(0.25 / bvh.dt)); f <= f1; f++) { pose(bvh, f, src); lo = Math.min(lo, src.p[R.id.LeftFoot].y, src.p[R.id.RightFoot].y); }
+  R.floor = floor ?? lo;
+  pose(bvh, fk, src);
+  const fwd = new THREE.Vector3(0, 0, 1).applyQuaternion(src.q[R.id.Hips]), yaw = Math.atan2(fwd.x, fwd.z), org = src.p[R.id.Hips].clone().setY(0);
+  const n = Math.round((f1 - f0) * bvh.dt * OHZ) + 1, A = newOut(), q = [], h = [], a = [];
+  let hy = [9, 0];
+  for (let i = 0; i < n; i++) {
+    retarget(bvh, R, pose(bvh, Math.min(f1, Math.round(f0 + i / OHZ / bvh.dt)), src), yaw, org, A);
+    for (const nm of NAMES) { const r = A.q[nm]; q.push(r.x, r.y, r.z, r.w); }
+    h.push(A.hips.x, A.hips.y, A.hips.z); a.push(A.ankleR.x, A.ankleR.y, A.ankleR.z, A.ankleL.x, A.ankleL.y, A.ankleL.z);
+    hy = [Math.min(hy[0], A.hips.y), Math.max(hy[1], A.hips.y)];
+  }
+  if (REPORT) console.log(`${name.padEnd(9)} once ${((f1 - f0) * bvh.dt).toFixed(2)} s, ${n} poses, hips ${hy[0].toFixed(3)}..${hy[1].toFixed(3)}, ends at ${h.slice(-3).map(v => v.toFixed(2)).join(', ')}`);
+  return { kind: 'once', speed: 0, hz: OHZ, n, q, h, a };
+}
+
 /* ---------- a kick: the swing through a ball ---------- */
 
 // Kept: from `lead` seconds before the contact (the plant foot's last touchdown and the top of the backswing
@@ -276,10 +307,10 @@ const clips = {};
 for (const [name, [file, kind, opt]] of Object.entries(CLIPS)) {
   // (subjects 141 and 143 were captured at 60 Hz though their files say 120: checked against gravity in their runs' flight)
   const bvh = parseBVH(await readFile(`${dir}/${file}.bvh`, 'utf8'), /^14[13]_/.test(file) ? 60 : 0);
-  try { clips[name] = kind === 'kick' ? kick(name, bvh, opt) : kind === 'loop' ? loop(name, bvh, opt) : stride(name, bvh, opt?.want); } catch (e) { console.log(String(e.message)); }
+  try { clips[name] = kind === 'kick' ? kick(name, bvh, opt) : kind === 'once' ? once(name, bvh, opt) : kind === 'loop' ? loop(name, bvh, opt) : stride(name, bvh, opt?.want); } catch (e) { console.log(String(e.message)); }
 }
 const r = v => +v.toFixed(4);
-const head = c => (c.kind === 'kick' ? `hz: ${c.hz}, n: ${c.n}, c: ${c.c}, top: ${c.top}, plant: ${c.plant}` : `period: ${c.period}, n: ${c.n}`);
+const head = c => (c.kind === 'kick' ? `hz: ${c.hz}, n: ${c.n}, c: ${c.c}, top: ${c.top}, plant: ${c.plant}` : c.kind === 'once' ? `hz: ${c.hz}, n: ${c.n}` : `period: ${c.period}, n: ${c.n}`);
 const body = Object.entries(clips).map(([name, c]) => `  ${name}: { kind: '${c.kind}', speed: ${c.speed}, ${head(c)},\n    q: [${c.q.map(r).join(',')}],\n    h: [${c.h.map(r).join(',')}]${c.a ? `,\n    a: [${c.a.map(r).join(',')}]` : ''} },`).join('\n');
 await mkdir(fileURLToPath(new URL('../game/assets/anim/', import.meta.url)), { recursive: true });
 await writeFile(OUT, `// Motion-capture clips for the players, baked by tools/build-anim.mjs. Do not edit by hand.\n// The data used in this project was obtained from mocap.cs.cmu.edu. The database was created with funding\n// from NSF EIA-0196217.\n// q: one quaternion (x, y, z, w) per bone per sample, bones in BONES order; h: the hips' place per sample (m).\n// A kick is sampled hz times a second; sample c is the contact; a: the right (kicking) and left ankles per sample;\n// h and a are measured from the kicking ankle at the contact (x, z) and the grass (y).\nexport const BONES = ${JSON.stringify(NAMES)};\nexport const CLIPS = {\n${body}\n};\n`);

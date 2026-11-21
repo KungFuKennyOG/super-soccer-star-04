@@ -18,7 +18,8 @@ import { buildStadium } from './stadium.js';
 import { pickWeather, applyWeather, WEATHER } from '../rules/weather.js';
 import { createWeather } from './weather.js';
 import { createResults, loadBest } from './results.js';
-import { buildBall, buildArrow, animate, placeModel, handsOf } from './actors.js';
+import { buildBall, buildArrow, animate, placeModel } from './actors.js';
+import { heldBall } from './keeperpose.js';
 import { startStrike, struck } from './strike.js';
 import { createSquads } from './squad.js';
 import { createMenus, LENGTHS } from './menus.js';
@@ -228,7 +229,8 @@ function feedback(ev) {
     if (e.type === 'knock' || e.type === 'flick' || (e.type === 'skill' && e.move === 'nutmeg')) struck(models.you, e.type === 'flick' ? 'scoop' : 'poke', Math.hypot(world.ball.vx, world.ball.vz) > 0.5 ? norm(world.ball.vx, world.ball.vz) : norm(world.you.fx, world.you.fz), 0.4);
     if (e.type === 'drag') models.you.special = { kind: 'drag', t: 0 };
     if ((e.type === 'kick' || e.type === 'pass') && m && e.kind !== 'header' && e.kind !== 'bicycle') struck(m, e.type === 'pass' ? 'pass' : e.kind === 'volley' ? 'volley' : 'shot', norm(world.ball.vx, world.ball.vz), e.power);
-    if (e.type === 'kick' && e.by !== 'gk' && models.gk) models.gk.split = 0;             // the keeper's split step
+    // the keeper's split step: as your shot is wound up (he reads the strike coming), or as anyone else's is struck
+    if (models.gk && ((e.type === 'windup' && e.kind === 'shot') || (e.type === 'kick' && e.by !== 'gk' && !(models.gk.split < 0.3)))) models.gk.split = 0;
     if (e.type === 'kick' && e.kind && m) m.special = { kind: e.kind, t: 0 };
     if (e.type === 'kick' && e.kind === 'bicycle') slowT = 1.3;               // slow motion for the overhead kick
     if (e.type === 'flick') sfx('touch');
@@ -341,15 +343,16 @@ const loop = startLoop(renderer, (dt, t) => {
   renderer.render(scene, camera);
 }, { onFps: fps => { $('fps').textContent = `${fps} FPS`; } });
 
-// When the keeper has it, the ball is drawn in his gloves (the sim keeps it at his feet): it slides
-// into his hands over a tenth of a second as he takes it, and stays there through the dive and the hug.
+// When the keeper has it, the ball is drawn in his gloves (the sim keeps it at his feet), where his pose put it
+// (game/keeperpose.js heldBall). From the moment his hands meet a shot it's there at once: the hands are on it, and
+// the sim's save comes a frame or three later (it times the save to the goal line, he meets it in front of him).
+// A ball he gathers off the grass slides up into his hands with the scoop.
 const gloveBall = new THREE.Vector3();
 let heldK = 0;
 function holdInGloves(dt) {
-  heldK = world.owner === 'gk' ? Math.min(1, heldK + dt * 10) : 0;
-  if (!heldK || !models.gk) return;
-  handsOf(models.gk, gloveBall);
-  gloveBall.y = Math.max(0.13, gloveBall.y);
+  const at = models.gk && heldBall(models.gk, gloveBall);
+  heldK = at ? (models.gk.sv && models.gk.sv.id !== 'claim' ? 1 : Math.min(1, heldK + dt * 10)) : 0;
+  if (!heldK) return;
   ball.mesh.position.lerp(gloveBall, heldK);
   ball.shadow.position.set(gloveBall.x + gloveBall.y * 0.25, 0.021, gloveBall.z - gloveBall.y * 0.12);
 }
