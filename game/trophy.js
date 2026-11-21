@@ -5,6 +5,7 @@ import * as THREE from 'three';
 import { BTN } from '../engine/input.js';
 import { ps1, pixelTex, canvasTex } from './ps1.js';
 import { drawText, textWidth } from './tex.js';
+import { uiPlane, PAL, text, panel, wrap, YEAR } from './ps2/ui.js';
 import { buildPlayer, animate } from './actors.js';
 import { sfx } from './audio.js';
 import { buildHand } from './hands.js';
@@ -48,7 +49,7 @@ function buildTrophy(kind) {
   if (kind === 'world') {
     const gold = GOLD();
     add(new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.11, 0.035, 6), gold));                       // foot
-    add(new THREE.Mesh(new THREE.CylinderGeometry(0.092, 0.092, 0.05, 6, 1, true), plate("WORLD CUP '96", '#f2c21a', '#1b6b3a')), 0.04);
+    add(new THREE.Mesh(new THREE.CylinderGeometry(0.092, 0.092, 0.05, 6, 1, true), plate(`WORLD CUP ${YEAR}`, '#f2c21a', '#1b6b3a')), 0.04);
     add(new THREE.Mesh(new THREE.CylinderGeometry(0.095, 0.1, 0.02, 6), gold), 0.075);
     g.add(lathe([[0.075, 0.085], [0.06, 0.12], [0.038, 0.19], [0.032, 0.25], [0.05, 0.3], [0.072, 0.34], [0.078, 0.375], [0.07, 0.385]], gold, 6));
     // the globe sits down in the cradle at the top of the column (an icosahedron's faces sit well
@@ -87,19 +88,14 @@ export function createCeremony(scene, camera, hands) {
   cloth.position.set(0, 1.0, NEAR); root.add(cloth);
 
   // the hint card over the plinth
-  const cv = canvasTex(192, 40, () => {}), ctx = cv.getContext('2d'), tex = pixelTex(cv);
-  const card = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 0.31), ps1({ map: tex, lit: false, transparent: true, depthTest: false, fog: false }));
+  const { ctx, t: tex, m: card } = uiPlane(768, 160, 1.5, 0.31, { mat: { depthTest: false } });
   card.renderOrder = 12; card.position.set(0, 2.25, 1.6); card.rotation.y = Math.PI; root.add(card);
-  const say = (a, b, col = '#f2c21a') => {
-    ctx.clearRect(0, 0, 192, 40); ctx.fillStyle = 'rgba(5,8,40,.85)'; ctx.fillRect(0, 0, 192, 40);
-    drawText(ctx, a, Math.round((192 - textWidth(a, 2)) / 2), 6, col, 2, '#000');
+  const say = (a, b, col = PAL.accent) => {
+    ctx.clearRect(0, 0, 768, 160); panel(ctx, 0, 0, 768, 160, { r: 18, alpha: 0.86 });
+    text(ctx, a, 384, 40, { size: 54, align: 'center', italic: true, weight: 900, color: col === '#f2c21a' ? PAL.accent : col, max: 730 });
     // the instruction wraps onto a second line when it's too wide for the sign
-    const lines = [];
-    for (const word of (b || '').split(' ').filter(Boolean)) {
-      const last = lines[lines.length - 1];
-      if (last && textWidth(`${last} ${word}`) <= 184) lines[lines.length - 1] = `${last} ${word}`; else lines.push(word);
-    }
-    lines.slice(0, 2).forEach((l, i) => drawText(ctx, l, Math.round((192 - textWidth(l)) / 2), lines.length > 1 ? 23 + i * 9 : 26, '#ffffff', 1, '#000'));
+    const lines = wrap(ctx, b || '', 720, 34, { weight: 800 }).filter(Boolean).slice(0, 2);
+    lines.forEach((l, i) => text(ctx, l, 384, lines.length > 1 ? 94 + i * 40 : 110, { size: 34, align: 'center', weight: 800, max: 730 }));
     tex.needsUpdate = true;
   };
 

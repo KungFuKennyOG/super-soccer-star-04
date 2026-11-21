@@ -1,16 +1,11 @@
 // Training mode: the drills from rules/tutorial.js, with a card at the top of your view saying
 // what to do, a progress bar, and how to skip. main.js feeds it each frame's events.
-import * as THREE from 'three';
-import { ps1, pixelTex, canvasTex } from './ps1.js';
-import { drawText, textWidth } from './tex.js';
+import { uiPlane } from './ps2/ui.js';
+import { CW, CH, paintTraining } from './ps2/hudpaint.js';
 import { STEPS, createTutorial, currentStep, setupDrill, clearDrill, stepTutorial, skipStep } from '../rules/tutorial.js';
 
-const W = 224, H = 50;
-
 export function createTraining(camera) {
-  const c = canvasTex(W, H, () => {}), ctx = c.getContext('2d'), tex = pixelTex(c);
-  const card = new THREE.Mesh(new THREE.PlaneGeometry(0.64, 0.64 * H / W),
-    ps1({ map: tex, lit: false, transparent: true, depthTest: false, depthWrite: false, fog: false }));
+  const { ctx, t: tex, m: card } = uiPlane(CW, CH, 0.64, 0.64 * CH / CW, { mat: { depthTest: false } });
   card.renderOrder = 25; card.position.set(0, 0.15, -0.72); card.rotation.x = -0.15; card.visible = false;
   camera.add(card);
 
@@ -21,26 +16,10 @@ export function createTraining(camera) {
     const key = `${tut.i}|${Math.floor(tut.n)}|${done}|${vr}|${tut.finished}`;
     if (key === shown) return;
     shown = key;
-    ctx.clearRect(0, 0, W, H);
-    ctx.fillStyle = 'rgba(5,8,40,0.88)'; ctx.fillRect(0, 0, W, H);
-    ctx.fillStyle = '#f2c21a'; ctx.fillRect(0, 0, W, 1); ctx.fillRect(0, H - 1, W, 1);
-    // title row: drill number and name, skip hint on the right
-    ctx.fillStyle = '#c8102e'; ctx.fillRect(0, 1, W, 10);
-    drawText(ctx, `${Math.min(tut.i + 1, STEPS.length)}/${STEPS.length}  ${s.title}`, 4, 3, '#ffffff');
-    const skip = vr ? 'X: SKIP' : 'N: SKIP';
-    drawText(ctx, skip, W - 4 - textWidth(skip), 3, '#f2c21a');
-    if (done) {
-      const msg = tut.finished || tut.i >= STEPS.length - 1 ? 'TRAINING COMPLETE!' : 'NICE ONE!';
-      drawText(ctx, msg, Math.round((W - textWidth(msg, 2)) / 2), 20, '#40ff60', 2, '#000');
-    } else {
-      (vr ? s.vr : s.pc).forEach((l, i) => drawText(ctx, l, 4, 14 + i * 9, '#ffffff'));
-      // progress bar
-      const k = tut.n / s.need;
-      ctx.fillStyle = '#1a2350'; ctx.fillRect(4, H - 8, W - 60, 4);
-      ctx.fillStyle = '#f2c21a'; ctx.fillRect(4, H - 8, Math.round((W - 60) * k), 4);
-      const lbl = `${Math.floor(tut.n)}/${s.need}${s.unit ? ' ' + s.unit : ''}`;
-      drawText(ctx, lbl, W - 4 - textWidth(lbl), H - 10, '#9aa8e0');
-    }
+    paintTraining(ctx, {
+      i: Math.min(tut.i + 1, STEPS.length), total: STEPS.length, title: s.title, lines: vr ? s.vr : s.pc, need: s.need, n: tut.n, unit: s.unit,
+      done, finished: tut.finished || tut.i >= STEPS.length - 1, vr,
+    });
     tex.needsUpdate = true;
   }
 

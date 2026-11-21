@@ -1,8 +1,8 @@
-// A small pixel world map for picking a nation. Continents are rough outlines (longitude, latitude)
+// A small world map for picking a nation. Continents are rough outlines (longitude, latitude)
 // filled on a canvas; each nation is a dot. European nations are close together, so when one of them
 // is selected the map zooms in on Europe.
 import { NATIONS, NATION_POS } from '../rules/teams.js';
-import { drawText, textWidth } from './tex.js';
+import { PAL, text, measure, gloss, rr } from './ps2/ui.js';
 
 const LAND = {
   northAmerica: [[-168, 66], [-140, 70], [-100, 72], [-80, 73], [-62, 60], [-55, 50], [-66, 44], [-75, 35], [-81, 25], [-90, 29], [-97, 26], [-97, 20], [-87, 21], [-84, 15], [-79, 8], [-83, 8], [-92, 14], [-105, 20], [-112, 30], [-118, 33], [-124, 40], [-124, 48], [-133, 56], [-150, 60], [-165, 61]],
@@ -22,42 +22,50 @@ const WORLD = { lon: [-170, 180], lat: [-55, 80] };
 const EUROPE = { lon: [-12, 32], lat: [34, 66] };
 const IN_EUROPE = id => { const [x, y] = NATION_POS[id]; return x > -12 && x < 32 && y > 34 && y < 66; };
 
-// Draws the map into the rectangle (x, y, w, h) with `selected` highlighted. t: seconds, for the blink.
+// Draws the map into the rectangle (x, y, w, h) with `selected` highlighted. t: seconds, for the pulse.
+// Painted in the '04 menu style: a soft ocean, lit continents, kit-coloured nation pins, a glowing ring.
 export function drawWorldMap(ctx, x, y, w, h, selected, t) {
-  const view = IN_EUROPE(selected) ? EUROPE : WORLD;
+  const view = IN_EUROPE(selected) ? EUROPE : WORLD, k = w / 248;
   const sx = w / (view.lon[1] - view.lon[0]), sy = h / (view.lat[1] - view.lat[0]), s = Math.min(sx, sy);
   const ox = x + (w - (view.lon[1] - view.lon[0]) * s) / 2, oy = y + (h - (view.lat[1] - view.lat[0]) * s) / 2;
   const px = lon => ox + (lon - view.lon[0]) * s, py = lat => oy + (view.lat[1] - lat) * s;
 
   ctx.save();
-  ctx.beginPath(); ctx.rect(x, y, w, h); ctx.clip();
-  ctx.fillStyle = '#0c1a4a'; ctx.fillRect(x, y, w, h);
-  // faint grid lines every 30 degrees, like an old atlas
-  ctx.fillStyle = '#13245c';
-  for (let lon = -150; lon <= 180; lon += 30) ctx.fillRect(Math.round(px(lon)), y, 1, h);
-  for (let lat = -30; lat <= 60; lat += 30) ctx.fillRect(x, Math.round(py(lat)), w, 1);
-  ctx.fillStyle = '#2f6e3c'; ctx.strokeStyle = '#4c9a58'; ctx.lineWidth = 1;
+  rr(ctx, x, y, w, h, 6 * k); ctx.clip();
+  const sea = ctx.createRadialGradient(x + w / 2, y + h / 2, 0, x + w / 2, y + h / 2, w * 0.7);
+  sea.addColorStop(0, '#16407a'); sea.addColorStop(1, '#081a3a');
+  ctx.fillStyle = sea; ctx.fillRect(x, y, w, h);
+  ctx.strokeStyle = 'rgba(140,190,255,0.12)'; ctx.lineWidth = Math.max(1, k * 0.5);
+  for (let lon = -150; lon <= 180; lon += 30) { ctx.beginPath(); ctx.moveTo(px(lon), y); ctx.lineTo(px(lon), y + h); ctx.stroke(); }
+  for (let lat = -30; lat <= 60; lat += 30) { ctx.beginPath(); ctx.moveTo(x, py(lat)); ctx.lineTo(x + w, py(lat)); ctx.stroke(); }
+  const land = ctx.createLinearGradient(0, y, 0, y + h);
+  land.addColorStop(0, '#5f9a6a'); land.addColorStop(1, '#2f6642');
+  ctx.lineJoin = 'round';
   for (const pts of Object.values(LAND)) {
     ctx.beginPath();
-    pts.forEach(([lon, lat], i) => (i ? ctx.lineTo : ctx.moveTo).call(ctx, Math.round(px(lon)) + 0.5, Math.round(py(lat)) + 0.5));
-    ctx.closePath(); ctx.fill(); ctx.stroke();
+    pts.forEach(([lon, lat], i) => (i ? ctx.lineTo : ctx.moveTo).call(ctx, px(lon), py(lat)));
+    ctx.closePath();
+    ctx.shadowColor = 'rgba(0,0,0,0.5)'; ctx.shadowBlur = 3 * k; ctx.shadowOffsetY = k;
+    ctx.fillStyle = land; ctx.fill();
+    ctx.shadowColor = 'transparent'; ctx.lineWidth = 0.7 * k; ctx.strokeStyle = 'rgba(200,240,200,0.55)'; ctx.stroke();
   }
-  // every nation, then the selected one blinking with a ring
+  // every nation as a pin in its shirt colour, then the selected one with a pulsing ring
   for (const n of NATIONS) {
     const [lon, lat] = NATION_POS[n.id];
-    ctx.fillStyle = n.kit.shirt; ctx.fillRect(Math.round(px(lon)) - 1, Math.round(py(lat)) - 1, 3, 3);
-    ctx.fillStyle = '#000'; ctx.fillRect(Math.round(px(lon)) - 1, Math.round(py(lat)) + 2, 3, 1);
+    ctx.beginPath(); ctx.arc(px(lon), py(lat), 2.1 * k, 0, Math.PI * 2);
+    ctx.fillStyle = n.kit.shirt; ctx.fill(); ctx.lineWidth = 0.7 * k; ctx.strokeStyle = '#0a0f1e'; ctx.stroke();
   }
-  const [lon, lat] = NATION_POS[selected], cx = Math.round(px(lon)), cy = Math.round(py(lat));
-  const on = Math.floor(t * 4) % 2;
-  ctx.strokeStyle = on ? '#f2c21a' : '#ffffff'; ctx.lineWidth = 1;
-  ctx.strokeRect(cx - 4.5, cy - 4.5, 9, 9);
-  ctx.fillStyle = '#f2c21a'; ctx.fillRect(cx - 2, cy - 2, 5, 5);
+  const [lon, lat] = NATION_POS[selected], cx = px(lon), cy = py(lat), pulse = (t * 1.5) % 1;
+  ctx.beginPath(); ctx.arc(cx, cy, (4 + pulse * 8) * k, 0, Math.PI * 2);
+  ctx.lineWidth = 1.2 * k; ctx.strokeStyle = `rgba(255,201,51,${1 - pulse})`; ctx.stroke();
+  ctx.beginPath(); ctx.arc(cx, cy, 3.4 * k, 0, Math.PI * 2);
+  ctx.shadowColor = 'rgba(255,190,40,0.95)'; ctx.shadowBlur = 6 * k; ctx.fillStyle = PAL.accent; ctx.fill();
+  ctx.shadowColor = 'transparent'; ctx.lineWidth = 0.9 * k; ctx.strokeStyle = '#fff'; ctx.stroke();
   // label, kept inside the map
-  const label = selected, lw = textWidth(label);
-  const lx = Math.min(x + w - lw - 2, Math.max(x + 2, cx - lw / 2)), ly = cy - 14 < y + 2 ? cy + 7 : cy - 14;
-  ctx.fillStyle = 'rgba(0,0,0,.7)'; ctx.fillRect(lx - 2, ly - 1, lw + 4, 9);
-  drawText(ctx, label, lx, ly, '#ffffff');
-  drawText(ctx, view === EUROPE ? 'EUROPE' : 'WORLD', x + 3, y + h - 9, '#7d8fd0');
+  const size = 8 * k, lw = measure(ctx, selected, size, { weight: 900 }) + 6 * k, lh = 11 * k;
+  const lx = Math.min(x + w - lw - 3 * k, Math.max(x + 3 * k, cx - lw / 2)), ly = cy - 9 * k - lh < y + 2 * k ? cy + 7 * k : cy - 9 * k - lh;
+  gloss(ctx, lx, ly, lw, lh, { kind: 'amber', r: 3 * k });
+  text(ctx, selected, lx + lw / 2, ly + lh / 2, { size, align: 'center', weight: 900, color: PAL.deep, shadow: false });
+  text(ctx, view === EUROPE ? 'EUROPE' : 'WORLD', x + 6 * k, y + h - 7 * k, { size: 7 * k, color: 'rgba(200,220,255,0.7)', italic: true, weight: 900 });
   ctx.restore();
 }

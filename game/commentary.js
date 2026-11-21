@@ -1,9 +1,8 @@
 // The commentator: a British TV voice (pre-recorded lines in game/assets/voice, rendered by
 // tools/build-voice.py) and the words as a subtitle at the bottom of your view. rules/commentary.js
 // decides what gets said; this plays it. mode: 0 off, 1 text only, 2 voice and text.
-import * as THREE from 'three';
-import { ps1, pixelTex, canvasTex } from './ps1.js';
-import { drawText, textWidth } from './tex.js';
+import { uiPlane } from './ps2/ui.js';
+import { UW, UH, paintSubtitle } from './ps2/hudpaint.js';
 import { audioOut } from './audio.js';
 import { pickLine } from '../rules/commentary.js';
 
@@ -14,22 +13,13 @@ export function createCommentary(camera) {
   const buffers = new Map(), loading = new Map();
   fetch(new URL('lines.json', BASE)).then(r => r.json()).then(j => { for (const [id, t] of j.lines) text[id] = t; }).catch(() => {});
 
-  // the subtitle strip, a little below the middle of your view
-  const W = 224, H = 14;
-  const c = canvasTex(W, H, () => {});
-  const ctx = c.getContext('2d'), tex = pixelTex(c);
-  const sub = new THREE.Mesh(new THREE.PlaneGeometry(0.64, 0.04), ps1({ map: tex, lit: false, transparent: true, depthTest: false, depthWrite: false, fog: false }));
-  sub.renderOrder = 24; sub.position.set(0, -0.11, -0.72); sub.rotation.x = 0.15; sub.visible = false;
+  // the subtitle strip, a little below the middle of your view (two lines, so long lines aren't cut)
+  const strip = uiPlane(UW, UH, 0.64, 0.64 * UH / UW, { mat: { depthTest: false } }), sub = strip.m;
+  sub.renderOrder = 24; sub.position.set(0, -0.13, -0.72); sub.rotation.x = 0.15; sub.visible = false;
   camera.add(sub);
   function showText(s) {
-    ctx.clearRect(0, 0, W, H);
-    let line = s;
-    while (textWidth(line) > W - 8 && line.length) line = line.slice(0, -1);
-    const tw = textWidth(line), x = Math.round((W - tw) / 2);
-    ctx.fillStyle = 'rgba(5,8,40,0.82)'; ctx.fillRect(x - 4, 1, tw + 8, H - 2);
-    ctx.fillStyle = '#f2c21a'; ctx.fillRect(x - 4, H - 2, tw + 8, 1);
-    drawText(ctx, line, x, 3, '#ffffff');
-    tex.needsUpdate = true;
+    paintSubtitle(strip.ctx, s);
+    strip.t.needsUpdate = true;
     sub.visible = true;
   }
 

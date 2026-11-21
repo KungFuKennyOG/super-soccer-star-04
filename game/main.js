@@ -1,4 +1,4 @@
-// Super Soccer Star 96: boots the stage, turns controls into sim intents, and draws the match.
+// Super Soccer Star: boots the stage, turns controls into sim intents, and draws the match.
 import * as THREE from 'three';
 import { createStage } from '../engine/stage.js';
 import { vrSupported, enterVR } from '../engine/xr.js';
@@ -70,6 +70,7 @@ juice.set(settings.juice);
 const weather = createWeather(scene);
 let slowT = 0, said10 = false, callT = 0;
 $('radar').appendChild(radar.canvas);
+$('bug').appendChild(hud.bugCanvas);
 
 // what's being played: the mode, your team, the opponent, and the cup run if there is one
 const game = { kind: 'attack', team: byId('MAD'), opp: byId('BAR'), cup: null, fixture: null, scenario: null };
@@ -372,10 +373,10 @@ function updateHud() {
   });
   const line = match.scenario ? `${game.team.id} ${match.us}-${match.them} ${game.opp.id}` : '';
   const clock = training.active ? 'DRILL' : clockText(match.clock);
-  hud.scoreboard(match.goals, clock, match.points, flashT > 0 ? 'GOAL!' : '', line);
-  // browser HUD
-  $('hClock').textContent = clock;
-  $('hScore').textContent = line || `V ${game.opp.id}`;
+  // the stadium's board, and the scoreboard bug (top left: on the headset's view, or the page's #bug)
+  hud.scoreboard(match.goals, clock, match.points, flashT > 0 ? 'GOAL!' : '', line, {
+    home: game.team, away: game.opp, us: match.scenario ? match.us : undefined, them: match.them, show: mode === 'play' && !training.active, vr: renderer.xr.isPresenting,
+  });
 }
 
 // the radar floats over the left hand, high enough to clear it, and draws on top of the hand anyway

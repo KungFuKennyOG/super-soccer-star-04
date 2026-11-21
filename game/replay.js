@@ -3,8 +3,8 @@
 // and shown on an old CRT that floats in front of you plus the stadium's big screen. The replay uses
 // its own copies of the players (built per match) so the live ones are never disturbed.
 import * as THREE from 'three';
-import { ps1, pixelTex, canvasTex } from './ps1.js';
-import { drawText } from './tex.js';
+import { ps1 } from './ps1.js';
+import { uiPlane, text, gloss } from './ps2/ui.js';
 import { buildBall, animate, placeModel } from './actors.js';
 import { startStrike, struck } from './strike.js';
 import { buildSet } from './squad.js';
@@ -48,11 +48,13 @@ export function createReplay(scene, renderer) {
   body.position.z = -0.32; tv.add(body);
   const screen = new THREE.Mesh(new THREE.PlaneGeometry(1.44, 0.81), ps1({ map: rt.texture, lit: false, fog: false }));
   screen.position.z = 0.002; tv.add(screen);
-  const tag = canvasTex(48, 10, () => {});
-  const tagMesh = new THREE.Mesh(new THREE.PlaneGeometry(0.34, 0.07), ps1({ map: pixelTex(tag), lit: false, transparent: true, fog: false }));
-  tagMesh.position.set(-0.52, 0.33, 0.004); tv.add(tagMesh);
-  const tctx = tag.getContext('2d');
-  tctx.fillStyle = '#c8102e'; tctx.fillRect(1, 2, 6, 6); drawText(tctx, 'REPLAY', 10, 2, '#ffffff');
+  // the REPLAY tag in the screen's corner: a red light and the word on a glossy blue tab
+  const tag = uiPlane(256, 64, 0.34, 0.085);
+  tag.m.position.set(-0.52, 0.33, 0.004); tv.add(tag.m);
+  gloss(tag.ctx, 2, 4, 252, 56, { kind: 'blue', r: 14 });
+  tag.ctx.beginPath(); tag.ctx.arc(34, 32, 12, 0, Math.PI * 2); tag.ctx.fillStyle = '#ff3b30'; tag.ctx.shadowColor = '#ff3b30'; tag.ctx.shadowBlur = 10; tag.ctx.fill();
+  tag.ctx.shadowColor = 'transparent';
+  text(tag.ctx, 'REPLAY', 60, 32, { size: 40, italic: true, weight: 900 });
   tv.visible = false; scene.add(tv);
   // and on the stadium's big screen, over the scoreboard
   const jumbo = new THREE.Mesh(new THREE.PlaneGeometry(12, 6.75), ps1({ map: rt.texture, lit: false, fog: false }));
@@ -160,7 +162,7 @@ export function createReplay(scene, renderer) {
       tv.position.set(headPos.x + Math.sin(tvYaw) * 2.3, headPos.y - 0.15, headPos.z + Math.cos(tvYaw) * 2.3);
       tv.lookAt(headPos.x, headPos.y - 0.15, headPos.z);
       tv.visible = jumbo.visible = true;
-      tagMesh.visible = Math.floor(t * 2) % 2 === 0;
+      tag.m.visible = Math.floor(t * 2) % 2 === 0;
     },
     // film the replay: swap the live players for the replay copies, render into the screen's texture,
     // swap back. live: objects to hide while filming (live players, ball, HUD).

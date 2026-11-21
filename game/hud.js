@@ -2,22 +2,15 @@
 // the stadium scoreboard, the event banner, the pass timing rings, the shot reticle and its power ring.
 import * as THREE from 'three';
 import { GOAL } from '../rules/tuning.js';
-import { ps1, pixelTex, canvasTex } from './ps1.js';
-import { drawText, textWidth, ringTex, reticleTex } from './tex.js';
-
-const TONES = { good: '#f2c21a', bad: '#ff4040', info: '#5ad0ff' };
-
-function canvasPlane(w, h, mw, mh) {
-  const c = canvasTex(w, h, () => {});
-  const t = pixelTex(c);
-  const m = new THREE.Mesh(new THREE.PlaneGeometry(mw, mh), ps1({ map: t, lit: false, transparent: true, depthTest: true, fog: false }));
-  return { c, ctx: c.getContext('2d'), t, m };
-}
+import { ps1 } from './ps1.js';
+import { ringTex, reticleTex } from './tex.js';
+import { uiPlane } from './ps2/ui.js';
+import { BW, BH, paintBug, SW, SH, paintBoard, NW, NH, paintBanner, TW, TH, paintTag, RW, RH, RMAP, paintRadar } from './ps2/hudpaint.js';
 
 export function buildHud(scene, camera) {
   /* scoreboard over the stand behind the goal */
-  const sb = canvasPlane(128, 48, 18, 6.75);
-  sb.m.material.transparent = false;
+  const sb = uiPlane(SW, SH, 18, 6.75);
+  sb.m.material.transparent = false; sb.m.material.depthWrite = true;
   sb.m.position.set(0, 29, GOAL.z - 22);
   scene.add(sb.m);
   const frame = new THREE.Mesh(new THREE.BoxGeometry(19, 7.6, 0.6), ps1({ color: '#22222a' }));
@@ -32,46 +25,35 @@ export function buildHud(scene, camera) {
     sb.m.position.z = z; frame.position.z = z - 0.35;
     for (const c of cables) { c.position.y = y + 3.8 + 20; c.position.z = z - 0.4; }
   }
-  let sbKey = '';
-  // score: 'MAD 1-2 BAR' in a cup match (shown instead of the goal count), or ''
-  function scoreboard(goals, clock, points, flash, score = '') {
-    const key = `${goals}|${clock}|${points}|${flash}|${score}`;
-    if (key === sbKey) return; sbKey = key;
-    const c = sb.ctx;
-    c.fillStyle = '#05050a'; c.fillRect(0, 0, 128, 48);
-    c.fillStyle = '#c8102e'; c.fillRect(0, 0, 128, 11);
-    drawText(c, 'SUPER SOCCER STAR', 13, 2, '#ffffff', 1, '#000');
-    if (flash) {
-      drawText(c, flash, Math.round((128 - textWidth(flash, 2)) / 2), 17, Math.floor(performance.now() / 150) % 2 ? '#f2c21a' : '#ffffff', 2);
-    } else if (score) {
-      drawText(c, score, Math.round((128 - textWidth(score)) / 2), 15, '#f2c21a');
-      drawText(c, clock, Math.round((128 - textWidth(clock, 2)) / 2), 24, '#ffffff', 2);
-    } else {
-      drawText(c, 'GOALS', 4, 15, '#5ad0ff'); drawText(c, String(goals).padStart(2, '0'), 4, 24, '#f2c21a', 2);
-      drawText(c, clock, 128 - 4 - textWidth(clock, 2), 24, '#ffffff', 2); drawText(c, 'TIME', 128 - 4 - textWidth('TIME'), 15, '#5ad0ff');
-    }
-    const pts = `PTS ${points}`;
-    drawText(c, pts, Math.round((128 - textWidth(pts)) / 2), 39, '#e8e8e8');
-    sb.t.needsUpdate = true;
+  // the scoreboard bug: top left of your view in the headset (on the camera), top left of the page in the browser
+  const bug = uiPlane(BW, BH, 0.3, 0.3 * BH / BW, { mat: { depthTest: false } });
+  bug.m.renderOrder = 26; bug.m.position.set(-0.33, 0.25, -0.72); bug.m.rotation.set(0.3, 0.38, 0, 'YXZ'); bug.m.visible = false;
+  camera.add(bug.m);
+  bug.c.className = 'bug';
+  let sbKey = '', bugKey = '';
+  // score: 'MAD 1-2 BAR' in a cup match (shown instead of the goal count), or ''.
+  // teams: { home, away, us, them, show, vr } for the bug (us / them only in a cup match)
+  function scoreboard(goals, clock, points, flash, score = '', teams = null) {
+    const blinkOn = flash ? Math.floor(performance.now() / 150) % 2 : 0;
+    const key = `${goals}|${clock}|${points}|${flash}|${score}|${blinkOn}`;
+    if (key !== sbKey) { sbKey = key; paintBoard(sb.ctx, { goals, clock, points, flash, score }); sb.t.needsUpdate = true; }
+    bug.m.visible = !!(teams && teams.show && teams.vr);
+    bug.c.style.visibility = teams && teams.show ? 'visible' : 'hidden';
+    if (!teams || !teams.show) return;
+    const k2 = `${teams.home.id}|${teams.away.id}|${teams.us}|${teams.them}|${goals}|${points}|${clock}|${flash}`;
+    if (k2 === bugKey) return;
+    bugKey = k2;
+    paintBug(bug.ctx, { ...teams, goals, points, clock, flash });
+    bug.t.needsUpdate = true;
   }
 
   /* banner: floats in front of your face */
-  const bn = canvasPlane(192, 64, 2.4, 0.8);
-  bn.m.material.depthTest = false; bn.m.renderOrder = 10; bn.m.visible = false;
+  const bn = uiPlane(NW, NH, 2.4, 0.8, { mat: { depthTest: false } });
+  bn.m.renderOrder = 10; bn.m.visible = false;
   scene.add(bn.m);
   let bnT = 9, bnLife = 1.8;
   function banner(b) {
-    const c = bn.ctx, W = 192;
-    c.clearRect(0, 0, W, 64);
-    const s = b.text.length > 15 ? 1 : 2, col = TONES[b.tone] || '#fff';
-    const w = textWidth(b.text, s), x = Math.round((W - w) / 2);
-    c.fillStyle = 'rgba(0,0,0,.6)'; c.fillRect(x - 5, 4, w + 10, 7 * s + 8);
-    drawText(c, b.text, x, 8, col, s, '#000');
-    (b.sub ? b.sub.split('\n') : []).slice(0, 3).forEach((line, i) => {
-      const sub = line.slice(0, 31), sw = textWidth(sub), sx = Math.round((W - sw) / 2), sy = 7 * s + 16 + i * 11;
-      c.fillStyle = 'rgba(0,0,0,.6)'; c.fillRect(sx - 3, sy - 2, sw + 6, 11);
-      drawText(c, sub, sx, sy, '#ffffff');
-    });
+    paintBanner(bn.ctx, b);
     bn.t.needsUpdate = true;
     bnT = 0; bnLife = b.big ? 2.4 : 1.4;
     bn.m.visible = true;
@@ -86,9 +68,11 @@ export function buildHud(scene, camera) {
   const groundRing = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 1.4), ps1({ map: ringTex(), alphaTest: 0.5, lit: false, color: '#f2c21a' }));
   groundRing.rotation.x = -Math.PI / 2; groundRing.visible = false; scene.add(groundRing);
   // "LOB" over the target when a defender is in the lane (the pass will go over the top)
-  const lobC = canvasTex(24, 9, c => { drawText(c, 'LOB', 2, 1, '#5ad0ff', 1, '#000'); });
-  const lobTag = new THREE.Mesh(new THREE.PlaneGeometry(0.72, 0.27), ps1({ map: pixelTex(lobC), alphaTest: 0.5, lit: false, depthTest: false, fog: false }));
+  // (and his number: the '04 name bar over the man you'd pass to)
+  const tag = uiPlane(TW, TH, 0.8, 0.8 * TH / TW, { mat: { depthTest: false } });
+  const lobTag = tag.m;
   lobTag.renderOrder = 11; lobTag.visible = false; scene.add(lobTag);
+  let tagKey = '';
 
   /* shot: a reticle on the goal mouth with a power ring */
   const reticle = new THREE.Mesh(new THREE.PlaneGeometry(1.2, 1.2), ps1({ map: reticleTex(), alphaTest: 0.5, lit: false, depthTest: false, fog: false }));
@@ -108,6 +92,7 @@ export function buildHud(scene, camera) {
 
   return {
     scoreboard, banner, placeScoreboard,
+    bugCanvas: bug.c,
     // everything the HUD floats in the world, hidden while the replay camera films
     overlays: [bn.m, ringTarget, ringLive, groundRing, lobTag, reticle],
     // per frame. pass: { target: {x,z}, scale (live ring), grade window color } or null.
@@ -127,8 +112,12 @@ export function buildHud(scene, camera) {
 
       groundRing.visible = !!mate;
       if (mate) { groundRing.position.set(mate.x, 0.03, mate.z); groundRing.material.color.set(lob ? '#5ad0ff' : '#f2c21a'); }
-      lobTag.visible = !!(mate && lob);
-      if (lobTag.visible) { lobTag.position.set(mate.x, pass ? 3.15 : 2.3, mate.z); lobTag.lookAt(headPos); }
+      lobTag.visible = !!mate;
+      if (mate) {
+        const k = `${mate.num}|${!!lob}`;
+        if (k !== tagKey) { tagKey = k; paintTag(tag.ctx, { num: mate.num, lob: !!lob }); tag.t.needsUpdate = true; }
+        lobTag.position.set(mate.x, pass ? 3.15 : 2.3, mate.z); lobTag.lookAt(headPos);
+      }
 
       ringTarget.visible = ringLive.visible = !!pass;
       if (pass) {
@@ -157,57 +146,20 @@ function lerpAngle(a, b, k) {
   return a + d * k;
 }
 
-// A panel for the headset: title screen and full-time. lines: [{ text, color, scale }].
-export function buildPanel(scene) {
-  const p = canvasPlane(256, 160, 2.56, 1.6);
-  p.m.material.depthTest = false; p.m.renderOrder = 12; p.m.visible = false;
-  scene.add(p.m);
-  return {
-    mesh: p.m,
-    show(draw, headPos, yaw) {
-      p.ctx.clearRect(0, 0, 256, 160);
-      draw(p.ctx);
-      p.t.needsUpdate = true;
-      p.m.position.set(headPos.x + Math.sin(yaw) * 2.6, headPos.y, headPos.z + Math.cos(yaw) * 2.6);
-      p.m.lookAt(headPos);
-      p.m.visible = true;
-    },
-    hide() { p.m.visible = false; },
-  };
-}
-
-// The 90s radar: a little map of the half pitch with your goals and points along the bottom.
+// The radar: a little map of the half pitch with your goals and points along the bottom.
 // One canvas, shown on your left wrist in VR and in the corner in the browser.
 export function buildRadar() {
-  const W = 64, MAP = 46, H = 60, c = canvasTex(W, H, () => {}), ctx = c.getContext('2d');
-  const t = pixelTex(c);
-  // drawn after everything and without a depth test, so your own hand can never poke through it
-  const mesh = new THREE.Mesh(new THREE.PlaneGeometry(0.16, 0.15), ps1({ map: t, lit: false, transparent: true, fog: false, depthTest: false, depthWrite: false }));
-  mesh.renderOrder = 30;
-  // world x -22..22 → 3..61, z goal line → 2, halfway → 44
-  const px = x => Math.round(W / 2 + x / 22 * (W / 2 - 3)), pz = z => Math.round(2 + (z - GOAL.z) / -GOAL.z * (MAP - 4));
+  // redrawn every frame, so no mipmaps; drawn after everything and without a depth test, so your own
+  // hand can never poke through it
+  const r = uiPlane(RW, RH, 0.16, 0.15, { mips: false, mat: { depthTest: false } });
+  r.m.renderOrder = 30;
+  // world x -22..22 → the map's width, z goal line → its top, halfway → its foot
+  const px = x => RW / 2 + x / 22 * (RW / 2 - 6), pz = z => 5 + (z - GOAL.z) / -GOAL.z * (RMAP - 8);
   return {
-    canvas: c, mesh,
+    canvas: r.c, mesh: r.m,
     draw(world, goals = 0, points = 0) {
-      ctx.clearRect(0, 0, W, H);
-      ctx.fillStyle = 'rgba(16,60,20,.88)'; ctx.fillRect(0, 0, W, MAP);
-      ctx.strokeStyle = 'rgba(255,255,255,.6)'; ctx.lineWidth = 1;
-      ctx.strokeRect(1.5, 1.5, W - 3, MAP - 3);
-      ctx.strokeRect(px(-16) + 0.5, 1.5, px(16) - px(-16), pz(GOAL.z + 16.5) - 1);
-      ctx.fillStyle = '#ffffff'; ctx.fillRect(px(-3.66), 0, px(3.66) - px(-3.66), 2);
-      for (const p of world.players) {
-        ctx.fillStyle = p.role === 'you' ? '#f2c21a' : p.team === 'home' ? '#f2f1ea' : p.role === 'gk' ? '#29d06a' : '#5a8aff';
-        ctx.fillRect(px(p.x) - 1, pz(p.z) - 1, 3, 3);
-        if (p.role === 'def') { ctx.fillStyle = '#c8102e'; ctx.fillRect(px(p.x), pz(p.z), 1, 1); }
-      }
-      ctx.fillStyle = '#ff40ff'; ctx.fillRect(px(world.ball.x), pz(world.ball.z), 1, 1);
-      // score strip
-      ctx.fillStyle = '#05072a'; ctx.fillRect(0, MAP, W, H - MAP);
-      ctx.fillStyle = '#c8102e'; ctx.fillRect(0, MAP, W, 1);
-      drawText(ctx, `G${goals}`, 2, MAP + 4, '#f2c21a');
-      const pts = String(points);
-      drawText(ctx, pts, W - 2 - textWidth(pts), MAP + 4, '#ffffff');
-      t.needsUpdate = true;
+      paintRadar(r.ctx, world, goals, points, px, pz, { box: GOAL.z + 16.5 });
+      r.t.needsUpdate = true;
     },
   };
 }
