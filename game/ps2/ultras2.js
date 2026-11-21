@@ -7,7 +7,7 @@ import { FRONT } from './groundplan.js';
 import { flagAtlas, bannerAtlas, bannerUV } from './groundtex.js';
 import { flagMaterial, bannerMaterial } from './groundmat.js';
 
-const FLAG_W = 1.35, FLAG_H = 0.9, POLE = 2.5, HANDS = 0.65 + 0.53, BIG = 2.1;
+const FLAG_W = 1.35, FLAG_H = 0.9, POLE = 2.5, HANDS = 0.65 + 0.5, BIG = 2.1;
 const PITCH = new THREE.Vector3(0, 0, -16);
 
 function seeded(s) { let r = (s * 16807 + 11) % 2147483647 || 1; return () => (r = (r * 16807) % 2147483647) / 2147483647; }
