@@ -15,6 +15,12 @@ export function startLoop(renderer, frame, { maxDt = .05, onFps } = {}) {
   const clock = new THREE.Clock();
   const loop = { time: 0, fps: 0 };
   let n = 0, t0 = performance.now(), errs = 0;
+  // ?film=1 (making videos only): no wall clock. Nothing runs until loop.step(dt) is called, which runs one
+  // frame of exactly dt seconds, so a slow headless capture still plays at an even pace.
+  if (typeof location !== 'undefined' && new URLSearchParams(location.search).has('film')) {
+    loop.step = dt => { loop.time += dt; frame(dt, loop.time); };
+    return loop;
+  }
   renderer.setAnimationLoop(() => {
     try {
       const realDt = Math.min(clock.getDelta(), maxDt);
