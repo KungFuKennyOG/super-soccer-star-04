@@ -121,8 +121,8 @@ function spanFor(m, bn, K, s, pw) {
 
 // Poses the hips and legs of a kick in progress. s: the model's m.strike (game/strike.js); A: where the ankle
 // is with the boot on the ball, qf: how the foot is turned then, turn: where the ball goes off his heading
-// (rad), B: the ball, all in model space. Returns how much of a kick the pose is (0..1).
-export function poseKick(m, bn, s, A, qf, turn, dt, B) {
+// (rad), B: the ball (where it was struck, once it has been), live: the ball now, all in model space. Returns how much of a kick the pose is (0..1).
+export function poseKick(m, bn, s, A, qf, turn, dt, B, live = null) {
   const K = KICKS[s.kind], c0 = K.clips[0], first = !!m.firstPerson, after = s.t - s.wind, pw = s.power ?? 0.5;
   // (a chip is stopped short; a man at a run has his next stride to take, where the man recorded stood and watched)
   const chip = s.kind === 'shot' ? 1 - smooth((pw - 0.15) / 0.12) : 0, follow = K.follow * (1 - 0.5 * chip) * (1 - 0.4 * smooth((m.gait ? m.gait.s : 0) / 6));
@@ -162,6 +162,12 @@ export function poseKick(m, bn, s, A, qf, turn, dt, B) {
   // kicking leg all the way, the body part of it
   const cb = Math.cos(bt), sb = Math.sin(bt), ck = Math.cos(turn), sk = Math.sin(turn);
   tR.set(A.x + P.a[0] * ck + P.a[2] * sk, P.a[1] + (A.y - a0) * near, A.z - P.a[0] * sk + P.a[2] * ck);
+  if (after > 0 && live) {
+    // the boot follows the ball through and never catches it up (a soft shot at a sprint leaves him slowly):
+    // it stays as far behind the ball along its path as it was on the contact
+    const d0 = (B.x - A.x) * sk + (B.z - A.z) * ck + 0.015 * smooth(after / 0.02), d = (live.x - tR.x) * sk + (live.z - tR.z) * ck;
+    if (d < d0 && Math.hypot(live.x - tR.x, live.y - tR.y, live.z - tR.z) < 0.6) { tR.x += (d - d0) * sk; tR.z += (d - d0) * ck; }
+  }
   if (after > 0) tR.y -= (P.a[1] - a0) * chip;                     // a chip's boot stays down: it has gone under the ball, not through it
   // (the plant foot is beside the ball as its path sees it: a pass across him has it behind the ball, not in its way)
   const pl = clamp(turn, PLANT.right, PLANT.left), cp = Math.cos(pl), sp = Math.sin(pl), px = clamp(P.a[3], PLANT.min, PLANT.max), pz = Math.min(P.a[5], PLANT.ahead);
