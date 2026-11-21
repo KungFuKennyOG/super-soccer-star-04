@@ -39,6 +39,14 @@ export const CLIPS = {
   // plays a stretch one time through (below). Looked at and not used: 140_04 (lies on his back, sits up), 77_03
   // 'ready stance' (hips only 2 cm down: not a keeper's set), subject 83's side-steps (single big steps from standing). 102_28 (a basketball 'defensive move side to side', the same as 78_30) is not baked: it was measured for the shuffle's numbers (docs/notes-keeper-anim.md).
   getup: ['140_03', 'once', { from: 2.5, to: 6.6 }],
+  // a beaten defender (game/beaten.js): pulling up hard out of a run, off balance. 127_05 'run to quick stop' (4.5 m/s
+  // to nothing in half a second: an arm thrown up, a deep sit, the body turned side-on, up again by 1.9 s) and 127_19
+  // 'run quick stop run' (arms flung wide, sat back on the heels). Each from the stride the braking begins on, facing
+  // the way he was running. Looked at and not used: 16_08 / 16_57 'run/jog, sudden stop' (an easy jog pulling up: no
+  // loss of balance), 104_13 'stumble walk' (a clowning drunk: a leg thrown out sideways, arms windmilling), 22_12
+  // 'A stumbles into B' (a walk), 91_59 '360 small stumble' (the stumble is the landing of a jump turn), 127_13 'run
+  // side step left' (a clean side-step, no wrong foot), 90_17 / 90_18 (falls: he has no time to get up).
+  stopA: ['127_05', 'once', { from: 0.45, to: 1.95, face: 'start' }], stopB: ['127_19', 'once', { from: 0.55, to: 1.8, face: 'start' }],
   // a 'loop' is [from, to] seconds of a capture played round and round, e.g. stand: ['137_28', 'loop', { from: 2, to: 12 }].
   // None is baked: the library's standing takes (113_21, 77_02, 141_20, 137_28) have a tilted or bowed head, fidgeting or hands on hips.
 };

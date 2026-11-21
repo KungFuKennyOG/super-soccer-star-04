@@ -9,6 +9,7 @@ import { buildBall, animate, placeModel } from './actors.js';
 import { startStrike, struck } from './strike.js';
 import { buildSet } from './squad.js';
 import { STRIKE } from '../rules/tuning.js';
+import { startBeat, beatKind, BEATS } from './beaten.js';
 
 const FPS = 72, KEEP = 8;                          // record rate and seconds kept
 const SLOTS = FPS * KEEP;
@@ -53,6 +54,7 @@ function playTrick(m, code, f, o) {
 
 export function createReplay(scene, renderer) {
   let ids = [], stride = 0, buf = null, head = 0, count = 0, simT = 0;
+  const stuns = {}, tackles = {};
   let ghosts = {}, strikes = [], clip = null, cursor = 0, active = false, pendingT = -1, goalAt = 0, frameSkip = 0;
   const ball = buildBall();
   ball.mesh.visible = ball.shadow.visible = false;
@@ -116,6 +118,13 @@ export function createReplay(scene, renderer) {
         if (p.dive < 0) flags |= 2; if (p.dive > 0) flags |= 4; if (p.holding) flags |= 8;
         if (p.id === 'you') for (const e of ev) if (trickOf(e) > 0) flags |= 32 * trickOf(e);
         if (p.id === 'you' && charge) flags |= charge.kind === 'pass' ? 1024 : 512;
+        // a defender beaten on this frame (x 2048: 1 + the kind's place in BEATS), and one going in for the ball (16384): game/beaten.js
+        if (p.role === 'def') {
+          if (p.stun > (stuns[p.id] || 0) + 0.15 && p.stun < 5) flags += 2048 * (1 + Math.max(0, BEATS.indexOf(ev.map(beatKind).find(Boolean) || 'drag')));
+          stuns[p.id] = p.stun;
+          if (p.tackleT > (tackles[p.id] || 0) && world.owner !== p.id) flags += 16384;
+          tackles[p.id] = p.tackleT;
+        }
         f[o] = p.x; f[o + 1] = p.z; f[o + 2] = p.vx; f[o + 3] = p.vz; f[o + 4] = p.fx; f[o + 5] = p.fz; f[o + 6] = flags; f[o + 7] = p.stride;
       });
       head = (head + 1) % SLOTS; count = Math.min(SLOTS, count + 1);
@@ -168,7 +177,11 @@ export function createReplay(scene, renderer) {
         const o = 8 + j * PER, m = ghosts[id];
         // tricks as they were done; strikes (game/strike.js) with the approach begun before the frame the ball was
         // struck on, so the boot gets there as it leaves; on that frame the boot is on the ball
-        for (const f of clip) if (f[o + 6] >= 32 && f[0] > prev && f[0] <= cursor) playTrick(m, (f[o + 6] >> 5) & 15, f, o);
+        for (const f of clip) if (f[o + 6] >= 32 && f[0] > prev && f[0] <= cursor) {
+          playTrick(m, (f[o + 6] >> 5) & 15, f, o);
+          const code = (f[o + 6] >> 11) & 7;
+          if (code) startBeat(m, { vx: f[o + 2], vz: f[o + 3] }, BEATS[code - 1], 0);
+        }
         const slide = slideAt(strikes[j], cursor);
         for (const k of strikes[j]) {
           if (k.how.kind !== 'volley' && !m.strike && k.t - SWING > prev && k.t - SWING <= cursor) startStrike(m, k.how);
@@ -176,7 +189,7 @@ export function createReplay(scene, renderer) {
         }
         const flags = a[o + 6];
         const p = { x: L(o), z: L(o + 1), vx: L(o + 2), vz: L(o + 3), fx: L(o + 4), fz: L(o + 5), stride: L(o + 7) + slide, role: id === 'gk' ? 'gk' : id === 'you' ? 'mate' : id[0] === 'd' ? 'def' : 'mate',
-          dive: flags & 2 ? -1 : flags & 4 ? 1 : 0, holding: !!(flags & 8) };
+          dive: flags & 2 ? -1 : flags & 4 ? 1 : 0, holding: !!(flags & 8), tackleT: flags & 16384 ? (m.tk = (m.tk || 0) + 1) : (m.tk = 0) };      // (counting while he goes in)
         if (p.dive) p.save = { y: Math.max(0.3, L(2)), kind: 'parry', id: 'replay' }; else m.saveId = null;
         if (id === 'you') { const c = flags & 1536; m.charge = c ? { kind: c & 1024 ? 'pass' : 'shot', t: (m.charge ? m.charge.t : 0) + dt * speed } : null; }
         placeModel(m, p);

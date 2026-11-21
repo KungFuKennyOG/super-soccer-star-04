@@ -20,6 +20,7 @@ import { layerDribble, dribbleGlance } from './dribblecap.js';
 import { trickHips, trickLegs, trickBody, trickHead } from './tricks.js';
 import { settle, remember } from './inertia.js';
 import { chargeLevel, chargeLegs, layerCharge } from './windup.js';
+import { beatWatch, beatLegs, beatBody, beatHead } from './beaten.js';
 
 const matCache = new Map();
 const mat = (key, make) => { if (!matCache.has(key)) matCache.set(key, make()); return matCache.get(key); };
@@ -65,16 +66,16 @@ export function animate(m, p, dt, t, celebrate, guide = null, ball = null, onBal
   // pose is mirrored back onto him. So every touch, strike and pass is his left boot's, and nothing that puts
   // a boot on the ball needs to know. The twin's world is a whole one, so what the poses remember between
   // frames (footprints, heading, springs) stays true in it.
-  const r = m.root, x = r.position.x, st = m.strike, flip = v => (v === undefined ? v : -v);
+  const r = m.root, st = m.strike, flip = v => (v === undefined ? v : -v);
   const pm = Object.create(p); pm.x = flip(p.x); pm.vx = flip(p.vx); pm.fx = flip(p.fx);
   let bm = null, gm = guide;
   if (ball) { bm = Object.create(ball); bm.x = -ball.x; bm.vx = flip(ball.vx); }
   if (guide && (guide.move === 'left' || guide.move === 'right')) { gm = Object.create(guide); gm.move = guide.move === 'left' ? 'right' : 'left'; }   // the dance's arm signals stay on the side they were called
-  r.position.x = -x; r.rotation.y = -r.rotation.y;
+  r.position.x = -r.position.x; r.rotation.y = -r.rotation.y;
   if (st) st.dir.x = -st.dir.x;
   pose(m, pm, dt, t, celebrate, gm, bm, onBall);
   if (st) st.dir.x = -st.dir.x;
-  r.position.x = x; r.rotation.y = -r.rotation.y;
+  r.position.x = -r.position.x; r.rotation.y = -r.rotation.y;      // (back out of the mirror, from wherever the pose left him: game/beaten.js moves a man thrown by a fake)
   mirrorPose(m.bone);
   if (m.cloth) m.cloth.uCloth.value.x *= -1;
 }
@@ -98,6 +99,9 @@ function posed(m, p, dt, t, celebrate, guide, ball, onBall) {
   const bn = m.bone;
   restPose(bn);
   if (m.bigHead) bn.head.scale.setScalar(1.65);           // the big-heads cheat (locker)
+  // a defender who has just been beaten, or is going in for the ball (game/beaten.js)
+  const def = p.role === 'def';
+  if (def) p = beatWatch(m, p, dt, onBall);
   const s = Math.hypot(p.vx, p.vz);
   if (p.stride === undefined) m.phase += dt * strideRate(s); else m.phase = p.stride;
   // the body turns after the sim's facing; then legs, feet and hips: the feet follow their paths over the
@@ -110,6 +114,7 @@ function posed(m, p, dt, t, celebrate, guide, ball, onBall) {
   if (cap > 0 && !m.firstPerson) leanHips(bn, g, cap);
   // holding the trigger (a shot charging) or the pass ring: he shapes up to strike it as he runs (game/windup.js)
   if (chargeLevel(m, dt) > 0) chargeLegs(m, bn);
+  if (def) beatLegs(m, bn, ball);
   if (m.special) { m.special.t += dt; if (m.special.t > 0.9) m.special = null; }
   const sp = m.special;
   // a skill move or a trick (game/tricks.js) is the whole body's: the hips first (the roulette's spin, how
@@ -138,9 +143,11 @@ function posed(m, p, dt, t, celebrate, guide, ball, onBall) {
   const ob = (m.onBallK || 0) * (1 - m.kickK), up = ob > 0.5 && !st && dribbleGlance(m, p, dt);
   layerDribble(bn, g, ob, m.drive || 0);
   layerCharge(m, bn);
+  if (def) beatBody(m, bn);
   if (trk) trickBody(m, bn, trk);
   layerLook(m, bn, g, celebrate || up ? null : ball, dt, 0.22 * (m.drive || 0));
   if (trk) trickHead(bn, trk);
+  if (def) beatHead(m, bn, ball);
   sway(m, bn, p, dt, g);
   if (guide && p.role === 'mate') { dancePose(bn, guide); return; }
   if (sp && sp.kind === 'header') specialPose(bn, sp);

@@ -9,6 +9,7 @@
 //   a2beat   you run at a defender who comes to meet you and beat him: &move=stepover|stepoverin|roulette|nutmeg|
 //            rainbow|drag|miss (default stepover; miss: you knock it past as he goes in)  &n=1|2|3 another run
 //            (his seed, the side you go)
+//            The move comes as he closes on you, about a second in (the page's title bar says when: note()).
 //   each also ...front, ...back, ...top and ...you (through your own eyes, your own first-person boots:
 //   &look=down|ahead). &rate=0.25 plays it at a quarter speed (FILM=4 then films one second of it at 120 frames a
 //   second). The trigger is let go at `at + hold`; a2beat's move is at 1.2 s.
@@ -29,7 +30,7 @@ const P = o => ({ x: -o.z - 14, z: o.x, vx: -o.vz, vz: o.vx, fx: -o.fz, fz: o.fx
 const B = b => ({ x: -b.z - 14, y: b.y, z: b.x, vx: -b.vz, vy: b.vy, vz: b.vx });
 
 // One row per sim step: { ev, you, def (or null), ball, own, charge }.
-function shotLog(q) {
+export function shotLog(q) {
   const w = createWorld(() => 0.5), log = [], speed = q.get('speed') || 'jog', mv = MOVE[speed] ?? 0.62, kind = q.get('kind') === 'pass' ? 'pass' : 'shot';
   const at = +(q.get('at') ?? 1), hold = +(q.get('hold') ?? (kind === 'pass' ? perfectTime() : 0.5)), cancel = !!q.get('cancel');
   for (const id of ['d1', 'd2', 'd3']) { w.byId[id].x = 20; w.byId[id].z = -1; w.byId[id].stun = 99; }
@@ -54,27 +55,29 @@ function shotLog(q) {
 // You run at a defender and beat him at 1.2 s (or he goes in and you knock it past him).
 const MOVES = { stepover: { skill: { move: 'stepover', side: 1 } }, stepoverin: { skill: { move: 'stepover', side: -1 } }, roulette: { skill: { move: 'roulette', side: 1 } },
   nutmeg: { skill: { move: 'nutmeg', side: 1 } }, rainbow: { skill: { move: 'rainbow', side: 1 } }, drag: { drag: true }, miss: { knock: true } };
-function beatLog(q) {
+export function beatLog(q) {
   const name = MOVES[q.get('move')] ? q.get('move') : 'stepover', act = MOVES[name], n = +(q.get('n') || 1), w = createWorld(() => 0.5), log = [];
   for (const id of ['d2', 'd3']) { w.byId[id].x = 20; w.byId[id].z = 20; w.byId[id].stun = 99; }
   // he starts goal-side of you and comes; where he starts is found so that he is on you as the move comes
   const d = w.byId.d1, gap = +(q.get('gap') ?? { nutmeg: 5.2, miss: 7.5, rainbow: 7.2 }[name] ?? 7), off = [0, 0.5, -0.9][(n - 1) % 3];
   w.you.x = 0; w.you.z = -4; w.ball.x = 0; w.ball.z = -4.6; d.x = off; d.z = -4 - gap;
-  const T = 1.2;
-  let did = false;
+  // the move comes as he closes to `when` m (about a second in); a miss is your knock-on past him as he goes in
+  const when = +(q.get('when') ?? { nutmeg: 2.2, rainbow: 2.6, roulette: 2.2, drag: 2.4 }[name] ?? 2.5);
+  let T = -1;
   for (let t = 0; t < 4.2; t += SIM) {
-    const dist = Math.hypot(d.x - w.you.x, d.z - w.you.z), go = !did && t >= T - SIM / 2;
-    const side = n % 2 ? 1 : -1, after = did ? t - T : -1;
+    const dist = Math.hypot(d.x - w.you.x, d.z - w.you.z), go = T < 0 && t > 0.5 && (name === 'miss' ? d.tackleT > 0.07 : dist < when);
+    const side = n % 2 ? 1 : -1, after = T >= 0 ? t - T : -1;
     // after the move you go on past him (to one side for the moves that don't carry you themselves)
-    const mx = after > 0 && after < 0.5 && (name === 'nutmeg' || name === 'miss' || name === 'drag') ? side * 0.8 : 0;
+    const mx = after > 0 && after < 0.6 && (name === 'nutmeg' || name === 'miss' || name === 'drag') ? side * 0.8 : 0;
     const it = { move: { x: mx, z: name === 'drag' && after > 0 && after < 0.25 ? 0 : -0.75 }, facing: { x: 0, z: -1 }, sprint: after > 0.3, ...(go ? act : {}) };
-    if (go) did = true;
+    if (go) T = t;
     const ev = stepSim(w, it, SIM, () => 0.5);
     if (w.dead) w.dead = false;
-    if (w.owner && w.owner !== 'you') { w.owner = 'you'; }       // (he wins it some runs: for the camera the ball stays yours)
-    log.push({ ev, you: P(w.you), def: { ...P(d), stun: d.stun, tackleT: d.tackleT, role: 'def' }, ball: B(w.ball), own: w.owner === 'you', charge: null, dist });
+    if (w.owner && w.owner !== 'you') log.lost = log.lost ?? t;       // (he won it)
+    log.push({ ev, you: P(w.you), def: { ...P(d), stun: d.stun, tackleT: d.tackleT, role: 'def' }, ball: B(w.ball), own: w.owner === 'you', defOwn: w.owner === 'd1', charge: null, dist });
   }
-  log.note = `${name}, run ${n}: ${log[Math.round(T / SIM)].dist.toFixed(1)} m apart at the move`;
+  log.T = T;
+  log.note = `${name}, run ${n}: the move at ${T.toFixed(2)} s${log.lost !== undefined ? ', he wins the ball at ' + log.lost.toFixed(2) + ' s' : ''}`;
   return log;
 }
 
@@ -137,16 +140,16 @@ export function anim2Look(scene, q, { players, ball, bp, camera, kit, shadowOf }
       if (row.def) {
         const d = row.def;
         def.m.root.visible = def.m.shadow.visible = true;
-        placeModel(def.m, d); animate(def.m, d, dt * rate, t * rate + 1, false, null, bp, false);
+        placeModel(def.m, d); animate(def.m, d, dt * rate, t * rate + 1, false, null, bp, !!row.defOwn);
         shadowOf(def.m, d);
       }
       // the camera: on you for a shot, between the two of you when you beat a man
-      const c = row.def && !first ? { x: (p.x + row.def.x) / 2, z: (p.z + row.def.z) / 2 } : p, f = kind === 'a2beat' ? 1.5 : 1;
+      const c = row.def && !first ? { x: def.m.root.position.x * 0.8 + p.x * 0.2, z: def.m.root.position.z * 0.8 + p.z * 0.2 } : p, f = kind === 'a2beat' ? 1.2 : 1;      // (mostly on him)
       camera.fov = first ? 96 : view === 'top' ? 34 : 30;
       if (first) {
         const h = Math.atan2(p.vx, p.vz), down = q.get('look') === 'ahead' ? 0.15 : 1.1, hx = Math.hypot(p.vx, p.vz) > 0.5 ? Math.sin(h) : p.fx, hz = Math.hypot(p.vx, p.vz) > 0.5 ? Math.cos(h) : p.fz;
         camera.position.set(p.x, 1.66, p.z); camera.lookAt(p.x + hx * Math.cos(down), 1.66 - Math.sin(down), p.z + hz * Math.cos(down));
-      } else if (view === 'front') { camera.position.set(c.x + 4.8 * f, 1.05, c.z + 0.7); camera.lookAt(c.x, 0.9, c.z); }
+      } else if (view === 'front') { camera.position.set(c.x + (kind === 'a2beat' ? -4.8 : 4.8) * f, 1.05, c.z + 0.7); camera.lookAt(c.x, 0.9, c.z); }
       else if (view === 'back') { camera.position.set(c.x - 4.4 * f, 1.5, c.z - 0.8); camera.lookAt(c.x + 0.6, 0.85, c.z); }
       else if (view === 'top') { camera.position.set(c.x - 0.4, 7.5 * f, c.z + 0.01); camera.lookAt(c.x, 0, c.z); }
       else { camera.position.set(c.x + 0.9, 1.0, c.z + 4.6 * f); camera.lookAt(c.x + 0.3, 0.9, c.z); }

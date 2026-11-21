@@ -21,6 +21,7 @@ import { createResults, loadBest } from './results.js';
 import { buildBall, buildArrow, animate, placeModel } from './actors.js';
 import { heldBall } from './keeperpose.js';
 import { startStrike, struck } from './strike.js';
+import { beaten } from './beaten.js';
 import { createSquads } from './squad.js';
 import { createMenus, LENGTHS } from './menus.js';
 import { createCeremony } from './trophy.js';
@@ -228,6 +229,7 @@ function feedback(ev) {
     if (e.type === 'launched') { struck(models.you, e.kind, norm(world.you.fx, world.you.fz), 0.5); continue; }
     if (e.type === 'knock' || e.type === 'flick' || (e.type === 'skill' && e.move === 'nutmeg')) struck(models.you, e.type === 'flick' ? 'scoop' : 'poke', Math.hypot(world.ball.vx, world.ball.vz) > 0.5 ? norm(world.ball.vx, world.ball.vz) : norm(world.you.fx, world.you.fz), 0.4);
     if (e.type === 'drag') models.you.special = { kind: 'drag', t: 0 };
+    if (e.type === 'drag' || e.type === 'skill') beaten(models, world.players.filter(p => p.role === 'def'), e);      // the man you beat (game/beaten.js)
     if ((e.type === 'kick' || e.type === 'pass') && m && e.kind !== 'header' && e.kind !== 'bicycle') struck(m, e.type === 'pass' ? 'pass' : e.kind === 'volley' ? 'volley' : 'shot', norm(world.ball.vx, world.ball.vz), e.power);
     // the keeper's split step: as your shot is wound up (he reads the strike coming), or as anyone else's is struck
     if (models.gk && ((e.type === 'windup' && e.kind === 'shot') || (e.type === 'kick' && e.by !== 'gk' && !(models.gk.split < 0.3)))) models.gk.split = 0;
