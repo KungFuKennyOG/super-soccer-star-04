@@ -22,7 +22,7 @@ function fields(id, what, kit) {
   for (const f of OPTIONAL) if (kit[f] !== undefined && !HEX.test(kit[f])) { err(id, `${what}: ${f} is '${kit[f]}', not a color like #1a2b3c`); ok = false; }
   if (kit.cut !== undefined && ![0, 1, 2].includes(kit.cut)) { err(id, `${what}: cut is ${kit.cut}, must be 0, 1 or 2`); ok = false; }
   if (kit.hoops !== undefined && ![0, 1].includes(kit.hoops)) { err(id, `${what}: hoops is ${kit.hoops}, must be 0 or 1`); ok = false; }
-  for (const f of Object.keys(kit)) if (![...COLORS, ...OPTIONAL, 'pattern', 'cut', 'hoops', 'gloves'].includes(f)) { err(id, `${what}: unknown field '${f}'`); ok = false; }
+  for (const f of Object.keys(kit)) if (![...COLORS, ...OPTIONAL, 'pattern', 'cut', 'hoops', 'gloves', 'flag'].includes(f)) { err(id, `${what}: unknown field '${f}'`); ok = false; }
   return ok;
 }
 function readable(id, what, kit) {
@@ -31,7 +31,8 @@ function readable(id, what, kit) {
   const best = Math.max(contrast(kit.number, kit.shirt), outline ? contrast(outline, kit.shirt) : 0);
   if (best < 2.5) err(id, `${what}: the number (${kit.number}${kit.outline ? ', outline ' + kit.outline : ''}) can't be read on the shirt (${kit.shirt}): contrast ${best.toFixed(1)}, needs 2.5. Change number or add an outline`);
   if (colorDist(kit.trim, kit.shirt) < 60 && colorDist(kit.trim2, kit.shirt) < 60) warn(id, `${what}: trim (${kit.trim}) and trim2 (${kit.trim2}) are nearly the shirt's color (${kit.shirt}): collar, cuffs and piping won't show`);
-  if (kit.pattern !== 'solid' && kit.pattern !== 'sleeves' && colorDist(kit.shirt, kit.alt) < 60) warn(id, `${what}: the pattern's two colors (${kit.shirt}, ${kit.alt}) are too alike for '${kit.pattern}' to show`);
+  const second = kit.pattern === 'band' ? kit.band : kit.alt;                  // (a band is painted in `band`, every other pattern in `alt`)
+  if (kit.pattern !== 'solid' && kit.pattern !== 'sleeves' && colorDist(kit.shirt, second) < 60) warn(id, `${what}: the pattern's two colors (${kit.shirt}, ${second}) are too alike for '${kit.pattern}' to show`);
 }
 
 for (const t of ALL) {

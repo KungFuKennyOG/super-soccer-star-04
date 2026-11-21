@@ -56,6 +56,8 @@ Status, 20 Nov 2026. This repo began as a copy of `KungFuKennyOG/super-soccer-st
 - **Nothing has been seen in a headset or measured on a Quest.** Every judgment so far is from a flat camera on a software renderer.
 - Wiring the look into the game: players in `main.js`, keepers and gloves, first-person boots and hands, every ground in `grounds.js`, rain and snow, replays, a far-distance LOD if fps needs it.
 - The keeper's animation is untouched.
+- **Queued by Kenny (20 Nov), after the kits:** your own first-person hands on the controllers (`game/hands.js`, still the PS1 low-poly ones) and the trophies (`game/trophy.js`, deliberately PS1) redone in the '04 look. First-person boots and socks are in the same state. Trophies: he sent the two real cups as references; those are protected designs and his own brief bars real branding, so build original cups in the same spirit (a gold sculpted one for the nations' cup, a polished silver one for the clubs' cup), not copies, with no real wordmarks.
+- **Also queued (20 Nov):** goalkeepers get gloves in the '04 look, and their animation (`game/keeperpose.js`, untouched so far) is brought up to the new standard, on real references like the rest.
 
 ## Decisions
 
