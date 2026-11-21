@@ -19,7 +19,7 @@ function flagGeo() {
   const pos = [], uv = [], cloth = [], along = [], idx = [], nx = 8, ny = 3;
   for (let j = 0; j <= ny; j++) for (let i = 0; i <= nx; i++) { pos.push(i / nx * FLAG_W, POLE - FLAG_H + j / ny * FLAG_H, 0); uv.push(i / nx, j / ny); cloth.push(1); along.push(i / nx); }
   for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) { const a = j * (nx + 1) + i; idx.push(a, a + 1, a + nx + 2, a, a + nx + 2, a + nx + 1); }
-  const w = 0.022;
+  const w = 0.03;
   for (const [dx, dz] of [[w, 0], [0, w]]) {
     const b = pos.length / 3;
     pos.push(-dx, -0.35, -dz, dx, -0.35, dz, dx, POLE + 0.04, dz, -dx, POLE + 0.04, -dz); uv.push(0, 0, 1, 0, 1, 1, 0, 1); cloth.push(0, 0, 0, 0); along.push(0, 0, 0, 0);

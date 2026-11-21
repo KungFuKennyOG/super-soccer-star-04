@@ -8,7 +8,8 @@
 //   groundwide   wide from the TV gantry on the left stand; groundtop: from above, for the layout
 // Query: &team=ID (a club's own ground; a nation plays at the national stadium), &opp=ID, &share=0.78,
 // &time=day|dusk|night (overrides the recipe's), &wx=rain|snow, &cheer=1 (your fans jumping),
-// &counter=1 (theirs), &ooh=1 (a near miss at 0.1 s). Shots are 1024 x 1024 at 90 degrees (as a Quest eye sees) unless noted.
+// &counter=1 (theirs), &ooh=1 (a near miss at 0.1 s), &goal=secs (your goal at that moment, for
+// filming), &poses=1 (every fan in one of the 16 poses, groundfans). Shots are 1024 x 1024 at 90 degrees (as a Quest eye sees) unless noted.
 import * as THREE from 'three';
 import { buildStadium, TIMES2 } from '../game/ps2/stadium.js';
 import { createWeather } from '../game/ps2/weather.js';
@@ -67,6 +68,7 @@ export function groundLook(q, players, ball) {
       if (s.hit && t >= 0.2 && t - dt < 0.2) stadium.netHit(...s.hit);
       if (q.get('counter') && t >= 0.1 && t - dt < 0.1) stadium.theirs();
       if (q.get('ooh') && t >= 0.1 && t - dt < 0.1) stadium.ooh();
+      if (q.get('goal') && t >= +q.get('goal') && t - dt < +q.get('goal')) stadium.cheer(true);   // &goal=secs: your goal goes in then (film it)
       stadium.update(dt, t);
     };
     S[k] = s;

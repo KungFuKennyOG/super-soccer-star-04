@@ -63,7 +63,7 @@ export class Crowd {
         if (R() < (packed ? 0.01 : 0.035 + patch)) continue;            // an empty seat (a few in patches)
         const jz = (R() - 0.5) * (packed ? 0.45 : 0.12), lz = z + jz, ly = y + jz * dy / dz;
         const p = run.pt(t + (R() - 0.5) * (packed ? 0.2 : 0.1) * sp / at(z), lz, ly);
-        this.fan(p, band, packed ? 1 : R() < 0.012 ? 2 : 0, shade, ultra && band > 0, packed);
+        this.fan(p, band, packed ? 1 : R() < 0.012 ? 2 : 0, shade, ultra && band > 0, packed, k, t);
       }
     }
   }
@@ -78,13 +78,13 @@ export class Crowd {
     S.idx.push(i, i + 1, i + 2, i, i + 2, i + 3);
   }
 
-  fan(p, band, role, shade, ultra, packed) {
+  fan(p, band, role, shade, ultra, packed, k, t) {
     const R = this.rand, mine = R() < this.share[band] ? 1 : 0, kit = mine ? 0 : 5;
     const shape = pick(SHAPE_W, R()), neutral = R() < (packed ? 0.1 : 0.28) * (JACKET.includes(shape) ? 2 : 1);
     const ks = pick(KIT_W, R()), shirt = neutral ? 10 + Math.floor(R() * 6) : kit + ks;
     const acc = neutral ? (R() < 0.7 ? kit + pick(KIT_W, R()) : 10 + Math.floor(R() * 6)) : kit + (ks + 1 + Math.floor(R() * 2)) % 5;
     const kid = !packed && R() < 0.03, scale = kid ? 0.8 : 0.94 + R() * 0.12, b = 0.9 + R() * 0.2;
-    const f = { p, shape: shape + (R() < 0.5 ? 8 : 0), mine, phase: R(), role, col: [shirt, acc, pick(SKIN_W, R()), pick(HAIR_W, R())], scale, shade: [shade[0] * b, shade[1] * b], band };
+    const f = { p, shape: shape + (R() < 0.5 ? 8 : 0), mine, phase: R(), role, col: [shirt, acc, pick(SKIN_W, R()), pick(HAIR_W, R())], scale, shade: [shade[0] * b, shade[1] * b], band, k, t };
     this.fans.push(f);
     if (ultra) this.ultras.push(f);
   }
@@ -94,13 +94,13 @@ export class Crowd {
   flags() {
     const R = this.rand, out = [];
     for (const band of [1, 2]) {
-      const pool = this.ultras.filter(f => f.band === band);
+      const pool = this.ultras.filter(f => f.band === band && f.k > 0.15 && f.k < 0.78);   // not the front rows, not under the roof
       if (pool.length < 20) continue;
       const box = new THREE.Box3().setFromPoints(pool.map(f => f.p)), span = Math.hypot(box.max.x - box.min.x, box.max.z - box.min.z);
       const want = [[Math.min(band === 1 ? 2 : 1, Math.floor(span / 12)), true], [Math.min(band === 1 ? 12 : 4, Math.round(span / (band === 1 ? 4.5 : 7))), false]];
       for (const [n, big] of want) for (let k = 0, tries = 0; k < n && tries < 400; tries++) {
         const f = pool[Math.floor(R() * pool.length)];
-        if (f.role >= 3 || out.some(o => o.f.p.distanceTo(f.p) < (big || o.big ? 6.5 : 3.2))) continue;
+        if (f.role >= 3 || (big && (f.k < 0.25 || f.k > 0.6)) || out.some(o => o.f.p.distanceTo(f.p) < (big || o.big ? 6.5 : 3.2))) continue;
         f.role = big ? 4 : 3; f.scale = 1;
         out.push({ f, p: f.p, mine: f.mine, phase: f.phase, big, side: band - 1 }); k++;
       }
