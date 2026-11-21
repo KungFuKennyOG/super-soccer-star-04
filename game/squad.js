@@ -1,7 +1,6 @@
 // Dresses the players on the pitch for a match: your team's kit on you and your teammates, the
 // opponent's kit (or their change kit on a clash) on the defenders, and a keeper kit that stands out.
-import { buildYou } from './actors.js';
-import { buildPlayer2 } from './ps2/player.js';
+import { buildPlayer2, buildFeet2 } from './ps2/player.js';
 import { matchKit, keeperKit } from '../rules/teams.js';
 import { pickSquad } from '../rules/looks.js';
 
@@ -25,7 +24,7 @@ export function buildSet(world, home, away, { fullYou = false, look: lk = {}, ma
   const awayK = matchKit(away, home), gkK = keeperKit(awayK), models = {}, aps = squadLooks(world, home, away, seed);
   for (const p of world.players) {
     const look = p.num * 7 + seedOf(p.team === 'home' ? home.id : away.id), ap = aps[p.id];   // (look still picks the left-footers)
-    models[p.id] = p.role === 'you' ? (fullYou ? make(home.kit, p.num, look, { boots: lk.boots || 0, ap }) : buildYou(home.kit, lk.boots || 0))
+    models[p.id] = p.role === 'you' ? (fullYou ? make(home.kit, p.num, look, { boots: lk.boots || 0, ap }) : buildFeet2(home.kit, lk.boots || 0))
       : p.team === 'home' ? make(home.kit, p.num, look, { ap })
       : make(p.role === 'gk' ? gkK : awayK, p.num, look, { ap });
     models[p.id].bigHead = !!lk.heads;

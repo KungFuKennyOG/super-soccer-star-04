@@ -18,7 +18,9 @@ import { buildStadium } from './ps2/stadium.js';
 import { pickWeather, applyWeather, WEATHER } from '../rules/weather.js';
 import { createWeather } from './ps2/weather.js';
 import { createResults, loadBest } from './results.js';
-import { buildBall, buildArrow, animate, placeModel } from './actors.js';
+import { animate, placeModel } from './actors.js';
+import { buildBall04 } from './ps2/ball.js';
+import { buildArrow04 } from './ps2/markers.js';
 import { heldBall } from './keeperpose.js';
 import { startStrike, struck } from './strike.js';
 import { beaten } from './beaten.js';
@@ -78,8 +80,8 @@ $('bug').appendChild(hud.bugCanvas);
 const game = { kind: 'attack', team: byId('MAD'), opp: byId('BAR'), cup: null, fixture: null, scenario: null };
 let world = createWorld(), match = createMatch();
 let models = squads.dress(world, game.team, game.opp);
-const ball = buildBall(); scene.add(ball.mesh, ball.shadow);
-const arrow = buildArrow(); scene.add(arrow);
+const ball = buildBall04(); scene.add(ball.mesh, ball.shadow);
+const arrow = buildArrow04(); scene.add(arrow);
 
 let mode = 'title';   // 'title' (browser start page) | 'menu' | 'play' | 'ceremony' | 'paused'
 let celebrateT = 0, flashT = 0, danceNext = false;   // danceNext: a hat-trick dance waiting for its replay to finish

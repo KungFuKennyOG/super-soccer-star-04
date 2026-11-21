@@ -3,8 +3,8 @@
 import * as THREE from 'three';
 import { GOAL } from '../rules/tuning.js';
 import { ps1 } from './ps1.js';
-import { ringTex, reticleTex } from './tex.js';
-import { uiPlane } from './ps2/ui.js';
+import { uiPlane, uiMat } from './ps2/ui.js';
+import { ringTex, groundTex, reticleTex, buildPower, COLORS } from './ps2/markers.js';
 import { BW, BH, paintBug, SW, SH, paintBoard, NW, NH, paintBanner, TW, TH, paintTag, RW, RH, RMAP, paintRadar } from './ps2/hudpaint.js';
 
 export function buildHud(scene, camera) {
@@ -60,13 +60,13 @@ export function buildHud(scene, camera) {
   }
 
   /* pass timing: a fixed white circle and a shrinking ring over your target */
-  const ringMat = () => ps1({ map: ringTex(), alphaTest: 0.5, lit: false, depthTest: false, fog: false });
+  const ringMat = () => uiMat(ringTex(), { depthTest: false });
   const ringTarget = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), ringMat());
   const ringLive = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), ringMat());
   for (const r of [ringTarget, ringLive]) { r.renderOrder = 11; r.visible = false; scene.add(r); }
   // ground ring under who you'd pass to
-  const groundRing = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 1.4), ps1({ map: ringTex(), alphaTest: 0.5, lit: false, color: '#f2c21a' }));
-  groundRing.rotation.x = -Math.PI / 2; groundRing.visible = false; scene.add(groundRing);
+  const groundRing = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 1.4), uiMat(groundTex(), { color: COLORS.ring, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }));
+  groundRing.rotation.x = -Math.PI / 2; groundRing.renderOrder = 2; groundRing.visible = false; scene.add(groundRing);
   // "LOB" over the target when a defender is in the lane (the pass will go over the top)
   // (and his number: the '04 name bar over the man you'd pass to)
   const tag = uiPlane(TW, TH, 0.8, 0.8 * TH / TW, { mat: { depthTest: false } });
@@ -75,17 +75,12 @@ export function buildHud(scene, camera) {
   let tagKey = '';
 
   /* shot: a reticle on the goal mouth with a power ring */
-  const reticle = new THREE.Mesh(new THREE.PlaneGeometry(1.2, 1.2), ps1({ map: reticleTex(), alphaTest: 0.5, lit: false, depthTest: false, fog: false }));
+  const reticle = new THREE.Mesh(new THREE.PlaneGeometry(1.2, 1.2), uiMat(reticleTex(), { depthTest: false }));
   reticle.renderOrder = 11; reticle.visible = false; scene.add(reticle);
   // Shot power: a ring round the reticle on the goal that fills up as you charge (Kenny dropped the
   // separate power bar as redundant).
-  const hudMat = color => ps1({ color, lit: false, depthTest: false, depthWrite: false, fog: false });
-  const ringSegs = [];
-  for (let i = 0; i < 28; i++) {
-    const a0 = Math.PI / 2 - (i / 28) * Math.PI * 2;                 // clockwise from the top
-    const seg = new THREE.Mesh(new THREE.RingGeometry(0.78, 0.98, 2, 1, a0 - Math.PI * 2 / 28 * 0.85, Math.PI * 2 / 28 * 0.85), hudMat('#f2c21a'));
-    seg.renderOrder = 12; reticle.add(seg); ringSegs.push(seg);
-  }
+  const power = buildPower();
+  reticle.add(power.mesh);
 
   const headPos = new THREE.Vector3(), headDir = new THREE.Vector3(), tmp = new THREE.Vector3();
   let bnYaw = null;
@@ -113,7 +108,7 @@ export function buildHud(scene, camera) {
       } else bnYaw = null;
 
       groundRing.visible = !!mate;
-      if (mate) { groundRing.position.set(mate.x, 0.03, mate.z); groundRing.material.color.set(lob ? '#5ad0ff' : '#f2c21a'); }
+      if (mate) { groundRing.position.set(mate.x, 0.03, mate.z); groundRing.material.color.set(lob ? COLORS.lob : COLORS.ring); }
       lobTag.visible = !!mate;
       if (mate) {
         const k = `${mate.num}|${!!lob}`;
@@ -126,16 +121,15 @@ export function buildHud(scene, camera) {
         for (const r of [ringTarget, ringLive]) { r.position.set(pass.target.x, 2.5, pass.target.z); r.lookAt(headPos); }
         ringTarget.scale.setScalar(0.9);
         ringLive.scale.setScalar(Math.max(0.01, pass.scale * 0.9));
-        ringLive.material.color.set(pass.grade === 'perfect' ? '#40ff60' : pass.grade === 'good' ? '#f2c21a' : '#ff5040');
+        ringLive.material.color.set(pass.grade === 'perfect' ? COLORS.perfect : pass.grade === 'good' ? COLORS.good : COLORS.bad);
       }
 
       reticle.visible = !!aim;
       if (aim) { reticle.position.set(aim.x, aim.y, GOAL.z + 0.08); reticle.lookAt(tmp.set(aim.x, aim.y, 0)); }
 
       if (charge != null) {
-        const col = over > 0 ? (Math.floor(performance.now() / 80) % 2 ? '#ff2020' : '#ffffff') : charge >= 1 ? '#ff8020' : '#f2c21a';
-        const lit = Math.round(charge * ringSegs.length);
-        ringSegs.forEach((sg, i) => { sg.visible = i < lit; sg.material.color.set(col); });
+        const col = over > 0 ? (Math.floor(performance.now() / 80) % 2 ? COLORS.over : '#ffffff') : charge >= 1 ? COLORS.full : COLORS.power;
+        power.set(charge, col);
       }
     },
   };

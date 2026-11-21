@@ -5,7 +5,8 @@
 import * as THREE from 'three';
 import { ps1 } from './ps1.js';
 import { uiPlane, text, box } from './ps2/ui.js';
-import { buildBall, animate, placeModel } from './actors.js';
+import { animate, placeModel } from './actors.js';
+import { buildBall04 } from './ps2/ball.js';
 import { startStrike, struck } from './strike.js';
 import { buildSet } from './squad.js';
 import { STRIKE } from '../rules/tuning.js';
@@ -56,7 +57,7 @@ export function createReplay(scene, renderer) {
   let ids = [], stride = 0, buf = null, head = 0, count = 0, simT = 0;
   const stuns = {}, tackles = {};
   let ghosts = {}, strikes = [], clip = null, cursor = 0, active = false, pendingT = -1, goalAt = 0, frameSkip = 0;
-  const ball = buildBall();
+  const ball = buildBall04();
   ball.mesh.visible = ball.shadow.visible = false;
   scene.add(ball.mesh, ball.shadow);
 

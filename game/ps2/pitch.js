@@ -2,8 +2,8 @@
 // stripes worked out from where the pixel is on the pitch, and a sheen that lightens the grass
 // toward the horizon. Lines are thin quads just above it.
 import * as THREE from 'three';
-import { BALL } from '../../rules/tuning.js';
-import { canvas, hash, vnoise, eachPixel, smoothTex, gauss } from './paint.js';
+import { canvas, hash, vnoise, eachPixel, smoothTex } from './paint.js';
+import { buildBall04 } from './ball.js';
 
 function grassTex() {
   const c = canvas(256, 256), ctx = c.getContext('2d');
@@ -62,23 +62,5 @@ export function buildLines(segs, w = 0.12) {
   return new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color: 0xe9efe2, transparent: true, opacity: 0.92, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1, side: THREE.DoubleSide }));
 }
 
-// The ball: white with dark star-shaped panels (an invented design), a little gloss.
-export function buildBall2() {
-  const ico = new THREE.IcosahedronGeometry(1, 0), corners = [], ip = ico.attributes.position, v = new THREE.Vector3();
-  for (let i = 0; i < ip.count; i++) { v.fromBufferAttribute(ip, i).normalize(); if (!corners.some(c => c.distanceTo(v) < 1e-3)) corners.push(v.clone()); }
-  const c = canvas(512, 256), ctx = c.getContext('2d'), up = new THREE.Vector3(), a = new THREE.Vector3(), b = new THREE.Vector3();
-  eachPixel(ctx, { x: 0, y: 0, w: 512, h: 256 }, (u, t, col) => {
-    const th = t * Math.PI, ph = u * Math.PI * 2;
-    v.set(-Math.cos(ph) * Math.sin(th), Math.cos(th), Math.sin(ph) * Math.sin(th));
-    let best = corners[0], d = -1;
-    for (const k of corners) { const q = k.dot(v); if (q > d) { d = q; best = k; } }
-    // a five-pointed star round each of the ball's twelve corners
-    up.set(0.3, 1, 0.2).cross(best).normalize(); a.copy(best).cross(up); b.copy(v).sub(best);
-    const ang = Math.atan2(b.dot(a), b.dot(up)), r = Math.acos(Math.min(1, d)), star = 0.17 + 0.3 * Math.max(0, Math.cos(ang * 5)) ** 1.5 * (1 - 0);
-    const k = 1 - Math.min(1, Math.max(0, (r - star) / 0.012 + 0.5)), rim = gauss(r, star + 0.035, 0.012) * 0.5;
-    const seam = 1 - 0.18 * gauss(r, 0.56, 0.01);
-    col[0] = (236 * (1 - k) + 26 * k) * seam * (1 - rim * 0.5); col[1] = (236 * (1 - k) + 34 * k) * seam * (1 - rim * 0.45); col[2] = (232 * (1 - k) + 74 * k) * seam * (1 - rim * 0.2);
-  });
-  const mesh = new THREE.Mesh(new THREE.SphereGeometry(BALL.r, 20, 14), new THREE.MeshPhongMaterial({ map: smoothTex(c), specular: 0x555555, shininess: 40 }));
-  return mesh;
-}
+// The ball (game/ps2/ball.js), just its mesh, for the look page.
+export const buildBall2 = () => buildBall04().mesh;
