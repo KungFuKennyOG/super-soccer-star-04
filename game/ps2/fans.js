@@ -5,12 +5,12 @@
 // home curva and the away end stand all game; some of them wave flags (ultras2.js draws the flags).
 // Two draws: the seats (the empty stand) and every fan in one instanced draw.
 import * as THREE from 'three';
-import { SEAT } from './groundplan.js';
 import { fanAtlas, seatTile } from './fantex.js';
 import { fanMaterial, seatMaterial } from './fanmat.js';
 import { LIGHT_DIR } from './player.js';
 
-const PITCH_P = new THREE.Vector3(0, 3, -15), PACKED = 0.5, AISLE = 15;
+// SEAT: one seat's width (m), a little under groundplan.js's 0.6 so shoulders nearly touch, as they do
+const PITCH_P = new THREE.Vector3(0, 3, -15), SEAT = 0.52, PACKED = 0.46, AISLE = 15;
 const NEUTRAL = ['#1c1e24', '#2b3550', '#4a4f58', '#7a7f88', '#3a4a38', '#6b5a44'];
 const SHAPE_W = [16, 14, 12, 12, 8, 10, 12, 16], JACKET = [2, 3, 5];
 const SKIN_W = [0.3, 0.25, 0.18, 0.12, 0.09, 0.06], HAIR_W = [0.22, 0.25, 0.18, 0.1, 0.08, 0.08, 0.04, 0.05], KIT_W = [0.56, 0.24, 0.08, 0.07, 0.05];
@@ -135,6 +135,6 @@ export class Crowd {
     const atlas = fanAtlas(), mat = fanMaterial(atlas, light, crowd);
     this.pal.forEach((c, i) => mat.uniforms.uPal.value[i].set(c));
     const fanMesh = new THREE.Mesh(g, mat); fanMesh.frustumCulled = false; fanMesh.matrixAutoUpdate = false;
-    return { seats: seatMesh, fans: fanMesh, holders, count: n, tris: S.idx.length / 3 + n * 2, atlasBytes: atlas.bytes };
+    return { seats: seatMesh, fans: fanMesh, holders, count: n, tris: S.idx.length / 3 + n * 2, atlasBytes: atlas.bytes, atlasMs: atlas.ms };
   }
 }

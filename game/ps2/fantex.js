@@ -89,8 +89,8 @@ function head(p, s, a, ox) {
   if (hair === 'hood') p.fill('shirt', 0.74, c => { c.ellipse(hx, hy + 0.5, w + 3, 9.6, 0, 0, 7); c.rect(hx - w - 3, hy, 2 * w + 6, 13); });
   p.ell('skin', 0.95, hx - w + 0.4 + turn * 0.3, hy + 1.5, 1.4, 2.2);                                // ears
   p.ell('skin', 0.95, hx + w - 0.4 + turn * 0.3, hy + 1.5, 1.4, 2.2);
-  p.fill('skin', 0.96, c => { c.ellipse(hx + turn * 0.3, hy, w, 7.8, 0, 0, 7); });                     // the head
-  p.fill('skin', 0.9, c => { c.ellipse(hx + turn * 0.4, hy + 4.2, w - 1.2, 3.6, 0, 0, Math.PI); });    // jaw
+  p.fill('skin', 0.96, c => { c.ellipse(hx + turn * 0.3, hy, w, 7.4, 0, 0, 7); });                     // the head
+  p.fill('skin', 0.9, c => { c.ellipse(hx + turn * 0.4, hy + 3.8, w - 1, 3.4, 0, 0, Math.PI); });    // jaw
   const fx = hx + turn;
   // hair or hat over the top
   if (hair === 'short') p.fill('hair', 0.78, c => { c.ellipse(hx + turn * 0.2, hy - 3.2, w + 0.5, 5, 0, Math.PI, 0); c.rect(hx - w - 0.5, hy - 3.5, 1.8, 4.5); c.rect(hx + w - 1.3, hy - 3.5, 1.8, 4.5); });
@@ -142,7 +142,7 @@ function fan(p, s, pose, ox) {
 let fanTex = null;
 export function fanAtlas() {
   if (fanTex) return fanTex;
-  const W = CELL.w * POSES.length, H = CELL.h * CELL.shapes, cv = { alb: canvas(W, H), mask: canvas(W, H), hair: canvas(W, H) };
+  const t0 = performance.now(), W = CELL.w * POSES.length, H = CELL.h * CELL.shapes, cv = { alb: canvas(W, H), mask: canvas(W, H), hair: canvas(W, H) };
   for (const [pass, c] of Object.entries(cv)) {
     const x = c.getContext('2d', { willReadFrequently: true });
     if (pass !== 'alb') { x.fillStyle = '#000'; x.fillRect(0, 0, W, H); }
@@ -185,8 +185,9 @@ export function fanAtlas() {
     a: tex(a, THREE.RGBAFormat), b: tex(b, THREE.RGFormat),
     // per pose: how much of the card's height (from the bottom) and half-width it needs (the card is cut to it)
     top: ext.map(e => Math.min(1, (e.top + 2) / CELL.h)), hw: ext.map(e => Math.min(1, (e.hw + 2) / CX)),
-    bytes: W * H * 6,
+    bytes: W * H * 6, ms: 0,
   };
+  fanTex.ms = Math.round(performance.now() - t0);
   return fanTex;
 }
 
@@ -201,11 +202,11 @@ export function seatTile() {
     let L, s = 0;
     if (x < 32) {
       const u = (x + 0.5) / 32, gap = u < 0.08 || u > 0.92;
-      if (v < 0.18) L = 0.42;                                       // the tread in front of the seat
-      else if (v < 0.3) { L = gap ? 0.25 : 0.55; s = gap ? 0 : 1; }  // the seat's front lip
-      else if (v < 0.82) { L = gap ? 0.16 : 0.34 + 0.5 * (v - 0.3); s = gap ? 0 : 1; }   // the seat back, lit toward its top
-      else if (v < 0.88) { L = gap ? 0.2 : 0.9; s = gap ? 0 : 1; }   // its rounded top edge
-      else L = 0.12;                                                // the shadow behind it
+      if (v < 0.18) L = 0.3;                                        // the tread in front of the seat
+      else if (v < 0.3) { L = gap ? 0.18 : 0.42; s = gap ? 0 : 1; }  // the seat's front lip
+      else if (v < 0.82) { L = gap ? 0.12 : 0.24 + 0.4 * (v - 0.3); s = gap ? 0 : 1; }   // the seat back, lit toward its top
+      else if (v < 0.88) { L = gap ? 0.16 : 0.72; s = gap ? 0 : 1; }   // its rounded top edge
+      else L = 0.1;                                                 // the shadow behind it
     } else {
       const f = (v * 2) % 1;                                        // two steps a row
       L = f < 0.15 ? 0.85 : f < 0.7 ? 0.62 : 0.4;

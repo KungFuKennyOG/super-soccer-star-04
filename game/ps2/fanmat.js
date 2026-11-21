@@ -23,7 +23,7 @@ vec3 fanState(float phase, float role, float mine) {
   float joy = me ? uJumpOurs : uJumpTheirs, woe = me ? uJumpTheirs : uJumpOurs;
   float gt = me ? uGoalT : uTheirT, wt = me ? uTheirT : uGoalT;
   // sitting: now and then he shifts and looks along the row
-  float pose = fract(t / (7.0 + 9.0 * h1) + h2) < 0.16 ? 1.0 : 0.0, up = standing ? 1.0 : 0.0, hop = 0.0;
+  float pose = fract(t / (7.0 + 9.0 * h1) + h2) < 0.16 ? 1.0 : h4 > 0.86 ? 13.0 : 0.0, up = standing ? 1.0 : 0.0, hop = 0.0;   // some sit with arms folded
   if (standing) {
     // the end sings a different song every 7 s or so (not all at once); some songs everyone bounces to
     float seg = floor(t / 7.0 + h4 * 0.3), r = fh(seg + phase * 3.1, 4.7), bounce = step(0.45, fh(seg, 9.1));
@@ -52,7 +52,7 @@ vec3 fanState(float phase, float role, float mine) {
   }
   // a near miss (a save, the woodwork): your fans half out of their seats, hands on heads
   if (me && uOoh > 0.2 + 0.35 * h1 && h3 < 0.8 && rise < 0.5 && role < 2.5) { pose = 11.0; up = max(up, smoothstep(0.2, 0.6, uOoh) * 0.7); }
-  if (up < 0.5 && pose > 1.5 && pose != 11.0) pose = 0.0;
+  if (up < 0.5 && pose > 1.5 && pose != 11.0 && pose != 13.0) pose = 0.0;           // poses that work sitting
   return vec3(pose, up * 0.45 + hop, up);
 }`;
 

@@ -141,6 +141,6 @@ export function buildGround2(recipe, ours, theirs, oursShare, light, jump, hype)
   return {
     group, recipe, plan, topY: plan.topY, endZ: plan.endZ, sideX: plan.sideX, ultras, curvaOurs, board: plan.board,
     lamps: meshes.glows.material, meshes, bits,
-    stats: { draws: Object.keys(meshes).length + ultras.draws, tris, fans: crowd.count, lamps: glow.pos.length / 12, ms: Math.round(performance.now() - t0) },
+    stats: { draws: Object.keys(meshes).length + ultras.draws, tris, fans: crowd.count, fanAtlasMs: crowd.atlasMs, lamps: glow.pos.length / 12, ms: Math.round(performance.now() - t0) },
   };
 }
