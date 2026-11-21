@@ -21,7 +21,7 @@ Nothing in `rules/`, `game/main.js` or `game/grounds.js` changed. Every ground i
 | `groundmat.js` | Shaders. Light is baked per vertex as two weights, how much a face takes the sun and how much it faces the floodlit pitch. The time of day sets three shared colours. |
 | `turf.js` | The pitch quad, mown as the recipe says (stripes 6 m, wide 12 m, checks 12 m, starting on the goal line), with a worn goalmouth and spot, the stands' shadow on sunny days, a pool of floodlight at night, Turin's track (rounded oval with lanes), a wet sheen, snow cover and concrete outside the stands. Also the half-pitch lines, soft-edged; under snow they show as swept-clear grass. |
 | `goal2.js` | Round posts, stanchions and corner flags in one lit mesh. The net is a painted 12 cm mesh, alpha blended, that bulges in its vertex shader when `netHit` is called. |
-| `ultras2.js` | Flags on poles: one instanced draw for both ends, swinging and rippling, harder when that side's hype is up. Banners draped over the end's front wall with generic words (FORZA, ULTRAS, CURVA, ALLEZ, VAMOS, SEMPRE, NEVER ALONE, ALE ALE). |
+| `ultras2.js` | Flags on poles: one instanced draw for both ends, swinging and rippling, harder when that side's hype is up. Banners draped over the end's front wall with generic words (FORZA, ULTRAS, CURVA, ALLEZ, VAMOS, SEMPRE, AVANTI, ALE ALE). |
 | `weather.js` | Rain streaks slanting with a little wind, and soft round snowflakes, in a box round your head. One draw each. |
 | `stadium.js` | Times of day (`TIMES2`: day, dusk, night) with weather on top, the sky dome (clouds by day, stars at night, grey overcast in rain and snow), the scene's hemisphere and key lights for the players, and the crowd's jump. |
 

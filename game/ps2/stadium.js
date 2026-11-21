@@ -2,7 +2,8 @@
 //   const stadium = buildStadium(scene);
 //   stadium.setGround(recipe, ours, theirs, oursShare)  -> ground { board: { y, z }, recipe, topY, ... }
 //   stadium.setWeather('clear' | 'rain' | 'snow')       (after setGround)
-//   stadium.netHit(x, y), stadium.cheer(on), stadium.theirs(), stadium.update(dt, t), stadium.ground
+//   stadium.netHit(x, y), stadium.cheer(on), stadium.theirs(), stadium.ooh(), stadium.update(dt, t), stadium.ground
+// (ooh: a near miss, a save or the woodwork: your fans' hands go to their heads; game/main.js calls it)
 // Recipes are game/grounds.js's (GROUNDS, groundFor, venueFor stay there). The time of day sets the
 // light every ground material shares (groundmat.js), the scene's two lights (they light the players
 // and the posts) and the sky; the weather sits on top of it. Rain and snow particles are
@@ -51,16 +52,16 @@ export function buildStadium(scene) {
   scene.fog = new THREE.Fog('#0d1328', 110, 440);
   const hemi = new THREE.HemisphereLight('#dfe6f0', '#38372c', 0.62); scene.add(hemi);
   const key = new THREE.DirectionalLight('#fff0d6', 0.68); key.position.copy(LIGHT_DIR).multiplyScalar(50); scene.add(key);
-  const light = groundLight(), jump = { uJumpOurs: { value: 0 }, uJumpTheirs: { value: 0 } }, hype = { uHypeH: { value: 0 }, uHypeA: { value: 0 } };
+  const light = groundLight(), jump = { uJumpOurs: { value: 0 }, uJumpTheirs: { value: 0 }, uOoh: { value: 0 }, uGoalT: { value: 99 }, uTheirT: { value: 99 } }, hype = { uHypeH: { value: 0 }, uHypeA: { value: 0 } };
   const sky = skyDome(); scene.add(sky.mesh);
   const turf = buildTurf(light); scene.add(turf.mesh);
   const marks = buildMarkings(light); scene.add(marks);
   const goal = buildGoal2(light); scene.add(goal.group);
 
-  let ground = null, time = TIMES2.night, weather = 'clear', jumpOurs = 0, jumpTheirs = 0, cheering = false;
+  let ground = null, time = TIMES2.night, weather = 'clear', jumpOurs = 0, jumpTheirs = 0, cheering = false, ooh = 0, goalT = 99, theirT = 99;
   const drop = g => {
     scene.remove(g.group);
-    g.group.traverse(o => { if (o.geometry) o.geometry.dispose(); if (o.material && o.material.uniforms) for (const u of Object.values(o.material.uniforms)) if (u.value && u.value.isTexture && u.value !== g.atlas) u.value.dispose(); });
+    g.group.traverse(o => { if (o.geometry) o.geometry.dispose(); if (o.material && o.material.uniforms) for (const u of Object.values(o.material.uniforms)) if (u.value && u.value.isTexture && u.value !== g.atlas && !u.value.userData.keep) u.value.dispose(); });
   };
   // the time of day with the weather over it
   function light2() {
@@ -79,12 +80,13 @@ export function buildStadium(scene) {
     scene.background.copy(fc);
     hemi.color.set(T.hemi[0]); hemi.groundColor.set(T.hemi[1]); hemi.intensity = T.hemi[2] * (rain ? 0.9 : 1);
     key.color.set(T.key[0]); key.intensity = T.key[1] * (rain ? 0.65 : snow ? 0.8 : 1);
-    if (ground) { turf.set(ground.recipe, ground.plan, T.shadow * sunK); ground.meshes.glows.visible = light.uLamp.value > 0; }
+    if (ground) { turf.set(ground.recipe, ground.plan, T.shadow * sunK); ground.meshes.glows.visible = light.uLamp.value > 0; ground.meshes.seats.material.uniforms.uDay.value = ground.meshes.fans.material.uniforms.uDay.value = T.day; }
   }
   const api = {
     netHit: goal.hit,
-    cheer: on => { cheering = on; },
-    theirs: () => { jumpTheirs = 1; },
+    cheer: on => { if (on && !cheering) goalT = 0; cheering = on; },
+    theirs: () => { jumpTheirs = 1; theirT = 0; },
+    ooh: () => { ooh = 1; },
     get ground() { return ground; },
     get light() { return light; },
     setGround(recipe = GROUNDS.default, ours = ['#f2f1ea'], theirs = ['#3a3a4a'], oursShare = 0.75) {
@@ -104,8 +106,9 @@ export function buildStadium(scene) {
       goal.update(dt);
       light.uTime.value = t;
       jumpOurs += ((cheering ? 1 : 0) - jumpOurs) * Math.min(1, dt * 3);
-      jumpTheirs = Math.max(0, jumpTheirs - dt * 0.3);
-      jump.uJumpOurs.value = jumpOurs; jump.uJumpTheirs.value = jumpTheirs;
+      jumpTheirs = Math.max(0, jumpTheirs - dt * 0.15);                   // their end celebrates for about 6 s
+      ooh = Math.max(0, ooh - dt * 0.55); goalT += dt; theirT += dt;
+      jump.uJumpOurs.value = jumpOurs; jump.uJumpTheirs.value = jumpTheirs; jump.uOoh.value = ooh; jump.uGoalT.value = goalT; jump.uTheirT.value = theirT;
       if (ground) { const co = ground.curvaOurs; ground.ultras.update(dt, t, co ? jumpOurs : jumpTheirs, co ? jumpTheirs : jumpOurs); }
     },
   };

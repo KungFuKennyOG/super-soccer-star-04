@@ -8,7 +8,7 @@ import { ps1, pixelTex, canvasTex } from './ps1.js';
 import { drawText, textWidth } from './tex.js';
 
 const FLAG_W = 2.1, FLAG_H = 1.35, POLE = 3.0;
-const WORDS = ['FORZA', 'ULTRAS', 'CURVA', 'ALLEZ', 'VAMOS', 'NEVER ALONE', 'ONE LOVE', 'SUPER STARS'];
+const WORDS = ['FORZA', 'ULTRAS', 'CURVA', 'ALLEZ', 'VAMOS', 'AVANTI', 'ONE LOVE', 'SUPER STARS'];
 
 // A flag design painted in a team's colors: 0 halves, 1 stripes, 2 tricolour, 3 diagonal sash.
 function flagTex(cols, design) {
