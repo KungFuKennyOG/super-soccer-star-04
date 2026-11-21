@@ -98,7 +98,7 @@ later the plant foot jumped again 50 cm (it was being pushed round where the bal
 **Measured** (`tests/unit/windup.test.js`: held 0.1 / 0.4 / 1.2 s, standing / walk / jog / sprint, four release
 points each, first person and whole body):
 - boot to ball on the strike frame 0.0 cm, always six frames after release;
-- worst jump in the wind-up now 5 to 26 cm (kicking foot at most 18), in the half second after 3 to 16 cm;
+- worst jump in the wind-up now 5 to 26 cm (kicking foot at most 18), in the half second after 3 to 26 cm (the worst is your own left boot at a walk as the stride changes cadence; the rest are under 16);
 - dribbling touches while charging 0.0 cm; your hips centred and unturned;
 - a planted plant foot is still (0.1 to 0.3 m/s) while it is held; it is held for about four of the six frames at
   a jog before the leg runs out.
