@@ -3,8 +3,8 @@
 // press E to pick it up and hold Up to raise it. Lifting it sets off confetti, fireworks and the crowd.
 import * as THREE from 'three';
 import { BTN } from '../engine/input.js';
-import { ps1, pixelTex, canvasTex } from './ps1.js';
-import { drawText, textWidth } from './tex.js';
+import { ps1 } from './ps1.js';
+import { uiPlane, PAL, text, box, maroon, wrap, sc } from './ps2/ui.js';
 import { animate } from './actors.js';
 import { buildPlayer2 as buildPlayer } from './ps2/player.js';
 import { sfx } from './audio.js';
@@ -29,19 +29,15 @@ export function createCeremony(scene, camera, hands) {
   const plinth = buildPlinth2(); plinth.position.set(0, 0, NEAR); root.add(plinth);   // the '04 plinth and cups (game/ps2/trophies.js)
 
   // the hint card over the plinth
-  const cv = canvasTex(192, 40, () => {}), ctx = cv.getContext('2d'), tex = pixelTex(cv);
-  const card = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 0.31), ps1({ map: tex, lit: false, transparent: true, depthTest: false, fog: false }));
+  const { ctx, t: tex, m: card } = uiPlane(768, 160, 1.5, 0.31, { mat: { depthTest: false } });
   card.renderOrder = 12; card.position.set(0, 2.25, 1.6); card.rotation.y = Math.PI; root.add(card);
-  const say = (a, b, col = '#f2c21a') => {
-    ctx.clearRect(0, 0, 192, 40); ctx.fillStyle = 'rgba(5,8,40,.85)'; ctx.fillRect(0, 0, 192, 40);
-    drawText(ctx, a, Math.round((192 - textWidth(a, 2)) / 2), 6, col, 2, '#000');
+  const say = (a, b, col = PAL.ink) => {
+    ctx.clearRect(0, 0, 768, 160); box(ctx, 0, 0, 768, 160, { r: 6, fill: 'rgba(8,8,10,0.86)' });
+    maroon(ctx, 2, 2, 764, 74); ctx.fillStyle = PAL.sep; ctx.fillRect(2, 76, 764, 2);
+    text(ctx, a, 384, 40, { size: 50, align: 'center', weight: 900, color: col === '#f2c21a' ? PAL.ink : col, max: 730 });
     // the instruction wraps onto a second line when it's too wide for the sign
-    const lines = [];
-    for (const word of (b || '').split(' ').filter(Boolean)) {
-      const last = lines[lines.length - 1];
-      if (last && textWidth(`${last} ${word}`) <= 184) lines[lines.length - 1] = `${last} ${word}`; else lines.push(word);
-    }
-    lines.slice(0, 2).forEach((l, i) => drawText(ctx, l, Math.round((192 - textWidth(l)) / 2), lines.length > 1 ? 23 + i * 9 : 26, '#ffffff', 1, '#000'));
+    const lines = wrap(ctx, sc(b || ''), 720, 32).filter(Boolean).slice(0, 2);
+    lines.forEach((l, i) => text(ctx, l, 384, lines.length > 1 ? 100 + i * 36 : 118, { size: 32, align: 'center', max: 730 }));
     tex.needsUpdate = true;
   };
 

@@ -1,4 +1,4 @@
-// Super Soccer Star 96: boots the stage, turns controls into sim intents, and draws the match.
+// Super Soccer Star: boots the stage, turns controls into sim intents, and draws the match.
 import * as THREE from 'three';
 import { createStage } from '../engine/stage.js';
 import { vrSupported, enterVR } from '../engine/xr.js';
@@ -23,6 +23,7 @@ import { heldBall } from './keeperpose.js';
 import { startStrike, struck } from './strike.js';
 import { createSquads } from './squad.js';
 import { createMenus, LENGTHS } from './menus.js';
+import { renderBackdrop } from './ps2/menuscene.js';
 import { createCeremony } from './trophy.js';
 import { createHands } from './ps2/hands.js';
 import { venueFor } from './grounds.js';
@@ -56,7 +57,7 @@ const stadium = buildStadium(scene);
 const hud = buildHud(scene, camera);
 const radar = buildRadar();
 const celebration = createCelebration(scene, camera);
-const menus = createMenus(scene, camera);
+const menus = createMenus(scene, camera, renderer);
 const squads = createSquads(scene);
 const hands = createHands(renderer, rig);
 const ceremony = createCeremony(scene, camera, hands);
@@ -70,6 +71,7 @@ juice.set(settings.juice);
 const weather = createWeather(scene);
 let slowT = 0, said10 = false, callT = 0;
 $('radar').appendChild(radar.canvas);
+$('bug').appendChild(hud.bugCanvas);
 
 // what's being played: the mode, your team, the opponent, and the cup run if there is one
 const game = { kind: 'attack', team: byId('MAD'), opp: byId('BAR'), cup: null, fixture: null, scenario: null };
@@ -87,7 +89,11 @@ const desk = controls.desk;
 /* ---------- start page (browser) ---------- */
 
 const overlay = $('overlay'), hudEl = $('hud');
-$('best').textContent = best ? `SCORE ATTACK BEST ${best}` : '';
+$('best').textContent = best ? `Score Attack best: ${best}` : '';
+// the title page's picture: the menus' own backdrop (rendered once, cached for the menus too)
+setTimeout(() => {
+  try { $('overlay').style.setProperty('--back', `url(${renderBackdrop(renderer, byId('MUN').kit, 'MUN').toDataURL('image/jpeg', 0.88)})`); } catch (e) { console.warn('title backdrop', e); }
+}, 50);
 vrSupported().then(ok => { $('vr').disabled = !ok; if (!ok) $('vrnote').textContent = 'No headset found. Open this page in the Quest browser to play in VR.'; });
 $('vr').onclick = async () => {
   startAudio(); playMusic('menu');
@@ -104,7 +110,7 @@ addEventListener('pointerdown', menuMusic, { once: true });
 addEventListener('keydown', menuMusic, { once: true });
 function showPause() {
   const was = mode;
-  mode = 'paused'; overlay.hidden = false; $('play').textContent = 'RESUME';
+  mode = 'paused'; overlay.hidden = false; $('play').textContent = 'Resume';
   $('play').onclick = () => { overlay.hidden = true; desk.lock(); mode = was; };
 }
 
@@ -115,6 +121,7 @@ function openMenu(screen, data, at = 0) {
   training.stop(world); weather.set('clear');
   if (!renderer.xr.isPresenting) { desk.pitch = 0; if (document.pointerLockElement) document.exitPointerLock(); }
   playMusic('menu');
+  menus.backdrop(game.picked ? game.team : byId('MUN'));   // the picture behind the menus wears your team's kit once you've picked one
   menus.open(screen, ['mode', 'settings'].includes(screen) ? { settings } : data, at);
 }
 const teamsForMode = kind => (kind === 'attack' ? ALL : teamsFor(kind));
@@ -126,7 +133,7 @@ function onMenu(act) {
   else if (act.mode === 'settings') openMenu(act.mode);
   else if (act.mode) { game.kind = act.mode; openMenu('team', { mode: act.mode, teams: teamsForMode(act.mode), start: teamsForMode(act.mode).some(t => t.id === game.team.id) ? game.team.id : null }); }
   else if (act.team) {
-    game.team = act.team;
+    game.team = act.team; game.picked = true;
     if (game.kind === 'attack') {
       game.fixture = null;
       const rivals = ALL.filter(t => t.id !== act.team.id && t.s >= 4 && (t.id.length === 3) && teamsFor(NATIONS.includes(act.team) ? 'world' : 'club').includes(t));
@@ -190,7 +197,7 @@ function startMatch() {
 const results = createResults({
   game, hud, stadium, commentary, replay, message, openMenu, startMatch,
   startCeremony: () => startCeremony(), lengthMul: () => LENGTHS[settings.length].mul, match: () => match,
-  setMenu: () => { mode = 'menu'; }, showBest: b => { $('best').textContent = `SCORE ATTACK BEST ${b}`; },
+  setMenu: () => { mode = 'menu'; }, showBest: b => { $('best').textContent = `Score Attack best: ${b}`; },
 });
 const fullTime = results.fullTime;
 
@@ -372,10 +379,10 @@ function updateHud() {
   });
   const line = match.scenario ? `${game.team.id} ${match.us}-${match.them} ${game.opp.id}` : '';
   const clock = training.active ? 'DRILL' : clockText(match.clock);
-  hud.scoreboard(match.goals, clock, match.points, flashT > 0 ? 'GOAL!' : '', line);
-  // browser HUD
-  $('hClock').textContent = clock;
-  $('hScore').textContent = line || `V ${game.opp.id}`;
+  // the stadium's board, and the scoreboard bug (top left: on the headset's view, or the page's #bug)
+  hud.scoreboard(match.goals, clock, match.points, flashT > 0 ? 'GOAL!' : '', line, {
+    home: game.team, away: game.opp, us: match.scenario ? match.us : undefined, them: match.them, show: mode === 'play' && !training.active, vr: renderer.xr.isPresenting,
+  });
 }
 
 // the radar floats over the left hand, high enough to clear it, and draws on top of the hand anyway

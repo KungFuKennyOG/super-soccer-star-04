@@ -2,22 +2,22 @@
 // player on a turntable wearing the kit, the cup hub (group table or bracket), and message screens.
 // Navigate with a stick or the arrow keys, confirm with the trigger / A / Enter, back with B / Esc.
 import * as THREE from 'three';
-import { ps1, pixelTex, canvasTex } from './ps1.js';
-import { drawText, textWidth } from './tex.js';
+import { ps1 } from './ps1.js';
+import { YEAR, uiPlane } from './ps2/ui.js';
+import { renderBackdrop } from './ps2/menuscene.js';
+import { MW, MH, paintMode, paintSettings, paintTeam, paintHub, paintMessage } from './ps2/menudraw.js';
 import { buildPlayer2 as buildPlayer } from './ps2/player.js';
 import { pickSquad } from '../rules/looks.js';
-import { byId, nationToward } from '../rules/teams.js';
-import { drawWorldMap } from './worldmap.js';
-import { table, userGroup, currentFixture, STAGE_NAMES, KO } from '../rules/cup.js';
+import { nationToward } from '../rules/teams.js';
+import { currentFixture } from '../rules/cup.js';
 import { WEATHER_SETTING } from '../rules/weather.js';
 import { DIFFICULTY } from '../rules/tuning.js';
 import { LOCKER } from './display.js';
 
-const W = 256, H = 192;
-const CUP_NAMES = { world: "WORLD CUP '96", club: 'CHAMPIONS CUP', attack: 'SCORE ATTACK' };
-const MODES = [
+const CUP_NAMES = { world: `WORLD CUP ${YEAR}`, club: 'CHAMPIONS CUP', attack: 'SCORE ATTACK' };
+export const MODES = [
   { id: 'attack', name: 'SCORE ATTACK', sub: 'BEAT YOUR HIGH SCORE' },
-  { id: 'world', name: "WORLD CUP '96", sub: '32 NATIONS: GROUPS + KNOCKOUTS' },
+  { id: 'world', name: `WORLD CUP ${YEAR}`, sub: '32 NATIONS: GROUPS + KNOCKOUTS' },
   { id: 'club', name: 'CHAMPIONS CUP', sub: '16 CLUBS: STRAIGHT KNOCKOUTS' },
   { id: 'training', name: 'TRAINING', sub: 'LEARN AND TEST EVERY MOVE' },
   { id: 'settings', name: 'SETTINGS', sub: 'OPTIONS AND YOUR LOCKER' },
@@ -30,7 +30,7 @@ export const COMMENTARY = ['OFF', 'TEXT', 'VOICE'];
 export const REPLAYS = ['OFF', 'ON'];
 export const JUICE = ['OFF', 'ON'];
 export const SKILLS = ['OFF', 'GESTURE', 'GRIP + GESTURE'];
-const ROWS = [
+export const ROWS = [
   { key: 'difficulty', name: 'DIFFICULTY', opts: DIFFICULTY.map(d => d.name) },
   { key: 'length', name: 'MATCH LENGTH', opts: LENGTHS.map(l => l.name) }, { key: 'wobble', name: 'PS1 WOBBLE', opts: WOBBLES },
   { key: 'commentary', name: 'COMMENTARY', opts: COMMENTARY }, { key: 'replays', name: 'GOAL REPLAYS', opts: REPLAYS },
@@ -38,27 +38,16 @@ const ROWS = [
   { key: 'weather', name: 'WEATHER', opts: WEATHER_SETTING },
   ...Object.entries(LOCKER).map(([k, l]) => ({ key: k, name: l.name, opts: l.options, locker: true })),
 ];
-const centre = (c, s, y, col, sc = 1, sh = '#000') => drawText(c, s, Math.round((W - textWidth(s, sc)) / 2), y, col, sc, sh);
-
-export function logo(c, y) {
-  const chrome = r => ['#ffffff', '#ffffff', '#dfe8ff', '#7d8fd0', '#ffffff', '#c8d4ff', '#9aa8e0'][r];
-  drawText(c, 'SUPER', Math.round((W - textWidth('SUPER', 2)) / 2) - 30, y, '#f2c21a', 2, '#c8102e');
-  drawText(c, 'SOCCER STAR', Math.round((W - textWidth('SOCCER STAR', 3)) / 2), y + 18, chrome, 3, '#0a0a50');
-  c.fillStyle = '#c8102e'; c.fillRect(186, y - 2, 40, 18);
-  drawText(c, "'96", 190, y + 1, '#f2c21a', 2, '#000');
-}
-
-export function createMenus(scene, camera) {
-  const cv = canvasTex(W, H, () => {}), ctx = cv.getContext('2d'), tex = pixelTex(cv);
-  const panel = new THREE.Mesh(new THREE.PlaneGeometry(2.2, 1.65), ps1({ map: tex, lit: false, transparent: true, fog: false }));
+export function createMenus(scene, camera, renderer = null) {
+  const { ctx, t: tex, m: panel } = uiPlane(MW, MH, 2.2, 1.65);
   panel.renderOrder = 12; panel.visible = false;
   const root = new THREE.Group(); root.visible = false; scene.add(root); root.add(panel);
 
   // the turntable: a plinth with a spotlight disc and whoever's kit you're looking at
   const table3d = new THREE.Group(); root.add(table3d);
-  const plinth = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.62, 0.18, 16), ps1({ color: '#2a2f5a' }));
+  const plinth = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.62, 0.18, 16), ps1({ color: '#1c2538' }));
   plinth.position.y = 0.09; table3d.add(plinth);
-  const ring = new THREE.Mesh(new THREE.CylinderGeometry(0.63, 0.63, 0.04, 16), ps1({ color: '#f2c21a', lit: false }));
+  const ring = new THREE.Mesh(new THREE.CylinderGeometry(0.63, 0.63, 0.04, 16), ps1({ color: '#ffc933', lit: false }));
   ring.position.y = 0.02; table3d.add(ring);
   let model = null, modelFor = null;
 
@@ -82,182 +71,36 @@ export function createMenus(scene, camera) {
     modelFor = team.id;
   }
 
-  /* ---------- drawing ---------- */
+  /* ---------- drawing (game/ps2/menudraw.js paints, here only when something changed) ---------- */
 
-  function frame(title) {
-    ctx.clearRect(0, 0, W, H);
-    ctx.fillStyle = 'rgba(5,8,40,.96)'; ctx.fillRect(0, 0, W, H);
-    ctx.fillStyle = '#f2c21a'; ctx.fillRect(0, 0, W, 2); ctx.fillRect(0, H - 2, W, 2);
-    if (title) { ctx.fillStyle = '#c8102e'; ctx.fillRect(0, 2, W, 13); centre(ctx, title, 5, '#ffffff'); }
-  }
-  const hint = s => centre(ctx, s, H - 12, '#9aa8e0', 1, null);
-
-  function drawMode() {
-    frame(null);
-    logo(ctx, 3);
-    // mode buttons; the picked one's description shows in the hint line
-    MODES.forEach((m, i) => {
-      const y = 50 + i * 20, on = i === sel;
-      ctx.fillStyle = on ? '#f2c21a' : '#1a2350'; ctx.fillRect(28, y, W - 56, 16);
-      drawText(ctx, m.name, 38, y + 1, on ? '#05072a' : '#ffffff', 2, on ? null : '#000');
-    });
-    hint(`${MODES[sel].sub} - A`);
-  }
-
-  const rowOpts = r => r.opts.map((_, i) => i);
-  function drawSettings() {
-    frame('SETTINGS');
-    const st = data.settings;
-    ROWS.forEach((r, i) => {
-      const y = (r.locker ? 36 : 22) + i * 12, on = sel === i;
-      if (i === ROWS.findIndex(x => x.locker)) { ctx.fillStyle = '#c8102e'; ctx.fillRect(28, y - 12, W - 56, 1); drawText(ctx, 'LOCKER', 38, y - 10, '#f2c21a'); }
-      if (on) { ctx.fillStyle = '#26306a'; ctx.fillRect(28, y - 2, W - 56, 11); }
-      drawText(ctx, r.name, 38, y, on ? '#f2c21a' : '#9aa8e0');
-      const v = r.opts[st[r.key]] || r.opts[0], n = rowOpts(r).length, val = on && n > 1 ? `< ${v} >` : v;
-      drawText(ctx, val, W - 38 - textWidth(val), y, on ? '#ffffff' : '#c8d4ff');
-    });
-    hint('LEFT/RIGHT TO CHANGE - B BACK');
-  }
-
-  // World Cup: pick on a world map; the stick moves to the nearest nation in that direction.
-  function drawNationMap() {
-    const t = data.teams[sel];
-    frame(`PICK YOUR NATION - ${CUP_NAMES[data.mode]}`);
-    centre(ctx, t.name, 20, '#ffffff', textWidth(t.name, 2) > W - 12 ? 1 : 2, '#0a0a50');
-    const stars = '*'.repeat(t.s) + '-'.repeat(5 - t.s), word = ['', 'UNDERDOG', 'DECENT', 'SOLID', 'STRONG', 'GIANT'][t.s];
-    centre(ctx, `${stars}  ${word}`, 38, '#f2c21a', 1, null);
-    drawWorldMap(ctx, 4, 50, W - 8, H - 66, t.id, blink);
-    hint('STICK MOVES ON THE MAP - A PICK - B BACK');
-    showModel(t);
-  }
-
-  function drawTeam() {
-    if (data.mode === 'world') return drawNationMap();
-    const t = data.teams[sel];
-    frame(`PICK YOUR TEAM - ${CUP_NAMES[data.mode]}`);
-    drawText(ctx, '<', 6, 70, '#f2c21a', 3, '#000'); drawText(ctx, '>', W - 21, 70, '#f2c21a', 3, '#000');
-    const name = t.name, sc = textWidth(name, 3) > W - 50 ? 2 : 3;
-    centre(ctx, name, 40, '#ffffff', sc, '#0a0a50');
-    centre(ctx, t.id, 70, '#9aa8e0', 2, null);
-    const stars = '*'.repeat(t.s) + '-'.repeat(5 - t.s);
-    centre(ctx, stars, 96, '#f2c21a', 2, null);
-    centre(ctx, ['', 'UNDERDOG', 'DECENT', 'SOLID', 'STRONG', 'GIANT'][t.s], 116, '#c8d4ff');
-    // kit swatch
-    const k = t.kit, sx = W / 2 - 30;
-    ctx.fillStyle = k.shirt; ctx.fillRect(sx, 132, 60, 18);
-    if (k.pattern === 'halves') { ctx.fillStyle = k.alt; ctx.fillRect(sx + 30, 132, 30, 18); }
-    else if (k.pattern !== 'solid') { ctx.fillStyle = k.pattern === 'sleeves' ? k.shirt : k.alt; for (let x = 4; x < 60; x += 12) ctx.fillRect(sx + x, 132, 5, 18); }
-    ctx.fillStyle = k.shorts; ctx.fillRect(sx + 6, 150, 48, 8);
-    ctx.fillStyle = k.socks; ctx.fillRect(sx + 10, 158, 12, 8); ctx.fillRect(sx + 38, 158, 12, 8);
-    centre(ctx, `${sel + 1}/${data.teams.length}`, 170, '#9aa8e0', 1, null);
-    hint('< > BROWSE - A PICK - B BACK');
-    showModel(t);
-  }
-
-  function drawHub() {
-    const cup = data.cup, fx = currentFixture(cup);
-    frame(`${CUP_NAMES[cup.kind]} - ${byId(cup.user).name}`);
-    drawText(ctx, 'CONTINUES', 6, 20, '#9aa8e0');
-    for (let i = 0; i < 3; i++) { ctx.fillStyle = i < cup.continues ? '#ff4060' : '#3a3a5a'; ctx.fillRect(66 + i * 9, 20, 7, 7); }
-    drawText(ctx, cup.stage === 'group' ? `GROUP STAGE - GAME ${cup.matchday + 1}/3` : STAGE_NAMES[cup.stage] || '', W - 6 - textWidth(cup.stage === 'group' ? `GROUP STAGE - GAME ${cup.matchday + 1}/3` : STAGE_NAMES[cup.stage] || ''), 20, '#f2c21a');
-    if (cup.stage === 'group') drawGroup(cup); else drawBracket(cup, 36);
-    if (fx) {
-      const opp = byId(fx.opp);
-      ctx.fillStyle = '#c8102e'; ctx.fillRect(0, H - 34, W, 20);
-      centre(ctx, `NEXT: ${byId(cup.user).id} V ${opp.id}  ${opp.name}`, H - 30, '#ffffff');
-      if (Math.floor(blink * 2) % 2) centre(ctx, 'PRESS A TO PLAY', H - 21, '#f2c21a', 1, null);
-    }
-    hint('B: QUIT TO MENU');
-  }
-
-  function drawGroup(cup) {
-    const g = userGroup(cup), rows = table(g);
-    drawText(ctx, `GROUP ${g.id}`, 10, 36, '#ffffff', 2, '#000');
-    const cols = [['P', 120], ['W', 138], ['D', 156], ['L', 174], ['GD', 194], ['PTS', 220]];
-    for (const [h, x] of cols) drawText(ctx, h, x, 56, '#9aa8e0');
-    rows.forEach((r, i) => {
-      const y = 68 + i * 16, me = r.id === cup.user;
-      if (me) { ctx.fillStyle = '#26306a'; ctx.fillRect(6, y - 3, W - 12, 13); }
-      if (i < 2) { ctx.fillStyle = '#40c060'; ctx.fillRect(6, y - 3, 3, 13); }
-      drawText(ctx, `${i + 1} ${byId(r.id).name}`, 14, y, me ? '#f2c21a' : '#ffffff');
-      const vals = [r.p, r.w, r.d, r.l, (r.gf - r.ga > 0 ? '+' : '') + (r.gf - r.ga), r.pts];
-      vals.forEach((v, j) => drawText(ctx, String(v), cols[j][1], y, me ? '#f2c21a' : '#ffffff'));
-    });
-    // this matchday's other results in the group
-    const done = g.fixtures.filter(f => f.ga !== null);
-    done.slice(-4).forEach((f, i) => drawText(ctx, `${f.a} ${f.ga}-${f.gb} ${f.b}`, 14 + (i % 2) * 120, 136 + Math.floor(i / 2) * 10, '#9aa8e0'));
-  }
-
-  // A classic two-sided bracket: the left half of the draw runs in from the left edge, the right half
-  // from the right edge, and they meet in the final in the middle.
-  function drawBracket(cup, top) {
-    const ROW = 15, L = [2, 31, 60, 92], R = [228, 199, 170, 140];
-    const slot = (t, which, x, y) => {
-      const id = t ? (which ? t.b : t.a) : null;
-      if (!id) { drawText(ctx, '---', x, y, '#3a4070'); return; }
-      const me = id === cup.user, won = t.winner === id, lost = t.winner && !won;
-      const col = me ? '#f2c21a' : lost ? '#5a6090' : '#ffffff';
-      drawText(ctx, id, x, y, col);
-      const g = which ? t.gb : t.ga;
-      if (g !== null) drawText(ctx, String(g) + (t.pens && won ? 'P' : ''), x + 19, y, col);
-    };
-    KO.forEach((r, ri) => {
-      const ties = cup.rounds[r] || [], half = (8 >> ri) / 2;           // ties per side
-      for (let i = 0; i < Math.max(1, half) * 2; i++) {
-        const side = ri === 3 ? i : i < half ? 0 : 1;                    // 0 left, 1 right
-        const k = ri === 3 ? 0 : i % half;
-        const t = ties[ri === 3 ? 0 : side * half + k];
-        for (const which of [0, 1]) {
-          if (ri === 3 && which !== i) continue;
-          const n = ri === 3 ? 0 : k * 2 + which;                       // slot index down this side
-          const span = 1 << ri;
-          const y = Math.round(ri === 3 ? top + 3.5 * ROW : top + (n * span + (span - 1) / 2) * ROW);
-          slot(t, which, side ? R[ri] : L[ri], y);
-        }
-      }
-    });
-    drawText(ctx, 'FINAL', 115, top - 2, '#f2c21a');
-    if (cup.done && cup.champion) centre(ctx, `WINNER ${byId(cup.champion).name}`, top + 8 * ROW, '#f2c21a', 1, null);
-  }
-
-  // Lines shrink to fit, and wrap onto a second line if they still don't.
-  function fitted(lines) {
-    const out = [];
-    for (const l of lines) {
-      let sc = l.big ? 2 : 1;
-      if (textWidth(l.text, sc) > W - 12) sc = 1;
-      if (textWidth(l.text, sc) <= W - 12) { out.push({ ...l, sc }); continue; }
-      const words = l.text.split(' '), a = [];
-      while (words.length && textWidth([...a, words[0]].join(' '), 1) <= W - 12) a.push(words.shift());
-      out.push({ ...l, text: a.join(' '), sc: 1 }, { ...l, text: words.join(' '), sc: 1 });
-    }
-    return out;
-  }
-
-  function drawMessage() {
-    frame(data.title);
-    let y = 36;
-    for (const l of fitted(data.lines)) { centre(ctx, l.text, y, l.color || '#ffffff', l.sc, '#000'); y += l.sc === 2 ? 24 : 14; }
-    if (Math.floor(blink * 2) % 2) centre(ctx, data.ok || 'PRESS A', H - 26, '#f2c21a', 1, null);
-  }
-
+  let shown = '', back = null, backFor = null;
   function draw() {
-    if (screen === 'mode') drawMode();
-    else if (screen === 'settings') drawSettings();
-    else if (screen === 'team') drawTeam();
-    else if (screen === 'hub') drawHub();
-    else drawMessage();
+    const cupName = CUP_NAMES[screen === 'hub' ? data.cup.kind : data.mode];
+    const blinkKey = screen === 'team' && data.mode === 'world' ? Math.floor(blink * 4) : 0;   // only the map's pulse moves
+    const key = `${screen}|${sel}|${blinkKey}|${screen === 'settings' ? JSON.stringify(data.settings) : ''}`;
+    if (key === shown) return;
+    shown = key;
+    if (screen === 'mode') paintMode(ctx, { modes: MODES, sel, back });
+    else if (screen === 'settings') paintSettings(ctx, { rows: ROWS, settings: data.settings, sel, back });
+    else if (screen === 'team') { paintTeam(ctx, { mode: data.mode, teams: data.teams, sel, blink, cupName, back }); showModel(data.teams[sel]); }
+    else if (screen === 'hub') paintHub(ctx, { cup: data.cup, blink, cupName, back });
+    else paintMessage(ctx, { ...data, blink, back });
     tex.needsUpdate = true;
   }
 
   return {
     get screen() { return screen; },
     get sel() { return sel; },
+    // the picture behind the menus (game/ps2/menuscene.js), wearing this team's kit; rendered once per team
+    backdrop(team) {
+      if (!renderer || backFor === team.id) return;
+      try { back = renderBackdrop(renderer, team.kit, team.id); backFor = team.id; shown = ''; } catch (e) { console.warn('menu backdrop', e); }
+    },
     // screen: 'mode' | 'settings' | 'team' | 'hub' | 'message'. data depends on the screen:
     // mode {}, settings { settings }, team { mode, teams, start? },
     // hub { cup }, message { title, lines: [{ text, big?, color? }], ok? }
     open(s, d = {}, at = 0) {
-      screen = s; data = d; sel = at;
+      screen = s; data = d; sel = at; shown = '';
       if (s === 'team' && d.start) sel = Math.max(0, d.teams.findIndex(t => t.id === d.start));
       root.visible = panel.visible = true;
       table3d.visible = s === 'team';
@@ -282,7 +125,7 @@ export function createMenus(scene, camera) {
         if (nav.down) sel = (sel + 1) % n;
         const dir = nav.right ? 1 : nav.left ? -1 : 0;
         if (dir) {
-          const opts = rowOpts(r), at = Math.max(0, opts.indexOf(st[r.key] || 0));
+          const opts = r.opts.map((_, i) => i), at = Math.max(0, opts.indexOf(st[r.key] || 0));
           const to = opts[Math.max(0, Math.min(opts.length - 1, at + dir))];
           if (to !== st[r.key]) { st[r.key] = to; act = { settings: st }; }
         }

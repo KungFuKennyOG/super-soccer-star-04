@@ -3,17 +3,15 @@
 import * as THREE from 'three';
 import { createDance, stepDance, poseFromHands, DANCE, beatLen } from '../rules/dance.js';
 import { controllers } from '../engine/input.js';
-import { ps1, pixelTex, canvasTex } from './ps1.js';
-import { drawText, textWidth } from './tex.js';
+import { uiPlane, PAL, text, box, maroon } from './ps2/ui.js';
 import { playMusic, stopMusic, musicPlaying, musicTime } from './music.js';
 import { sfx } from './audio.js';
 
-const W = 256, H = 80, HIT_X = 44, PX_PER_S = 150;
+const W = 512, H = 160, HIT_X = 88, PX_PER_S = 300;   // canvas px (redrawn every frame, so 2x the old lane, no mipmaps)
 const KEYS = { ArrowLeft: 'left', ArrowRight: 'right', ArrowUp: 'up', ArrowDown: 'out', Digit1: 'left', Digit2: 'right', Digit3: 'up', Digit4: 'out' };
 
 export function createCelebration(scene, camera) {
-  const c = canvasTex(W, H, () => {}), ctx = c.getContext('2d'), tex = pixelTex(c);
-  const lane = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 0.75), ps1({ map: tex, lit: false, transparent: true, depthTest: false, fog: false }));
+  const { ctx, t: tex, m: lane } = uiPlane(W, H, 2.4, 0.75, { mips: false, mat: { depthTest: false } });
   lane.renderOrder = 12; lane.visible = false; scene.add(lane);
 
   let wait = 0, dance = null, clock = 0, judge = null, judgeT = 9;
@@ -30,24 +28,23 @@ export function createCelebration(scene, camera) {
 
   function draw() {
     ctx.clearRect(0, 0, W, H);
-    ctx.fillStyle = 'rgba(5,8,40,.78)'; ctx.fillRect(0, 14, W, 54);
-    ctx.fillStyle = '#f2c21a'; ctx.fillRect(0, 14, W, 2); ctx.fillRect(0, 66, W, 2);
-    drawText(ctx, 'DANCE!', 4, 2, '#f2c21a', 1, '#c8102e');
-    const sc = `+${dance.score}`;
-    drawText(ctx, sc, W - 4 - textWidth(sc), 2, '#ffffff', 1, '#000');
+    box(ctx, 0, 30, W, 106, { r: 5, fill: 'rgba(8,8,10,0.8)' });
+    maroon(ctx, 4, 2, 130, 36, 4); box(ctx, 4, 2, 130, 36, { r: 4, fill: null, lw: 1.5 });
+    text(ctx, 'Dance!', 69, 20, { size: 26, align: 'center', weight: 900 });
+    text(ctx, `+${dance.score}`, W - 10, 21, { size: 30, align: 'right', weight: 900 });
     // hit zone, pulsing on the beat
     const beat = clock / beatLen(), pulse = 1 - (beat - Math.floor(beat));
-    ctx.strokeStyle = pulse > 0.75 ? '#ffffff' : '#9aa8e0'; ctx.lineWidth = 2;
-    ctx.strokeRect(HIT_X - 16, 24, 32, 34);
+    ctx.save(); ctx.lineWidth = 5; ctx.strokeStyle = pulse > 0.75 ? PAL.gold : 'rgba(220,220,220,0.6)';
+    ctx.beginPath(); ctx.roundRect ? ctx.roundRect(HIT_X - 34, 46, 68, 74, 12) : ctx.rect(HIT_X - 34, 46, 68, 74); ctx.stroke(); ctx.restore();
     for (const m of dance.moves) {
       const x = HIT_X + (m.t - clock) * PX_PER_S;
-      if (x < -20 || x > W + 20) continue;
+      if (x < -40 || x > W + 40) continue;
       if (m.grade && m.grade !== 'miss') continue;
-      icon(ctx, m.move, Math.round(x), 41, m.grade === 'miss' ? '#ff4040' : '#ffffff');
+      icon(ctx, m.move, Math.round(x), 83, m.grade === 'miss' ? PAL.bad : PAL.ink);
     }
     if (judge && judgeT < 0.5) {
-      const col = judge === 'perfect' ? '#40ff60' : judge === 'good' ? '#f2c21a' : '#ff4040', s = judge.toUpperCase();
-      drawText(ctx, s, HIT_X + 26, 30, col, 2, '#000');
+      const col = judge === 'perfect' ? PAL.good : judge === 'good' ? PAL.gold : PAL.bad;
+      text(ctx, judge.charAt(0).toUpperCase() + judge.slice(1), HIT_X + 52, 66, { size: 38, weight: 900, color: col });
     }
     tex.needsUpdate = true;
   }
@@ -94,17 +91,18 @@ export function createCelebration(scene, camera) {
   };
 }
 
-// A little stick figure seen from behind (your left is on the left) for each move.
+// A little stick figure seen from behind (your left is on the left) for each move, on a dark disc.
 function icon(ctx, move, cx, cy, col) {
-  ctx.fillStyle = '#000'; ctx.fillRect(cx - 12, cy - 14, 24, 28);
-  ctx.fillStyle = col;
-  const line = (s, dx, dy, n) => { for (let i = 0; i < n; i++) ctx.fillRect(Math.round(cx + s * (1 + dx * i)) - (s < 0 ? 2 : 0), Math.round(cy - 6 + dy * i), 2, 2); };
-  ctx.fillRect(cx - 2, cy - 12, 4, 4);                                   // head
-  ctx.fillRect(cx - 1, cy - 7, 2, 9);                                    // body
-  ctx.fillRect(cx - 3, cy + 2, 2, 9); ctx.fillRect(cx + 1, cy + 2, 2, 9); // legs
-  const up = s => line(s, 0.9, -1.2, 6), down = s => line(s, 0.5, 1.4, 6), out = s => line(s, 1.5, 0, 6);
+  ctx.save();
+  ctx.beginPath(); ctx.arc(cx, cy, 30, 0, Math.PI * 2); ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fill();
+  ctx.strokeStyle = col; ctx.fillStyle = col; ctx.lineWidth = 5; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.arc(cx, cy - 17, 5, 0, Math.PI * 2); ctx.fill();                       // head
+  const seg = (x0, y0, x1, y1) => { ctx.beginPath(); ctx.moveTo(cx + x0, cy + y0); ctx.lineTo(cx + x1, cy + y1); ctx.stroke(); };
+  seg(0, -10, 0, 6); seg(0, 6, -6, 22); seg(0, 6, 6, 22);                                    // body, legs
+  const up = s => seg(0, -7, s * 13, -22), down = s => seg(0, -7, s * 9, 10), out = s => seg(0, -7, s * 19, -7);
   if (move === 'left') { up(-1); down(1); }
   if (move === 'right') { up(1); down(-1); }
   if (move === 'up') { up(-1); up(1); }
   if (move === 'out') { out(-1); out(1); }
+  ctx.restore();
 }
