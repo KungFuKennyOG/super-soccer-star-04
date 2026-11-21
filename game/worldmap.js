@@ -62,7 +62,7 @@ export function drawWorldMap(ctx, x, y, w, h, selected, t) {
   const lx = Math.min(x + w - lw - 3 * k, Math.max(x + 3 * k, cx - lw / 2)), ly = cy - 9 * k - lh < y + 2 * k ? cy + 7 * k : cy - 9 * k - lh;
   maroon(ctx, lx, ly, lw, lh, 2 * k); box(ctx, lx, ly, lw, lh, { r: 2 * k, fill: null, lw: 1.5 });
   text(ctx, selected, lx + lw / 2, ly + lh / 2, { size, align: 'center' });
-  text(ctx, view === EUROPE ? 'Europe' : 'World', x + w - 6 * k, y + 8 * k, { size: 7 * k, align: 'right', color: PAL.muted });
+  text(ctx, view === EUROPE ? 'Europe' : 'World', x + w - 8 * k, y + 10 * k, { size: 7 * k, align: 'right', color: PAL.muted });
   ctx.restore();
   box(ctx, x, y, w, h, { fill: null });
 }

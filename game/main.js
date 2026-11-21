@@ -23,6 +23,7 @@ import { heldBall } from './keeperpose.js';
 import { startStrike, struck } from './strike.js';
 import { createSquads } from './squad.js';
 import { createMenus, LENGTHS } from './menus.js';
+import { renderBackdrop } from './ps2/menuscene.js';
 import { createCeremony } from './trophy.js';
 import { createHands } from './hands.js';
 import { venueFor } from './grounds.js';
@@ -88,7 +89,11 @@ const desk = controls.desk;
 /* ---------- start page (browser) ---------- */
 
 const overlay = $('overlay'), hudEl = $('hud');
-$('best').textContent = best ? `SCORE ATTACK BEST ${best}` : '';
+$('best').textContent = best ? `Score Attack best: ${best}` : '';
+// the title page's picture: the menus' own backdrop (rendered once, cached for the menus too)
+setTimeout(() => {
+  try { $('overlay').style.setProperty('--back', `url(${renderBackdrop(renderer, byId('MUN').kit, 'MUN').toDataURL('image/jpeg', 0.88)})`); } catch (e) { console.warn('title backdrop', e); }
+}, 50);
 vrSupported().then(ok => { $('vr').disabled = !ok; if (!ok) $('vrnote').textContent = 'No headset found. Open this page in the Quest browser to play in VR.'; });
 $('vr').onclick = async () => {
   startAudio(); playMusic('menu');
@@ -105,7 +110,7 @@ addEventListener('pointerdown', menuMusic, { once: true });
 addEventListener('keydown', menuMusic, { once: true });
 function showPause() {
   const was = mode;
-  mode = 'paused'; overlay.hidden = false; $('play').textContent = 'RESUME';
+  mode = 'paused'; overlay.hidden = false; $('play').textContent = 'Resume';
   $('play').onclick = () => { overlay.hidden = true; desk.lock(); mode = was; };
 }
 
@@ -192,7 +197,7 @@ function startMatch() {
 const results = createResults({
   game, hud, stadium, commentary, replay, message, openMenu, startMatch,
   startCeremony: () => startCeremony(), lengthMul: () => LENGTHS[settings.length].mul, match: () => match,
-  setMenu: () => { mode = 'menu'; }, showBest: b => { $('best').textContent = `SCORE ATTACK BEST ${b}`; },
+  setMenu: () => { mode = 'menu'; }, showBest: b => { $('best').textContent = `Score Attack best: ${b}`; },
 });
 const fullTime = results.fullTime;
 

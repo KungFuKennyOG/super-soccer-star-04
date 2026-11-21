@@ -5,13 +5,14 @@
 // Pure painting: game/menus.js owns the screens, the selection and the input, and calls these with what to show.
 import { PAL, text, wrap, box, maroon, stack, bands, header, hints, star, tc, sc, NAME, YEAR } from './ui.js';
 import { drawWorldMap } from '../worldmap.js';
-import { byId } from '../../rules/teams.js';
+import { byId, ALL } from '../../rules/teams.js';
 import { table, userGroup, currentFixture, STAGE_NAMES, KO } from '../../rules/cup.js';
 
 export const MW = 1024, MH = 768;              // menu canvas (the panel is 2.2 x 1.65 m)
 const WORD = ['', 'UNDERDOG', 'DECENT', 'SOLID', 'STRONG', 'GIANT'];
 const RH = 54, FS = 29;                         // row height and type size: bigger than the reference's for the headset
-const IDS = new Set(['VR', 'PTS', 'GK', 'PS1']);
+// (team ids stay upper case in result lines; CAN is an id there, not the word)
+const IDS = new Set(['VR', 'PTS', 'GK', 'PS1', 'USA', ...ALL.map(t => t.id)]);
 
 export function paintMode(ctx, { modes, sel, back }) {
   const b = bands(ctx, MW, MH, back);

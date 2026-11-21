@@ -110,7 +110,10 @@ export function paintTraining(ctx, { i, total, title, lines, need, n, unit, done
     text(ctx, finished ? 'Training complete!' : 'Nice one!', CW / 2, 132, { size: 54, align: 'center', weight: 900, color: PAL.good });
     return;
   }
-  lines.slice(0, 3).forEach((l, j) => text(ctx, sc(l), 26, 86 + j * 36, { size: 29, max: CW - 52 }));
+  // the drill's lines are cased as one text (a line that carries on a sentence stays lower case), kept as written
+  const words = sc(lines.join(' ')).split(' ');
+  let at = 0;
+  lines.slice(0, 3).forEach((l, j) => { const n = l.split(' ').length; text(ctx, words.slice(at, at + n).join(' '), 26, 86 + j * 36, { size: 29, max: CW - 52 }); at += n; });
   const bx = 26, by = CH - 34, bw = CW - 230, f = Math.max(0, Math.min(1, n / need));
   rr(ctx, bx, by, bw, 18, 3); ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fill();
   if (f > 0) maroon(ctx, bx, by, Math.max(6, bw * f), 18, 3);

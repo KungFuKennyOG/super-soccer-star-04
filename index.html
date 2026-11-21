@@ -6,71 +6,63 @@
 <meta name="theme-color" content="#050b18">
 <title>Super Soccer Star</title>
 <style>
-/* The '04 look: a night stadium behind soft floodlights, a chrome logo with the year on an amber tag, glossy
-   rounded buttons and dark glass cards in a bold condensed system sans (no downloaded fonts). In play, a
+/* The '04 look, as the menus: letterbox black bands (the title heavy and upright in the top one, a status line in the
+   bottom one), a soft washed-out stadium picture in the middle (the menus' own backdrop, game/ps2/menuscene.js, set
+   as --back once it's rendered), buttons as a stack of near-black translucent rows with a thin light outline, the
+   hovered or focused one maroon. Black, white, greys, maroon, a little gold. System fonts only. In play a flat
    scoreboard bug sits top left (drawn on a canvas by game/ps2/hudpaint.js, the same one the headset shows). */
 :root{
-  --deep:#050b18; --navy:#0a1426; --blueHi:#5b92f0; --blueLo:#14378c; --amberHi:#ffd75a; --amberLo:#e56f0f;
-  --accent:#ffc933; --ink:#fff; --soft:#d6e0f2; --muted:#97a9cc; --line:rgba(160,190,240,.28);
+  --maroonHi:#962c25; --maroonLo:#6e1c19; --gold:#e2b23e; --ink:#fff; --soft:#dcdcdc; --muted:#a8a8a8;
+  --row:rgba(10,10,12,.76); --line:rgba(230,230,230,.9); --sep:rgba(205,205,205,.75);
   --sans:Roboto,Inter,"Helvetica Neue",Arial,"Liberation Sans",sans-serif;
+  --back:linear-gradient(180deg,#8c949c 0%,#6b7378 55%,#4b6a3a 60%,#3c5a2e 100%);
   color-scheme:dark;
 }
 html,body{height:100%;margin:0}
 [hidden]{display:none!important}
-body{background:var(--deep);color:var(--ink);font-family:var(--sans);overflow:hidden}
+body{background:#000;color:var(--ink);font-family:var(--sans);overflow:hidden}
 #c{position:fixed;inset:0;width:100%;height:100%;display:block;image-rendering:pixelated;image-rendering:crisp-edges;touch-action:none}
 
-#overlay{position:fixed;inset:0;overflow:auto;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;
-  padding:28px max(16px,env(safe-area-inset-left,0px));
-  background:
-    radial-gradient(circle at 14% 6%,rgba(255,250,225,.55),rgba(200,220,255,.12) 9%,transparent 24%),
-    radial-gradient(circle at 86% 6%,rgba(255,250,225,.55),rgba(200,220,255,.12) 9%,transparent 24%),
-    radial-gradient(circle at 38% 2%,rgba(255,250,225,.35),transparent 16%),
-    radial-gradient(circle at 62% 2%,rgba(255,250,225,.35),transparent 16%),
-    radial-gradient(ellipse at 50% 55%,transparent 30%,rgba(0,0,0,.6) 100%),
-    linear-gradient(180deg,#0b1838 0%,#1a2d55 42%,#20364a 55%,#1f5a2c 62%,#123a1c 100%)}
+#overlay{position:fixed;inset:0;display:grid;grid-template-rows:16vh 1fr 20vh;background:#000}
+.band{display:flex;align-items:center;padding:0 5vw;gap:2.4vw;min-width:0}
+.top{padding-top:1.5vh}
+.mark{flex:none;width:min(9vh,64px);aspect-ratio:1;border-radius:50%;display:grid;place-items:center;
+  background:radial-gradient(circle,var(--maroonHi) 0 58%,transparent 59%),linear-gradient(180deg,#f4f4f4,#bdbdbd 50%,#8a8a8a)}
+.mark::after{content:"\2605";color:var(--gold);font-size:min(5.6vh,40px);line-height:1;text-shadow:0 0 1px #5a4210}
+.title{margin:0;font-weight:900;font-size:clamp(26px,6.4vh,58px);letter-spacing:.01em;white-space:nowrap;
+  background:linear-gradient(180deg,#fff 0%,#f0f0f0 48%,#c9ccd0 56%,#ececec 100%);-webkit-background-clip:text;background-clip:text;color:transparent;
+  filter:drop-shadow(2px 2px 0 rgba(0,0,0,.9))}
+.mid{position:relative;overflow:auto;background:var(--back) center/cover no-repeat;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2.2vh;padding:2vh 4vw}
+.tag{margin:0;font-size:15px;font-weight:700;color:var(--ink);text-shadow:1px 1px 2px #000}
 
-/* the logo: SUPER SOCCER over a chrome STAR, the year on an amber tag, an orange swoosh under it */
-.logo{position:relative;display:grid;justify-items:center;margin-top:8px;user-select:none;font-style:italic;font-weight:900}
-.logo .super{font-size:clamp(18px,3.6vw,34px);letter-spacing:.04em;color:var(--soft);line-height:1;text-shadow:0 2px 6px #000a;
-  transform:scaleX(1.02)}
-.logo .main{font-size:clamp(64px,15vw,150px);line-height:.95;letter-spacing:-.01em;
-  background:linear-gradient(180deg,#fff 0%,#dfe8f8 44%,#7f95c4 50%,#2c4483 56%,#b8c8ea 80%,#fff 100%);
-  -webkit-background-clip:text;background-clip:text;color:transparent;
-  padding:0 .06em;filter:drop-shadow(0 0 1.5px #0a1a48) drop-shadow(0 0 1.5px #0a1a48) drop-shadow(0 0 1px #0a1a48) drop-shadow(0 6px 10px rgba(0,0,0,.7))}
-.logo .year{position:absolute;right:-24%;top:36%;padding:.08em .32em;font-size:clamp(26px,5vw,52px);line-height:1.1;color:var(--deep);
-  border-radius:.28em;background:linear-gradient(180deg,var(--amberHi),#f3a334 48%,var(--amberLo) 52%,#ee9a3c);
-  box-shadow:0 0 22px rgba(255,160,40,.6),inset 0 2px 0 rgba(255,255,255,.6),inset 0 -3px 0 rgba(0,0,0,.25);border:2px solid rgba(0,0,0,.45)}
-.logo .swoosh{height:9px;width:118%;margin-top:4px;border-radius:50%;background:linear-gradient(90deg,transparent,#ff8a1c 15%,#ffd75a 50%,#ff8a1c 85%,transparent);
-  box-shadow:0 0 18px rgba(255,140,40,.8)}
-.tag{margin:0;font-size:15px;font-weight:700;color:var(--muted);letter-spacing:.08em;text-align:center;line-height:1.6}
+/* the row stack */
+.rows{display:flex;flex-direction:column;gap:2px;width:min(440px,80vw);border:2px solid var(--line);border-radius:6px;overflow:hidden;background:var(--sep)}
+.rows button{display:flex;align-items:center;gap:14px;width:100%;margin:0;padding:12px 16px 12px 58px;position:relative;border:0;border-radius:0;
+  font:700 22px/1.1 var(--sans);text-align:left;color:var(--ink);background:var(--row);cursor:pointer;text-shadow:1px 1px 2px #000}
+.rows button:hover:not(:disabled),.rows button:focus-visible{background:linear-gradient(180deg,var(--maroonHi),var(--maroonLo));outline:none}
+.rows button:hover:not(:disabled)::before,.rows button:focus-visible::before{content:"A";position:absolute;left:12px;top:50%;transform:translateY(-50%);
+  width:28px;height:28px;border-radius:50%;border:2px solid #c4c4c4;background:#111;display:grid;place-items:center;font-size:15px;box-sizing:border-box}
+.rows button:hover:not(:disabled)::after,.rows button:focus-visible::after{content:"\25B2\A\25BC";white-space:pre;position:absolute;right:14px;top:50%;transform:translateY(-50%);
+  color:var(--gold);font-size:9px;line-height:1.05;text-align:center}
+.rows button:disabled{color:var(--muted);cursor:not-allowed}
+.note{margin:0;font-size:14px;color:var(--soft);min-height:1em;text-align:center;line-height:1.5;max-width:60ch;text-shadow:1px 1px 2px #000}
+#final{margin:0;font-size:18px;font-weight:700;color:var(--gold);text-align:center;text-shadow:1px 1px 2px #000}
 
-.start{font-size:22px;font-weight:900;font-style:italic;color:var(--accent);text-shadow:0 0 14px rgba(255,190,50,.8);animation:pulse 1.4s ease-in-out infinite;margin:0}
-@keyframes pulse{50%{opacity:.35}}
-.btns{display:flex;gap:18px;flex-wrap:wrap;justify-content:center}
-button{position:relative;font:italic 900 22px/1 var(--sans);letter-spacing:.02em;padding:18px 34px;border-radius:14px;cursor:pointer;color:var(--ink);
-  background:linear-gradient(180deg,var(--blueHi),#3a68c2 48%,var(--blueLo) 52%,#2b4f9e);border:2px solid rgba(0,0,0,.5);
-  box-shadow:inset 0 2px 0 rgba(255,255,255,.5),inset 0 -3px 0 rgba(0,0,0,.25),0 4px 14px rgba(0,0,0,.5);text-shadow:0 2px 3px rgba(0,0,0,.6);text-transform:uppercase}
-button#vr{color:var(--deep);text-shadow:none;background:linear-gradient(180deg,var(--amberHi),#f3a334 48%,var(--amberLo) 52%,#ee9a3c);
-  box-shadow:inset 0 2px 0 rgba(255,255,255,.6),inset 0 -3px 0 rgba(0,0,0,.25),0 0 22px rgba(255,160,40,.55)}
-button:hover:not(:disabled){filter:brightness(1.12)}
-button:active:not(:disabled){transform:translateY(2px)}
-button:disabled{opacity:.4;cursor:not-allowed;filter:grayscale(.6)}
-button:focus-visible{outline:3px solid var(--accent);outline-offset:4px}
-.note{margin:0;font-size:14px;color:var(--muted);min-height:1em;text-align:center;line-height:1.5;max-width:60ch}
-#final{margin:0;font-size:18px;font-weight:800;color:var(--accent);text-align:center;line-height:1.6}
-
-.how{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px 26px;margin:0;max-width:820px;width:100%;box-sizing:border-box;
-  padding:0 22px 18px;border-radius:16px;border:2px solid var(--line);overflow:hidden;
-  background:linear-gradient(180deg,rgba(34,48,78,.86),rgba(14,24,44,.86) 50%,rgba(6,12,26,.86));box-shadow:0 8px 30px rgba(0,0,0,.5)}
-.how h2{grid-column:1/-1;margin:0 -22px 4px;padding:10px 22px;font-size:20px;font-style:italic;font-weight:900;letter-spacing:.02em;
-  background:linear-gradient(180deg,var(--blueHi),#3a68c2 48%,var(--blueLo) 52%,#2b4f9e);border-bottom:2px solid rgba(0,0,0,.4);
-  box-shadow:inset 6px 0 0 var(--accent)}
-.how dl{margin:0;display:grid;grid-template-columns:auto 1fr;gap:8px 14px;font-size:14px;line-height:1.45}
-.how dt{color:var(--accent);font-weight:900;font-style:italic;white-space:nowrap}
+.how{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));margin:0;max-width:820px;width:100%;box-sizing:border-box;
+  border:2px solid var(--line);border-radius:6px;overflow:hidden;background:var(--row)}
+.how h2{grid-column:1/-1;margin:0;padding:8px 18px;font-size:17px;font-weight:700;background:linear-gradient(180deg,var(--maroonHi),var(--maroonLo));border-bottom:2px solid var(--sep)}
+.how dl{margin:0;padding:12px 18px;display:grid;grid-template-columns:auto 1fr;gap:6px 14px;font-size:13px;line-height:1.4}
+.how dt{color:var(--ink);font-weight:700;white-space:nowrap}
 .how dd{margin:0;color:var(--soft)}
 @media (max-width:640px){.how{grid-template-columns:1fr}}
-#best{font-size:17px;font-weight:900;font-style:italic;color:var(--accent);margin:0}
+
+.bottom{flex-direction:column;align-items:stretch;justify-content:flex-start;gap:1.4vh;padding-top:2.2vh}
+.hints{display:flex;justify-content:center;gap:5vw;font-size:17px;font-weight:700}
+.hints span{display:inline-flex;align-items:center;gap:10px}
+.hints kbd{font:700 12px var(--sans);min-width:26px;height:26px;padding:0 7px;box-sizing:border-box;border:2px solid #c4c4c4;border-radius:13px;background:#111;display:inline-grid;place-items:center}
+.status{display:flex;align-items:center;gap:12px;font-size:16px;font-weight:700;margin:0}
+.status::before{content:"";flex:none;width:14px;height:14px;border:3px solid #a8382e;border-radius:50%}
+#best{color:var(--gold);margin:0 0 0 auto}
 
 #hud{position:fixed;inset:0;pointer-events:none}
 #bug{position:fixed;top:calc(14px + env(safe-area-inset-top,0px));left:max(14px,env(safe-area-inset-left,0px));line-height:0}
@@ -79,8 +71,7 @@ button:focus-visible{outline:3px solid var(--accent);outline-offset:4px}
   linear-gradient(#fff,#fff) center/2px 10px no-repeat,linear-gradient(#fff,#fff) center/10px 2px no-repeat;mix-blend-mode:difference}
 #keys{position:fixed;bottom:calc(12px + env(safe-area-inset-bottom,0px));left:0;right:0;text-align:center;font-size:12px;font-weight:700;color:var(--soft);
   text-shadow:0 1px 3px #000;pointer-events:none;line-height:1.6;padding:0 230px 0 16px}
-#radar{position:fixed;right:max(14px,env(safe-area-inset-right,0px));bottom:calc(34px + env(safe-area-inset-bottom,0px));line-height:0;
-  border-radius:14px;box-shadow:0 6px 20px rgba(0,0,0,.6)}
+#radar{position:fixed;right:max(14px,env(safe-area-inset-right,0px));bottom:calc(34px + env(safe-area-inset-bottom,0px));line-height:0}
 #radar canvas{width:192px;height:180px;display:block}
 #fps{position:fixed;right:10px;bottom:10px;font-size:11px;color:var(--muted);pointer-events:none}
 </style>
@@ -102,38 +93,40 @@ button:focus-visible{outline:3px solid var(--accent);outline-offset:4px}
 </div>
 
 <main id="overlay">
-  <div class="logo" data-brand-label aria-label="Super Soccer Star">
-    <span class="super">SUPER SOCCER</span>
-    <span class="main">STAR</span>
-    <span class="year" data-year></span>
-    <span class="swoosh"></span>
-  </div>
-  <p class="tag">ARCADE VR FOOTBALL · 3 ON 3 + KEEPER · 2 MINUTES</p>
-  <p class="start">PRESS START</p>
-  <p id="final" hidden></p>
-  <div class="btns">
-    <button id="vr">ENTER VR</button>
-    <button id="play" class="alt">PLAY IN BROWSER</button>
-  </div>
-  <p id="vrnote" class="note"></p>
-  <p id="best"></p>
-  <section class="how">
-    <h2>HOW TO PLAY</h2>
-    <dl>
-      <dt>RUN</dt><dd>Left stick · WASD</dd>
-      <dt>SPRINT</dt><dd>Left grip or stick click · Shift</dd>
-      <dt>TURN</dt><dd>Right stick · mouse</dd>
-      <dt>PASS</dt><dd>Lobs over defenders in the way, along the ground when it's clear</dd>
-      <dt>SHOOT</dt><dd>Hold right trigger, look where you want it, let go · hold click</dd>
-    </dl>
-    <dl>
-      <dt>PASS</dt><dd>Hold left trigger at a teammate, let go when the ring meets the circle · right click / E</dd>
-      <dt>CALL</dt><dd>Raise your hand or pass button without the ball · get it back</dd>
-      <dt>KNOCK-ON</dt><dd>A · Space</dd>
-      <dt>DRAG-BACK</dt><dd>B · C · shakes the presser</dd>
-      <dt>GOAL DANCE</dt><dd>Strike each pose on the beat: left hand up, right hand up, both up, arms out · arrow keys</dd>
-    </dl>
+  <header class="band top">
+    <span class="mark" aria-hidden="true"></span>
+    <h1 class="title" data-brand-label aria-label="Super Soccer Star">SUPER SOCCER STAR <span data-year></span></h1>
+  </header>
+  <section class="mid">
+    <p class="tag">Arcade VR football · 3 on 3 + keeper · 2 minutes</p>
+    <p id="final" hidden></p>
+    <div class="rows">
+      <button id="vr">Enter VR</button>
+      <button id="play" class="alt">Play in Browser</button>
+    </div>
+    <p id="vrnote" class="note"></p>
+    <section class="how">
+      <h2>How to play</h2>
+      <dl>
+        <dt>Run</dt><dd>Left stick · WASD</dd>
+        <dt>Sprint</dt><dd>Left grip or stick click · Shift</dd>
+        <dt>Turn</dt><dd>Right stick · mouse</dd>
+        <dt>Pass</dt><dd>Lobs over defenders in the way, along the ground when it's clear</dd>
+        <dt>Shoot</dt><dd>Hold right trigger, look where you want it, let go · hold click</dd>
+      </dl>
+      <dl>
+        <dt>Pass</dt><dd>Hold left trigger at a teammate, let go when the ring meets the circle · right click / E</dd>
+        <dt>Call</dt><dd>Raise your hand or pass button without the ball · get it back</dd>
+        <dt>Knock-on</dt><dd>A · Space</dd>
+        <dt>Drag-back</dt><dd>B · C · shakes the presser</dd>
+        <dt>Goal dance</dt><dd>Strike each pose on the beat: left hand up, right hand up, both up, arms out · arrow keys</dd>
+      </dl>
+    </section>
   </section>
+  <footer class="band bottom">
+    <div class="hints"><span><kbd>A</kbd>Select</span><span><kbd>Click</kbd>Play</span></div>
+    <p class="status">Press start<span id="best"></span></p>
+  </footer>
 </main>
 <p id="fps"></p>
 

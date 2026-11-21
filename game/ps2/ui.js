@@ -8,6 +8,7 @@
 import * as THREE from 'three';
 import { paintFlag, FLAGS } from './flags.js';
 import { YEAR, NAME } from './brand.js';
+import { ALL } from '../../rules/teams.js';
 export { YEAR, NAME };
 
 export const PAL = {
@@ -60,17 +61,20 @@ export function wrap(ctx, s, max, size, o = {}) {
 
 // Mixed case for the game's upper-case strings: "SCORE ATTACK" → "Score Attack". Words with a digit, single
 // letters (button names: A, B, X) and the words in `keep` (team ids, VR) stay as they are.
-const KEEP = new Set(['VR', 'PTS', 'GK', 'PS1']);
+const KEEP = new Set(['VR', 'PTS', 'GK', 'PS1', 'USA']);
 const kept = (w, keep) => /\d/.test(w) || w.replace(/[^A-Za-z]/g, '').length === 1 || keep.has(w.replace(/[^A-Z0-9]/g, ''));
 export function tc(s, keep = KEEP) {
   return String(s).split(' ').map(w => (kept(w, keep) ? w : w.charAt(0) + w.slice(1).toLowerCase())).join(' ');
 }
-// Sentence case: "THE CROWD ARE ON THEIR FEET!" → "The crowd are on their feet!" (same exceptions as tc).
+// Sentence case: "THE CROWD ARE ON THEIR FEET!" → "The crowd are on their feet!" (same exceptions as tc; the
+// words of team names keep a capital: "V MUNICH" → "V Munich").
+const PROPER = new Set(ALL.flatMap(t => t.name.split(' ')).filter(w => w.length > 2));
 export function sc(s, keep = KEEP) {
   let first = true;
   return String(s).split(' ').map(w => {
-    const out = kept(w, keep) ? w : first ? w.charAt(0) + w.slice(1).toLowerCase() : w.toLowerCase();
-    first = /[.!?:]$/.test(w);
+    const bare = w.replace(/[^A-Z]/g, '');
+    const out = kept(w, keep) ? w : first || PROPER.has(bare) ? w.charAt(0) + w.slice(1).toLowerCase() : w.toLowerCase();
+    first = /[.!?]$/.test(w);
     return out;
   }).join(' ');
 }
