@@ -82,6 +82,9 @@ export const HAIR2 = [
   { name: 'slick', front: 0.212, side: 0.46, back: 0.775, recede: 0.036, burn: 0.6, top: 0.0125, sides: 0.0055, nape: 0.011, quiff: 0.008, wall: 0.085, taper: 0.2, pole: -0.6, fade: 0.025, swept: true, flick: true },
   { name: 'ponytail', front: 0.226, side: 0.46, back: 0.75, recede: 0.03, burn: 0.565, top: 0.0055, sides: 0.004, nape: 0.005, quiff: 0.002, wall: 0.12, taper: 0.2, pole: 0.35, fade: 0.02, swept: true, tail: true },
   { name: 'curls', front: 0.238, side: 0.455, back: 0.725, recede: 0.022, burn: 0.57, top: 0.019, sides: 0.014, nape: 0.014, quiff: 0.002, wall: 0.1, taper: 0.13, pole: 1.05, fade: 0.03, curls: 0.006 },
+  // (added for team looks, rules/looks.js) spiky: short, standing up in tufts with a lifted front; mop: a longer crop with a fringe low on the forehead
+  { name: 'spiky', front: 0.218, side: 0.455, back: 0.73, recede: 0.024, burn: 0.575, top: 0.021, sides: 0.006, nape: 0.005, quiff: 0.012, wall: 0.16, taper: 0.3, pole: 1.05, fade: 0.06, choppy: 1 },
+  { name: 'mop', front: 0.25, side: 0.47, back: 0.77, recede: 0.008, burn: 0.6, top: 0.016, sides: 0.01, nape: 0.011, quiff: 0.003, wall: 0.1, taper: 0.22, pole: 1.05, fade: 0.02, choppy: 1 },
 ];
 // Where the hair stops at this angle: level across the forehead with the corners running back, down
 // the temple to the top of the ear, then down behind the ear to the nape. (Sideburns are painted on.)

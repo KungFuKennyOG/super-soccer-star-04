@@ -5,6 +5,7 @@ import { BALL } from '../rules/tuning.js';
 import { ps1 } from './ps1.js';
 import { SKINS, HAIRS, blobTex, arrowTex } from './tex.js';
 import { playerAtlas } from './atlas.js';
+import { toneOf, HAIRS as LHAIRS, stylePS1 } from '../rules/looks.js';
 import { buildBody, restPose } from './body.js';
 import { animateKeeper, keeperRuns, keeperRan } from './keeperpose.js';
 import { strideRate } from '../rules/dribble.js';
@@ -23,9 +24,11 @@ const mat = (key, make) => { if (!matCache.has(key)) matCache.set(key, make()); 
 
 // kit: a kit spec from rules/teams.js; look picks skin, hair, hairstyle and stubble.
 // boots: a locker color (0 black, 1 white, 2 red, 3 gold).
-export function buildPlayer(kit, num, look = 0, { feetOnly = false, boots = 0 } = {}) {
-  const skin = SKINS[look % SKINS.length], hair = HAIRS[(look * 3 + 1) % HAIRS.length];
-  const style = [0, 0, 2, 0, 5, 1, 0, 2, 3, 0, 5, 0, 2, 4][look % 14], stubble = look % 3 !== 0;   // mostly short hair, most with stubble
+// ap: a look from rules/looks.js (pickSquad) in place of `look`'s: its tone, hair color, hairstyle and stubble.
+export function buildPlayer(kit, num, look = 0, { feetOnly = false, boots = 0, ap = null } = {}) {
+  let skin = SKINS[look % SKINS.length], hair = HAIRS[(look * 3 + 1) % HAIRS.length];
+  let style = [0, 0, 2, 0, 5, 1, 0, 2, 3, 0, 5, 0, 2, 4][look % 14], stubble = look % 3 !== 0;   // mostly short hair, most with stubble
+  if (ap) { skin = toneOf(ap); hair = LHAIRS[ap.hair]; style = stylePS1(ap.style, ap.face); stubble = ap.stubble; }
   const tex = playerAtlas({ kit, num, skin, hair, style, stubble, feetOnly, boots });
   const material = mat(tex.uuid, () => ps1(feetOnly ? { map: tex, alphaTest: 0.5, vertexColors: true, pop: true } : { map: tex, vertexColors: true, pop: true }));
   const { mesh, bone } = buildBody(material, style);
