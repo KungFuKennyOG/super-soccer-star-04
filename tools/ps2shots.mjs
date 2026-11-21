@@ -16,7 +16,7 @@ const server = await startServer(+(process.env.PORT || 8123));
 const browser = await chromium.launch({ executablePath: process.env.CHROME || '/usr/bin/google-chrome', args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
 try {
   for (const shot of shots) {
-    const [w, h] = SIZES[shot] || [1280, 960];
+    const [w, h] = process.env.SIZE ? process.env.SIZE.split('x').map(Number) : SIZES[shot] || [1280, 960];   // SIZE=800x600: smaller, quicker frames
     const page = await browser.newPage({ viewport: { width: w, height: h } });
     page.on('console', m => { if (m.type() === 'error' || m.type() === 'warning') console.log('[page]', m.text()); });
     page.on('pageerror', e => console.log('[page error]', e.message));

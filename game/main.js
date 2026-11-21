@@ -21,6 +21,7 @@ import { createResults, loadBest } from './results.js';
 import { buildBall, buildArrow, animate, placeModel } from './actors.js';
 import { heldBall } from './keeperpose.js';
 import { startStrike, struck } from './strike.js';
+import { beaten } from './beaten.js';
 import { createSquads } from './squad.js';
 import { createMenus, LENGTHS } from './menus.js';
 import { renderBackdrop } from './ps2/menuscene.js';
@@ -235,6 +236,7 @@ function feedback(ev) {
     if (e.type === 'launched') { struck(models.you, e.kind, norm(world.you.fx, world.you.fz), 0.5); continue; }
     if (e.type === 'knock' || e.type === 'flick' || (e.type === 'skill' && e.move === 'nutmeg')) struck(models.you, e.type === 'flick' ? 'scoop' : 'poke', Math.hypot(world.ball.vx, world.ball.vz) > 0.5 ? norm(world.ball.vx, world.ball.vz) : norm(world.you.fx, world.you.fz), 0.4);
     if (e.type === 'drag') models.you.special = { kind: 'drag', t: 0 };
+    if (e.type === 'drag' || e.type === 'skill') beaten(models, world.players.filter(p => p.role === 'def'), e);      // the man you beat (game/beaten.js)
     if ((e.type === 'kick' || e.type === 'pass') && m && e.kind !== 'header' && e.kind !== 'bicycle') struck(m, e.type === 'pass' ? 'pass' : e.kind === 'volley' ? 'volley' : 'shot', norm(world.ball.vx, world.ball.vz), e.power);
     // the keeper's split step: as your shot is wound up (he reads the strike coming), or as anyone else's is struck
     if (models.gk && ((e.type === 'windup' && e.kind === 'shot') || (e.type === 'kick' && e.by !== 'gk' && !(models.gk.split < 0.3)))) models.gk.split = 0;
@@ -290,7 +292,9 @@ const loop = startLoop(renderer, (dt, t) => {
     if (raw.vr) { raw.hand = hands.highest(camera.position.y); raw.rightHand = hands.hand('right', handW); raw.leftHand = hands.hand('left', handL); }
     const intent = intents.build(raw, dt, world);
     const ev = stepSim(world, intent, simDt);
-    replay.record(world, ev, simDt);
+    // your hold on the trigger or the pass ring: you shape up to strike it (game/windup.js), in the replay too
+    if (models.you) models.you.charge = intents.shotHold ? { kind: 'shot', t: intents.shotHold.t } : intents.passHold ? { kind: 'pass', t: intents.passHold.t } : null;
+    replay.record(world, ev, simDt, models.you && models.you.charge);
     feedback(ev);
     const tr = training.update({ ev, intent, world, dt: simDt, vr: raw.vr, restart: raw.restart });
     if (tr === 'done') { sfx('perfect'); buzz('both', 0.5, 80); }

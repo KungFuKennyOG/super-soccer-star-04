@@ -23,6 +23,7 @@
      your own hands (tools/handlook.js): handeye | handraise | handgrid | handposes | handcmp | handfilm, &pose=open|point|fist|hold, &d=, &side=left.
      trophies: see tools/trophylook.js (worldheld, clubspin, pair ...).
      grounds: see tools/groundlook.js (ground, groundwide, groundcurva ... &team=ID&wx=rain).
+     charging a shot and beaten defenders (tools/anim2look.js): a2shot | a2beat, each also ...front, ...back, ...top, ...you; &speed=, &hold=, &replay=1, &move=, &rate=.
      tools/ps2shots.mjs renders them all to files. -->
 <style>html,body{margin:0;background:#101830;overflow:hidden}canvas{display:block}#i{position:fixed;left:8px;top:8px;font:12px monospace;color:#fff;text-shadow:0 0 3px #000}
 .bar{position:fixed;bottom:6%;width:27%;display:none;font:600 2.3vw 'Trebuchet MS',Arial,sans-serif;color:#fff}.bar b{display:block;padding:.25em .9em;border-radius:.6em;background:linear-gradient(#3a4250e6,#151a22e6);box-shadow:0 0 0 2px #0006}.bar i{display:block;height:.5vw;margin:.5vw .4em 0;background:repeating-linear-gradient(90deg,#f2f2f2 0 1.5vw,#0000 1.5vw 1.9vw)}</style>
@@ -52,6 +53,7 @@ import { heldBall } from '../game/keeperpose.js';
 import { sampleOnce } from '../game/keepercap.js';
 import { pickSquad } from '../rules/looks.js';
 import { handLook } from './handlook.js';
+import { anim2Look } from './anim2look.js';
 import { trophyShots } from './trophylook.js';
 import { groundLook } from './groundlook.js';
 
@@ -109,6 +111,7 @@ const buildMs = Math.round(performance.now() - t0);            // painting six p
 const ball = buildBall2(); scene.add(ball);
 const HL = handLook(scene, q);                                 // your own hands: shots named hand... (tools/handlook.js)
 const bp = { x: 0, y: 0.11, z: 0 };
+const A2 = anim2Look(scene, q, { players, ball, bp, camera, kit: MAD, shadowOf: (m, p) => m.shadow.position.set(p.x - LIGHT_DIR.x * 0.12, 0.01, p.z - LIGHT_DIR.z * 0.12) });   // charging a shot, beaten defenders: shots named a2... (tools/anim2look.js)
 
 // A shot: where each player is at time t ([x, z, heading, speed, stride offset] or null = off stage),
 // the ball, the camera. Headings: 0 = toward +z (away from the main stand).
@@ -282,6 +285,7 @@ const bX = t => reelX(t, BURST, -9);
 let time = +(q.get('t') || 0);
 const RAW = CLIPS[q.get('raw')], rawPose = Object.assign(newPose(), { a: new Float32Array(6) });
 function pose(t, dt) {
+  if (A2.active(shot)) { HL.hide(); ball.visible = true; A2.pose(shot, t, dt); return; } A2.hide();
   if (HL.active(shot)) { for (const { m } of players) m.root.visible = m.shadow.visible = false; ball.visible = false; HL.pose(shot, t, dt); return; }
   HL.hide(); ball.visible = true;
   if (SHOTS[shot].keep) return keepPose(SHOTS[shot], t, dt);
@@ -330,7 +334,7 @@ function pose(t, dt) {
   camera.position.set(...val(s.cam, t)); camera.lookAt(...val(s.at, t));
 }
 // poses ease in over time (speed, lean, the head's turn), so a still is run up to, not jumped to (a shot's `warm`: for how many seconds)
-function warm() { if (!SHOTS[shot] && !HL.active(shot)) { console.warn(`no shot '${shot}', showing duel`); shot = 'duel'; } for (const pl of players) { pl.p.stride = null; pl.m.gait = pl.m.strike = pl.m.special = pl.m.trick = null; pl.m.sway = null; pl.m.kickK = pl.m.onBallK = pl.m.cheerK = pl.m.driveT = 0; } played = 1e9; for (let k = Math.round(((SHOTS[shot] || {}).warm || 1.5) * 60); k >= 0; k--) pose(time - k / 60, 1 / 60); }   // (the last step is the moment itself: a still of the frame a ball is struck on is that frame)
+function warm() { if (!SHOTS[shot] && !HL.active(shot) && !A2.active(shot)) { console.warn(`no shot '${shot}', showing duel`); shot = 'duel'; } for (const pl of players) { pl.p.stride = null; pl.m.gait = pl.m.strike = pl.m.special = pl.m.trick = null; pl.m.sway = null; pl.m.kickK = pl.m.onBallK = pl.m.cheerK = pl.m.driveT = 0; } played = 1e9; for (let k = Math.round(((SHOTS[shot] || {}).warm || 1.5) * 60); k >= 0; k--) pose(time - k / 60, 1 / 60); }   // (the last step is the moment itself: a still of the frame a ball is struck on is that frame)
 function frame(dt) {
   time += dt; pose(time, dt); if (HL.active(shot)) HL.render(renderer, camera, W, H); else if (GL.active(shot)) GL.render(renderer, camera, shot, time); else renderer.render(scene, camera);
   document.getElementById('i').textContent = q.get('info') ? `${shot}  calls ${renderer.info.render.calls}  tris ${renderer.info.render.triangles}` : '';

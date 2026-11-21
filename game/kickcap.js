@@ -20,6 +20,7 @@
 import * as THREE from 'three';
 import { CLIPS, BONES, newPose, applyPose } from './mocap.js';
 import { ankleOf, footOf, aimFoot } from './legik.js';
+import { inertialize } from './inertia.js';
 
 // Which recorded kick each kind of strike is. clips: [soft, hard], mixed by power (one take each for now); warp: how much faster than
 // life the downswing may play in a wind-up; follow: seconds of follow-through before he eases back to his run;
@@ -39,6 +40,8 @@ const KICKS = {
 };
 const RECOVER = 0.2, NEAR = 0.09, LOCK = [0.08, 0.3], LEAN = { volley: 0.1, chip: -0.09 };     // s back to the run; s either side of contact the boot is steered to the ball; s the ankle stays locked after it, then lets go over; the trunk tipped forward over a volley, back under a chip (rad)
 const HIPS = { x: 0.26, z: 0.25, drop: 0.06 }, BODY = { share: 0.7, max: 0.75 }, EASE = 22;   // how far the hips may go over (m), how much of the aim the body takes (rad), how fast the body joins a kick (1/s)
+const LAND = { at: -0.75, into: 0.5, ease: 0.14 };      // where the run's cycle is as the kicking foot comes down (rad: just before its plant), and how far into the ease back to the run that is
+const STEP = [0.45, 0.85], REACH = [0.52, 0.3, 0.16], LEG = 0.83, HIPX = 0.09;      // m the plant foot can be brought in a wind-up: all the way, not at all; m from under its hip a planted foot is held to, let go over, and how far he sits down for it; hip to ankle, and hip joint from the middle (m)
 const GRASS = { ahead: 0.4, hold: 0.28, let: 0.3 };       // the plant foot on a moving man: how far ahead of its place it may land, how far he goes on before it lifts, and it is let go over (m)
 const PLANT = { min: 0.2, max: 0.3, ahead: 0.2, left: 1.3, right: -0.35 }, SOLE = 0.085, CLEAR = 0.2;      // the plant foot beside the ball: m to the left of its path and at most ahead of the kicking ankle; how far it goes round with the path (rad)
 const LEGL = new Set(['upperLegL', 'lowerLegL', 'footL', 'toeL']), LEGR = new Set(['upperLegR', 'lowerLegR', 'footR', 'toeR']);
@@ -98,25 +101,58 @@ const footIn = (P, n, out) => out.fromArray(P.q, 0).multiply(qi.fromArray(P.q, I
 // the lowest point of a boot's sole below its ankle when it points as q says (heel, ball of the foot, toe)
 const under = q => Math.min(pt.set(0.05, -SOLE, -0.1).applyQuaternion(q).y, pt.set(-0.05, -SOLE, -0.1).applyQuaternion(q).y, pt.set(0.04, -SOLE, 0.2).applyQuaternion(q).y, pt.set(-0.04, -SOLE, 0.2).applyQuaternion(q).y);
 
+// How much of the captured downswing a wind-up plays (s before the contact it starts from): between the wind-up's
+// own length (life speed) and the top of the backswing, where the kicking leg is nearest to where the run has it
+// now, leaning to a bigger backswing for a harder shot. A leg already trailing gets the whole downswing from the
+// top; one that is under him or ahead gets the short end of it (there is no time for more).
+const SPAN = { step: 1 / 60, lean: 0.9, soft: 0.6 };      // s between tries; m of mismatch a second off the preferred start is worth; how far down the range a soft shot starts
+function spanFor(m, bn, K, s, pw) {
+  const c = K.clips[0], lo = Math.min(s.wind, c.top), want = lo + (c.top - lo) * (1 - SPAN.soft * (1 - smooth(pw / 0.8)));
+  ankleOf(bn, 'R', nR);
+  const az = nR.z - bn.hips.position.z, ay = nR.y;
+  let best = want, cost = Infinity;
+  for (let sp = lo; sp <= c.top + 1e-6; sp += SPAN.step) {
+    sampleKick(c, -sp, S1);
+    const d = Math.hypot(S1.a[2] - S1.h[2] - az, S1.a[1] - ay) + SPAN.lean * Math.abs(sp - want);
+    if (d < cost) { cost = d; best = sp; }
+  }
+  return best;
+}
+
 // Poses the hips and legs of a kick in progress. s: the model's m.strike (game/strike.js); A: where the ankle
 // is with the boot on the ball, qf: how the foot is turned then, turn: where the ball goes off his heading
-// (rad), B: the ball, all in model space. Returns how much of a kick the pose is (0..1).
-export function poseKick(m, bn, s, A, qf, turn, dt, B) {
+// (rad), B: the ball (where it was struck, once it has been), live: the ball now, all in model space. Returns how much of a kick the pose is (0..1).
+export function poseKick(m, bn, s, A, qf, turn, dt, B, live = null) {
   const K = KICKS[s.kind], c0 = K.clips[0], first = !!m.firstPerson, after = s.t - s.wind, pw = s.power ?? 0.5;
   // (a chip is stopped short; a man at a run has his next stride to take, where the man recorded stood and watched)
   const chip = s.kind === 'shot' ? 1 - smooth((pw - 0.15) / 0.12) : 0, follow = K.follow * (1 - 0.5 * chip) * (1 - 0.4 * smooth((m.gait ? m.gait.s : 0) / 6));
+  const kk = m.kick || (m.kick = { P: newKick(), s: null, w: 0, wb: 0, live: false, tip: 0, lock: new THREE.Quaternion(), g: {}, carry: false, span: 0 }), P = kk.P, mixk = smooth((pw - 0.45) / 0.45) * (1 - chip);
+  if (kk.s !== s) {      // a new strike
+    kk.s = s; kk.wb = 0; kk.fresh = true; kk.landed = false; kk.pl = 1; Object.assign(kk.g, { on: false, seen: false, x: 0, z: 0, lx: 0, lz: 0, bx: 0, bz: 0 });
+    // A wind-up (your own strike, or anyone's in a replay) takes him over at once, and what he was doing is carried
+    // into it and eased away by the contact (game/inertia.js). A strike nobody saw coming can't be: the boot is
+    // on the ball this very frame.
+    kk.carry = after < 0 && !s.hit && dt > 0;
+    kk.span = s.wind > c0.top ? Math.min(s.wind, c0.c / c0.hz) : Math.min(c0.top, s.wind * K.warp);
+    if (kk.carry) { inertialize(m, s.wind - 1e-4); if (s.wind <= c0.top) kk.span = spanFor(m, bn, K, s, pw); }
+  }
   let tau, w;
   if (after < 0) {
-    // the wind-up: the end of the downswing, as much of it as the time allows
-    const lead = c0.c / c0.hz, span = s.wind > c0.top ? Math.min(s.wind, lead) : Math.min(c0.top, s.wind * K.warp), k = s.t / s.wind;
-    tau = -span * (1 - 0.4 * chip) * (1 - k); w = smooth(k / 0.35);             // (a chip's backswing is short)
+    // the wind-up: the end of the downswing, as much of it as the time allows (kk.span of it)
+    const k = s.t / s.wind;
+    tau = -kk.span * (1 - 0.4 * chip) * (1 - k); w = kk.carry ? 1 : smooth(k / 0.35);             // (a chip's backswing is short)
   } else { tau = after * (1 - 0.7 * chip); w = 1 - smooth((after - follow) / RECOVER); }
-  const kk = m.kick || (m.kick = { P: newKick(), s: null, w: 0, wb: 0, live: false, tip: 0, lock: new THREE.Quaternion(), g: {} }), P = kk.P, mixk = smooth((pw - 0.45) / 0.45) * (1 - chip);
-  if (kk.s !== s) { kk.s = s; kk.wb = 0; Object.assign(kk.g, { on: false, seen: false, x: 0, z: 0, lx: 0, lz: 0, bx: 0, bz: 0 }); }      // a new strike
+  if (after > 1e-6 && !kk.landed) {
+    // He comes out of it onto the kicking foot (as players do off a struck ball at a run): the run's own cycle is
+    // put where that foot is coming down as the follow-through ends, so the leg goes from one into the other.
+    // (What shows of the run under the kick just then is eased across; the cycle drifts back to the sim's afterwards.)
+    kk.landed = true;
+    if (m.gait && m.gait.s > 1) m.land = { t: follow - after + LAND.into * RECOVER, at: LAND.at, ease: LAND.ease };      // (game/gait.js moves the cycle as it next poses his legs)
+  }
   sample(K, mixk, tau, P);
   // the boot has to be on the ball on the contact frame however little warning there was (and the plant foot
-  // out of its way); the rest of him (hips, trunk, arms) is eased into the kick over a few frames instead of jumping
-  const wb = kk.wb = w < kk.wb ? w : kk.wb + (w - kk.wb) * Math.min(1, dt * EASE);
+  // out of its way); with no wind-up the rest of him (hips, trunk, arms) is eased into the kick over a few frames instead of jumping
+  const wb = kk.wb = w < kk.wb || kk.carry ? w : kk.wb + (w - kk.wb) * Math.min(1, dt * EASE);
   const near = 1 - smooth(Math.abs(tau) / NEAR), bt = first ? 0 : clamp(turn * BODY.share, -BODY.max, BODY.max);
   const a0 = c0.a[c0.c * 6 + 1] + (K.clips[1].a[K.clips[1].c * 6 + 1] - c0.a[c0.c * 6 + 1]) * mixk;      // the captured ankle's height at contact
   // where the run has the feet
@@ -126,6 +162,12 @@ export function poseKick(m, bn, s, A, qf, turn, dt, B) {
   // kicking leg all the way, the body part of it
   const cb = Math.cos(bt), sb = Math.sin(bt), ck = Math.cos(turn), sk = Math.sin(turn);
   tR.set(A.x + P.a[0] * ck + P.a[2] * sk, P.a[1] + (A.y - a0) * near, A.z - P.a[0] * sk + P.a[2] * ck);
+  if (after > 0 && live) {
+    // the boot follows the ball through and never catches it up (a soft shot at a sprint leaves him slowly):
+    // it stays as far behind the ball along its path as it was on the contact
+    const d0 = (B.x - A.x) * sk + (B.z - A.z) * ck + 0.015 * smooth(after / 0.02), d = (live.x - tR.x) * sk + (live.z - tR.z) * ck;
+    if (d < d0 && Math.hypot(live.x - tR.x, live.y - tR.y, live.z - tR.z) < 0.6) { tR.x += (d - d0) * sk; tR.z += (d - d0) * ck; }
+  }
   if (after > 0) tR.y -= (P.a[1] - a0) * chip;                     // a chip's boot stays down: it has gone under the ball, not through it
   // (the plant foot is beside the ball as its path sees it: a pass across him has it behind the ball, not in its way)
   const pl = clamp(turn, PLANT.right, PLANT.left), cp = Math.cos(pl), sp = Math.sin(pl), px = clamp(P.a[3], PLANT.min, PLANT.max), pz = Math.min(P.a[5], PLANT.ahead);
@@ -151,7 +193,18 @@ export function poseKick(m, bn, s, A, qf, turn, dt, B) {
   const G = kk.g, rt = after < 0 ? s.t - s.wind : after, speed = Math.hypot(vx, vz), gone = smooth((speed * rt - GRASS.hold) / GRASS.let);
   if (dt > 0 && G.seen) { G.bx = (B.x - G.lx) / dt; G.bz = (B.z - G.lz) / dt; }
   G.seen = true; G.lx = B.x; G.lz = B.z;
-  if (G.on) { G.x -= vx * dt; G.z -= vz * dt; } else if (after >= 0 || w > 0.9) {
+  const fresh = kk.fresh;
+  if (kk.fresh && kk.carry) {
+    // As the wind-up begins the plant foot is wherever the run had it. On the grass: that is where he stands to
+    // strike it (if the ball isn't there), and it stays on that spot. In the air: it comes down beside the ball
+    // if it can get there in the time, and if it is too far off (trailing behind him at a sprint) it carries on
+    // with the stride and he strikes it on the run.
+    const far = Math.hypot(tL.x - nL.x, tL.z + (vz + G.bz) * s.wind - nL.z);
+    if (s.wind > c0.plant + 0.05) kk.pl = 1;      // (time for the whole approach: a replay)
+    else if (nL.y < 0.125 && Math.hypot(nL.x - B.x, nL.z - B.z) > CLEAR + 0.06) { G.on = true; G.x = nL.x; G.z = nL.z; } else kk.pl = 1 - smooth((far - STEP[0]) / (STEP[1] - STEP[0]));
+  }
+  kk.fresh = false;
+  if (G.on && !fresh) { G.x -= vx * dt; G.z -= vz * dt; } else if (G.on) { /* put down this frame */ } else if (after >= 0 || (w > 0.9 && tau > -c0.plant - 0.03)) {      // (as the recorded plant foot comes down, not before)
     const k = after < 0 ? Math.min(-rt, GRASS.ahead / (Math.hypot(vx + G.bx, vz + G.bz) || 1)) : 0;
     G.on = true; G.x = tL.x + (vx + G.bx) * k; G.z = tL.z + (vz + G.bz) * k;
     for (const along of [0.2, 0.05, -0.1]) {          // (not onto the ball where it is now, either)
@@ -160,12 +213,24 @@ export function poseKick(m, bn, s, A, qf, turn, dt, B) {
     }
   }
   if (G.on) { tL.x = G.x; tL.z = G.z; }
-  const wp = w * (1 - gone);
+  let wp = w * (1 - gone) * kk.pl;
   if (first) h.position.y -= clamp(h.position.y - P.h[1], 0, HIPS.drop) * wb;
   else {
     const ox = A.x + P.h[0] * cb + P.h[2] * sb - h.position.x, oz = A.z - P.h[0] * sb + P.h[2] * cb - h.position.z;
     h.position.x += clamp(ox, -HIPS.x, HIPS.x) * wb; h.position.z += clamp(oz, -HIPS.z, HIPS.z) * wb; h.position.y += (P.h[1] - h.position.y) * wb;
     h.quaternion.slerp(qh.fromArray(P.q, 0).premultiply(qb), wb);
+  }
+  // A foot kept on its spot has to stay within the leg's reach of the hips the kick gives him: he sits lower over
+  // it, then his hips hang back toward it, and a foot left too far behind him is let go to the run.
+  if (G.on && wp > 0) {
+    pt.set(HIPX, -0.02, 0).applyQuaternion(h.quaternion).add(h.position);
+    let ox = tL.x - pt.x, oz = tL.z - pt.z, hor = Math.hypot(ox, oz);
+    wp *= 1 - smooth((hor - REACH[0]) / REACH[1]);
+    const top = tL.y + Math.sqrt(Math.max(0.01, LEG * LEG - Math.min(hor, LEG * 0.98) ** 2)) - (pt.y - h.position.y);
+    h.position.y -= Math.min(REACH[2], Math.max(0, h.position.y - top)) * wp;
+    pt.set(HIPX, -0.02, 0).applyQuaternion(h.quaternion).add(h.position);
+    const d = Math.hypot(ox, tL.y - pt.y, oz), short = Math.max(0, d - LEG) * wp;
+    if (short > 0 && !first && hor > 1e-3) { h.position.x += ox / hor * short * d / hor; h.position.z += oz / hor * short * d / hor; }
   }
   applyPose(bn, P, wp, LEGL); applyPose(bn, P, w, LEGR);
   // (no part of a sole under the grass; on the contact frame the kicking boot is where the ball says)
@@ -173,10 +238,15 @@ export function poseKick(m, bn, s, A, qf, turn, dt, B) {
   // (whatever the run had the left boot doing as the strike began, it isn't on the ball: on the ball he now runs
   // on recorded strides, game/dribblecap.js, and the ball is drawn in toward him through the wind-up)
   fwd.set(0, 0, 1).applyQuaternion(fL).setY(0).normalize();
-  if (nL.y < 0.3) for (const along of [0.2, 0.05, -0.1, 0.2, 0.05]) {
-    const ox = nL.x + fwd.x * along - B.x, oz = nL.z + fwd.z * along - B.z, d = Math.hypot(ox, oz) || 1, short = Math.max(0, CLEAR + 0.03 - d);
-    nL.x += ox / d * short; nL.z += oz / d * short;
-  }
+  // (only while the ball is there; what it had moved the foot by on the contact is eased away after it)
+  if (after <= 0) {
+    const x0 = nL.x, z0 = nL.z;
+    if (nL.y < 0.3) for (const along of [0.2, 0.05, -0.1, 0.2, 0.05]) {
+      const ox = nL.x + fwd.x * along - B.x, oz = nL.z + fwd.z * along - B.z, d = Math.hypot(ox, oz) || 1, short = Math.max(0, CLEAR + 0.03 - d);
+      nL.x += ox / d * short; nL.z += oz / d * short;
+    }
+    kk.px = nL.x - x0; kk.pz = nL.z - z0;
+  } else { const k = 1 - smooth(after / 0.1); nL.x += (kk.px || 0) * k; nL.z += (kk.pz || 0) * k; }
   fR.slerp(gR, w); nR.lerp(tR, w); if (near * w < 0.99) nR.y = Math.max(nR.y, -under(fR));
   nudgeLeg(bn, 'L', nL); aimFoot(bn, 'L', fL);
   nudgeLeg(bn, 'R', nR); aimFoot(bn, 'R', fR);
@@ -189,8 +259,8 @@ export function poseKick(m, bn, s, A, qf, turn, dt, B) {
     if (nR.y < low) { nR.y = low; nudgeLeg(bn, 'R', nR); }
   }
   kk.w = wb; kk.live = !first; kk.tip = K.lean ? LEAN.volley * smooth((A.y - 0.3) / 0.4) : LEAN.chip * chip;
-  // the contact frame is held as it is; then time moves on
-  if (s.hold) s.hold = false; else s.t += dt;
+  // time moves on (the contact frame was posed at the contact: game/strike.js struck)
+  s.hold = false; s.t += dt;
   if (s.t > s.wind + follow + RECOVER) m.strike = null;
   return w;
 }

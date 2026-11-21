@@ -85,7 +85,7 @@ export function poseStrike(m, bn, ball, dt) {
   // the ankle when the boot is on the ball, then where the swing starts and where it ends up
   ankleFor(st, B, qf, A);
   A.y = Math.max(0.085, A.y);                                    // never through the grass
-  if (isKick(s.kind)) return poseKick(m, bn, s, A, qf, turn, dt, B);   // a shot, a pass or a volley is a recorded kick round that contact (game/kickcap.js)
+  if (isKick(s.kind)) return poseKick(m, bn, s, A, qf, turn, dt, B, toModel(m, ball.x, ball.y ?? BALL.r, ball.z, T));   // a shot, a pass or a volley is a recorded kick round that contact (game/kickcap.js)
   const before = s.t < s.wind, after = s.t - s.wind;
   let w = 1;
   if (before) {
