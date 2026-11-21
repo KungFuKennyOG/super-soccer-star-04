@@ -1,9 +1,7 @@
 // Textures for the '04-look grounds, painted in code: the structure atlas (concrete, roof sheeting,
-// lattice, executive boxes, lamp faces, ad boards), the crowd (one tile per block: everyone, the home
-// curva, the away block, with a little table saying who supports whom so the shader can make the
-// right fans jump), the ultras' flags and banners, the net and the clouds.
-import * as THREE from 'three';
-import { AD_WORDS, SKINS, HAIRS } from '../tex.js';
+// lattice, executive boxes, lamp faces, ad boards), the ultras' flags and banners, the net and the
+// clouds. The crowd's own sprites are fantex.js.
+import { AD_WORDS } from '../tex.js';
 import { canvas, hex, css, hash, vnoise, fbm, eachPixel, smoothTex } from './paint.js';
 
 // The atlas: a 4 x 3 grid of 256-pixel cells over a strip of eight 512 x 64 ad boards.
@@ -88,56 +86,6 @@ export function structureAtlas() {
   return atlas;
 }
 
-// The crowd. Each block is one tile of 32 fans by 12 rows (32 x 48 pixels a fan), staggered in the
-// shader. block: { ours: share of fans supporting you, packed: ultras (fewer gaps, more scarves up),
-// seats: [a, b] seat colours }. Returns the textures and a table (32 x 12 per block, R = yours,
-// G = a phase) that the crowd shader reads with texelFetch.
-export const FAN = { cols: 32, rows: 12, w: 32, h: 36 };
-export function crowdTiles(blocks, ours, theirs) {
-  const { cols, rows, w, h } = FAN, data = new Uint8Array(cols * rows * blocks.length * 4);
-  const tex = blocks.map((b, bi) => {
-    const c = canvas(cols * w, rows * h), x = c.getContext('2d');
-    const seatA = hex(b.seats[0]), seatB = hex(b.seats[1]);
-    x.fillStyle = '#121016'; x.fillRect(0, 0, c.width, c.height);
-    for (let j = 0; j < rows; j++) for (let i = 0; i < cols; i++) {
-      const r = (k) => hash(i + bi * 97, j, k), px = i * w, py = j * h, cx = px + w / 2;
-      const mine = r(1) < b.ours, o = (j * cols + i + bi * cols * rows) * 4;
-      data[o] = mine ? 255 : 0; data[o + 1] = Math.floor(r(2) * 255); data[o + 3] = 255;
-      // the seat behind: its back shows above everyone's shoulders
-      const seat = ((i >> 2) + j) % 2 ? seatA : seatB;
-      x.fillStyle = css(seat.map(v => v * 0.5)); x.fillRect(px + 2, py + 1, w - 4, 7);
-      if (i === 0 && !b.packed) { x.fillStyle = j % 2 ? '#8d8f96' : '#6f7178'; x.fillRect(px, py, w, h); x.fillStyle = '#3a3b42'; x.fillRect(px, py + h - 5, w, 5); data[o] = 128; continue; }   // a stairway
-      if (r(3) < (b.packed ? 0.01 : 0.07)) {          // an empty seat
-        x.fillStyle = css(seat); x.fillRect(px + 3, py + 9, w - 6, 14); x.fillStyle = css(seat.map(v => v * 0.7)); x.fillRect(px + 3, py + 23, w - 6, 9); continue;
-      }
-      const pal = mine ? ours : theirs, plain = r(4) < (b.packed ? 0.08 : 0.24);
-      const shirtC = plain ? hex(['#22242a', '#e8e6e0', '#5a5e66', '#2a3550', '#7a2a2a'][Math.floor(r(5) * 5)]) : hex(pal[Math.floor(r(6) * pal.length)]);
-      const lit = 0.75 + 0.3 * r(7), shirt = shirtC.map(v => v * lit);
-      const skin = hex(SKINS[Math.floor(r(8) * SKINS.length)]), hair = hex(HAIRS[Math.floor(r(9) * HAIRS.length)]);
-      const dx = (r(10) - 0.5) * 6, hy = py + 11 + r(11) * 2.5, up = r(12) < (b.packed ? 0.35 : 0.14);
-      // body: shoulders and chest, shaded at the sides
-      const g = x.createLinearGradient(px, 0, px + w, 0); g.addColorStop(0, css(shirt.map(v => v * 0.6))); g.addColorStop(0.45, css(shirt)); g.addColorStop(1, css(shirt.map(v => v * 0.55)));
-      x.fillStyle = g; x.beginPath(); x.ellipse(cx + dx, hy + 16, 12.5, 8, 0, Math.PI, 0); x.lineTo(cx + dx + 13, py + h); x.lineTo(cx + dx - 13, py + h); x.fill();
-      if (!plain && r(13) < 0.4) { x.fillStyle = css(hex(pal[(Math.floor(r(6) * pal.length) + 1) % pal.length]).map(v => v * lit)); x.fillRect(cx + dx - 12, hy + 20, 24, 3); }   // a band across the shirt
-      if (up) {                                          // arms up: a scarf held over the head
-        x.fillStyle = css(skin.map(v => v * 0.85)); x.fillRect(cx + dx - 10, hy - 8, 3, 18); x.fillRect(cx + dx + 7, hy - 8, 3, 18);
-        const sc = hex(pal[Math.floor(r(14) * pal.length)]); x.fillStyle = css(sc); x.fillRect(cx + dx - 11, hy - 10, 22, 4); x.fillStyle = css(sc.map(v => v * 0.6)); for (let k = 0; k < 22; k += 5) x.fillRect(cx + dx - 11 + k, hy - 10, 2, 4);
-      }
-      // head: skin with a lit side, hair on top (or a hat)
-      const hg = x.createRadialGradient(cx + dx - 2, hy - 2, 1, cx + dx, hy, 7); hg.addColorStop(0, css(skin.map(v => v * 1.08))); hg.addColorStop(1, css(skin.map(v => v * 0.62)));
-      x.fillStyle = hg; x.beginPath(); x.ellipse(cx + dx, hy + 1, 5.6, 6.6, 0, 0, 7); x.fill();
-      x.fillStyle = r(15) < 0.12 ? css(shirtC) : css(hair); x.beginPath(); x.ellipse(cx + dx, hy - 2, 6, 4.4, 0, Math.PI, 0); x.fill();
-      x.fillStyle = 'rgba(0,0,0,0.35)'; x.fillRect(cx + dx - 3, hy + 7, 6, 2);   // the shadow of the chin
-    }
-    // the row behind is darker at its foot (in the shade of the one in front)
-    for (let j = 0; j < rows; j++) { const g = x.createLinearGradient(0, j * h + h - 10, 0, j * h + h); g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, 'rgba(0,0,0,0.35)'); x.fillStyle = g; x.fillRect(0, j * h + h - 10, c.width, 10); }
-    return smoothTex(c, { repeat: [1, 1], aniso: 8 });
-  });
-  const table = new THREE.DataTexture(data, cols, rows * blocks.length, THREE.RGBAFormat);
-  table.magFilter = table.minFilter = THREE.NearestFilter; table.needsUpdate = true;
-  return { tex, table };
-}
-
 // The ultras' flags: four designs per side, 128 x 96 each (home on the top row), and their banners:
 // six 1024 x 64 strips (four home, two away) with a word on each.
 export function flagAtlas(home, away) {
@@ -157,7 +105,7 @@ export function flagAtlas(home, away) {
   eachPixel(x, { x: 0, y: 0, w: 512, h: 192 }, (u, v, col, px, py) => { const k = 0.9 + 0.12 * (vnoise(px / 9, py / 9, 11) - 0.5) + ((px % 128) < 3 ? -0.3 : 0); col[0] *= k; col[1] *= k; col[2] *= k; });
   return smoothTex(c, { aniso: 4 });
 }
-export const BANNER_WORDS = ['FORZA', 'ULTRAS', 'CURVA', 'ALLEZ', 'VAMOS', 'SEMPRE', 'NEVER ALONE', 'ALE ALE'];
+export const BANNER_WORDS = ['FORZA', 'ULTRAS', 'CURVA', 'ALLEZ', 'VAMOS', 'SEMPRE', 'AVANTI', 'ALE ALE'];
 // banner i (0..3 home, 4..5 away) is 512 x 64 at column i % 2, row i >> 1 (bannerUV gives its uvs)
 export const bannerUV = i => [(i % 2) * 0.5, 1 - ((i >> 1) + 1) / 3, (i % 2) * 0.5 + 0.5, 1 - (i >> 1) / 3];
 export function bannerAtlas(home, away, seed = 1) {

@@ -252,6 +252,7 @@ function feedback(ev) {
     if (e.type === 'goal') { sfx('net'); sfx('roar'); setTimeout(() => sfx('whistle', 1), 300); stadium.netHit(e.x, e.y); stadium.cheer(true); celebrateT = 2.4; flashT = 2.4; buzz('both', 1, 200); }
     if (e.type === 'saved' || e.type === 'parried' || e.type === 'blocked') sfx('ooh');
     if (e.type === 'post') { sfx('post'); sfx('ooh'); }
+    if (e.type === 'saved' || e.type === 'parried' || e.type === 'post') stadium.ooh();       // the crowd: hands on heads
     if (e.type === 'out' || e.type === 'tackled' || e.type === 'intercepted') { sfx('groan'); sfx('whistle', 0.6); }
     const b = scoreEvent(match, e);
     if (b && (e.type === 'tackled' || e.type === 'intercepted') && counterAttack(match, Math.random, e)) {

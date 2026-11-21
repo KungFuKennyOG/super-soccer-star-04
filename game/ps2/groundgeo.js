@@ -72,30 +72,6 @@ export class Geo {
   }
 }
 
-// The crowd: tier slopes with uv in fans and rows, which tile (aBand), (day, night) shade, ultras.
-export class CrowdGeo {
-  constructor() { this.pos = []; this.uv = []; this.band = []; this.shade = []; this.ultra = []; this.idx = []; }
-  quad(a, b, c, d, uv, band, shades, ultra = 0) {
-    const i = this.pos.length / 3;
-    [a, b, c, d].forEach((p, k) => {
-      this.pos.push(p.x, p.y, p.z); this.uv.push(k === 0 || k === 3 ? uv[0] : uv[2], k < 2 ? uv[1] : uv[3]);
-      this.band.push(band); this.shade.push(...shades[k < 2 ? 0 : 1]); this.ultra.push(ultra);
-    });
-    this.idx.push(i, i + 1, i + 2, i, i + 2, i + 3);
-  }
-  mesh(mat) {
-    const g = new THREE.BufferGeometry();
-    g.setAttribute('position', new THREE.Float32BufferAttribute(this.pos, 3));
-    g.setAttribute('uv', new THREE.Float32BufferAttribute(this.uv, 2));
-    g.setAttribute('aBand', new THREE.Float32BufferAttribute(this.band, 1));
-    g.setAttribute('aShade', new THREE.Float32BufferAttribute(this.shade, 2));
-    g.setAttribute('aUltra', new THREE.Float32BufferAttribute(this.ultra, 1));
-    g.setIndex(this.idx); g.computeBoundingSphere();
-    const m = new THREE.Mesh(g, mat); m.matrixAutoUpdate = false;
-    return m;
-  }
-}
-
 // Glows: billboards (all four corners at the centre, pushed out in the vertex shader).
 export class GlowGeo {
   constructor() { this.pos = []; this.corner = []; this.size = []; this.idx = []; }

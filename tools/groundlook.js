@@ -4,10 +4,11 @@
 //   groundleft   the same spot, turned to the left-hand stand; groundright, groundback (the stand behind you)
 //   groundcurva  near the penalty spot looking up at the home end, its curva, flags and banners
 //   groundnet    the goal and net close up; groundbulge: a shot just hit the net (film it)
+//   groundfans   the side stand's front rows close up, from the touchline
 //   groundwide   wide from the TV gantry on the left stand; groundtop: from above, for the layout
 // Query: &team=ID (a club's own ground; a nation plays at the national stadium), &opp=ID, &share=0.78,
 // &time=day|dusk|night (overrides the recipe's), &wx=rain|snow, &cheer=1 (your fans jumping),
-// &counter=1 (theirs). Shots are 1024 x 1024 at 90 degrees (as a Quest eye sees) unless noted.
+// &counter=1 (theirs), &ooh=1 (a near miss at 0.1 s). Shots are 1024 x 1024 at 90 degrees (as a Quest eye sees) unless noted.
 import * as THREE from 'three';
 import { buildStadium, TIMES2 } from '../game/ps2/stadium.js';
 import { createWeather } from '../game/ps2/weather.js';
@@ -33,6 +34,7 @@ export function groundLook(q, players, ball) {
   const wx = q.get('wx') || 'clear';
   stadium.setWeather(wx); weather.set(wx); weather.bright(stadium.weatherBright);
   if (q.get('cheer')) stadium.cheer(true);
+  if (q.get('poses')) g.meshes.fans.material.uniforms.uPoses.value = 1;           // every fan in one of the 16 poses
   // a stand-in for the HUD's scoreboard and the replay's big screen, where ground.board says (page only)
   const sb = new THREE.Mesh(new THREE.BoxGeometry(19, 7.6, 0.6), new THREE.MeshBasicMaterial({ color: '#15171c' }));
   const sc = new THREE.Mesh(new THREE.PlaneGeometry(12, 6.75), new THREE.MeshBasicMaterial({ color: '#2a5a8a' }));
@@ -52,6 +54,7 @@ export function groundLook(q, players, ball) {
     groundbulge: { fov: 45, cam: [5.5, 1.6, -39.4], at: [0.4, 1.1, -36], set: () => [off, off, off, off, off, off], hit: [1.2, 1.4] },
     groundwide: { fov: 50, cam: [-sideX + (roofL ? roofL.zFront : -4) + 1.5, roofL ? roofL.y - 1.4 : 18, -17], at: [12, 0, -19], set: team6 },
     groundcrowd: { fov: 28, cam: eye, at: [sideX + 6, 5, -24], set: team6 },
+    groundfans: { fov: 34, cam: [sideX - 5, 1.68, -20], at: [sideX + 6, 5.2, -21], set: team6 },          // the side stand's front rows from the touchline
     groundtop: { fov: 60, cam: [0, 150, -12], at: [0, 0, -14], set: () => [off, off, off, off, off, off], up: true },
   };
   // &cam=x,y,z&at=x,y,z&fov=n: any camera, for looking into a corner
@@ -63,6 +66,7 @@ export function groundLook(q, players, ball) {
       const dt = last === null ? 0 : Math.max(0, t - last); last = t;
       if (s.hit && t >= 0.2 && t - dt < 0.2) stadium.netHit(...s.hit);
       if (q.get('counter') && t >= 0.1 && t - dt < 0.1) stadium.theirs();
+      if (q.get('ooh') && t >= 0.1 && t - dt < 0.1) stadium.ooh();
       stadium.update(dt, t);
     };
     S[k] = s;

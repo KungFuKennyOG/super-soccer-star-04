@@ -1,17 +1,17 @@
 // An '04-look ground, built from its recipe in game/grounds.js through the plan in groundplan.js:
 // stands with tiers, fascias with ad boards, executive boxes under the overhangs, roofs on cantilever
-// trusses, closed gable ends, corner sweeps, and the crowd painted on every tier. The floodlights,
-// towers and pitchside boards are in groundbits.js, the flags and banners in ultras2.js.
-// Draw calls per ground: structure 1, lattice 1, crowd 1, glows 1, flags 1, banners 1.
+// trusses, closed gable ends, corner sweeps, and a crowd on every tier (fans.js: the seats and a fan on
+// each). The floodlights, towers and pitchside boards are in groundbits.js, the flags and banners in
+// ultras2.js. Draw calls per ground: structure 1, lattice 1, seats 1, fans 1, glows 1, flags 1, banners 1.
 import * as THREE from 'three';
-import { planGround, gable, FRONT, SEAT } from './groundplan.js';
-import { Geo, CrowdGeo, GlowGeo, frameAt } from './groundgeo.js';
-import { structureAtlas, crowdTiles, region, adRegion } from './groundtex.js';
-import { structureMaterial, crowdMaterial, glowMaterial } from './groundmat.js';
+import { planGround, gable, FRONT } from './groundplan.js';
+import { Geo, GlowGeo, frameAt } from './groundgeo.js';
+import { structureAtlas, region, adRegion } from './groundtex.js';
+import { structureMaterial, glowMaterial } from './groundmat.js';
+import { Crowd } from './fans.js';
 import { lightsAndBits } from './groundbits.js';
 import { buildUltras2 } from './ultras2.js';
 import { extras, cornerBlock, skyline, skylineTex, END_CORNER } from './groundextras.js';
-import { LIGHT_DIR } from './player.js';
 
 const PITCH_P = new THREE.Vector3(0, 3, -15);
 const v = () => new THREE.Vector3();
@@ -42,39 +42,16 @@ export function strip(G, run, t0, t1, [z0, y0], [z1, y1], o) {
   }
 }
 
-// The crowd on one tier, from t0 to t1 of the run: uv in fans and rows; shaded darker under a roof.
-function crowdStrip(CG, run, t0, t1, tier, band, ultra, roofFront) {
-  const segs = Math.max(1, Math.ceil((t1 - t0) * run.n - 1e-6));
-  // split at the roof's front edge, so the shade under it starts on a row line
-  const cuts = [0, 1];
-  if (roofFront !== null && roofFront < tier.z0 && roofFront > tier.z1) cuts.splice(1, 0, Math.round((tier.z0 - roofFront) / (tier.z0 - tier.z1) * tier.rows) / tier.rows);
-  for (let c = 0; c < cuts.length - 1; c++) {
-    const k0 = cuts[c], k1 = cuts[c + 1]; if (k1 <= k0) continue;
-    const zA = tier.z0 + (tier.z1 - tier.z0) * k0, yA = tier.y0 + (tier.y1 - tier.y0) * k0, zB = tier.z0 + (tier.z1 - tier.z0) * k1, yB = tier.y0 + (tier.y1 - tier.y0) * k1;
-    const covered = roofFront !== null && zA <= roofFront + 1e-6, along = run.at((zA + zB) / 2) / SEAT;
-    for (let k = 0; k < segs; k++) {
-      const ta = t0 + (t1 - t0) * k / segs, tb = t0 + (t1 - t0) * (k + 1) / segs;
-      const a = run.pt(ta, zA, yA), b = run.pt(tb, zA, yA), c2 = run.pt(tb, zB, yB), d = run.pt(ta, zB, yB);
-      const n = v().subVectors(b, a).cross(v().subVectors(d, a)).normalize();
-      if (n.dot(v().subVectors(PITCH_P, a)) < 0) n.negate();
-      const sun = Math.max(0, n.dot(LIGHT_DIR));
-      const day = (0.62 + 0.5 * sun) * (covered ? 0.62 : 1), back = r => 1 - 0.18 * r;
-      const sh = [[day * back(k0), (covered ? 0.82 : 1) * back(k0)], [day * back(k1), (covered ? 0.82 : 1) * back(k1)]];
-      CG.quad(a, b, c2, d, [ta * along, k0 * tier.rows, tb * along, k1 * tier.rows], band, sh, ultra);
-    }
-  }
-}
-
 // The whole cross-section of a stand along a run. bands(i): the crowd blocks on tier i as
 // [[t0, t1, band, ultra]]. ends: close the two ends with gable walls (straight stands only).
-function stand(G, L, CG, glow, run, p, colors, bands, ends) {
+function stand(G, L, CR, glow, run, p, colors, bands, ends) {
   const club = colors.facade || colors.club, front = colors.front || '#343841';
   strip(G, run, 0, 1, [0.02, 0], [0.02, FRONT], { reg: region('paint'), color: front, tile: [4, 4], face: 'pitch' });
   strip(G, run, 0, 1, [0.02, FRONT], [-0.4, FRONT], { reg: region('concrete'), tile: [4, 4], face: 'up' });
   const roofFront = p.roof ? Math.max(p.roof.zFront, p.tiers[p.tiers.length - 1].z1) : null;
   p.tiers.forEach((t, i) => {
-    const tier = i === 0 ? { ...t, z0: -0.4 } : { ...t, z0: t.z0 - 0.4 };
-    for (const [t0, t1, band, ultra] of bands(i)) crowdStrip(CG, run, t0, t1, tier, band, ultra, roofFront);
+    const tier = i === 0 ? { ...t, z0: -0.4, i } : { ...t, z0: t.z0 - 0.4, i };
+    for (const [t0, t1, band, ultra] of bands(i)) CR.strip(run, t0, t1, tier, band, ultra, roofFront);
     const f = p.fascias[i];
     if (f) {
       // the fascia under the next tier: a trim in the club's colour, a row of ads, a trim; its top
@@ -126,11 +103,12 @@ function stand(G, L, CG, glow, run, p, colors, bands, ends) {
 }
 
 // recipe: from GROUNDS. ours / theirs: fan colours. oursShare: 0..1 of the crowd that is yours.
-// light: groundLight() (stadium.js), shared by every ground material. jump: { uJumpOurs, uJumpTheirs }.
+// light: groundLight() (stadium.js), shared by every ground material. jump: the match-moment uniforms
+// the crowd reacts to (stadium.js: uJumpOurs, uJumpTheirs, uOoh, uGoalT, uTheirT).
 export function buildGround2(recipe, ours, theirs, oursShare, light, jump, hype) {
   const t0 = performance.now(), plan = planGround(recipe), group = new THREE.Group();
-  const G = new Geo(), L = new Geo(), CG = new CrowdGeo(), glow = new GlowGeo();
   const curvaOurs = oursShare >= 0.5, home = curvaOurs ? ours : theirs, away = curvaOurs ? theirs : ours;
+  const G = new Geo(), L = new Geo(), CR = new Crowd(ours, theirs, oursShare, curvaOurs, recipe.name.length * 31 + recipe.gap * 7), glow = new GlowGeo();
   const colors = { club: recipe.seats[0], facade: recipe.facade, front: recipe.front, roof: recipe.roofColor, lights: recipe.lights };
   const { curva, block } = plan, T = s => s + 0.5;              // fractions along the end stand, from -0.5..0.5 to 0..1
   for (const s of plan.stands) {
@@ -143,29 +121,26 @@ export function buildGround2(recipe, ours, theirs, oursShare, light, jump, hype)
     };
     // gables close a stand's ends where nothing meets them: no corner there, or one shaped differently
     const ends = [-1, 1].map(sx => { const k = END_CORNER[s.id][sx < 0 ? 0 : 1], c = plan.corners.find(q => q.id === k); return !c || c.block || JSON.stringify(c.tiers) !== JSON.stringify(s.tiers); });
-    stand(G, L, CG, glow, run, s.p, colors, bands, ends);
+    stand(G, L, CR, glow, run, s.p, colors, bands, ends);
     extras(G, L, run, s.p, recipe, s.id);
   }
   for (const c of plan.corners) {
     const run = cornerRun(c.x, c.z, c.a0, c.a1);
-    if (c.block) cornerBlock(G, run, c.p); else { stand(G, L, CG, glow, run, c.p, colors, () => [[0, 1, 0, 0]], [false, false]); extras(G, L, run, c.p, recipe, c.id); }
+    if (c.block) cornerBlock(G, run, c.p); else { stand(G, L, CR, glow, run, c.p, colors, () => [[0, 1, 0, 0]], [false, false]); extras(G, L, run, c.p, recipe, c.id); }
   }
   const SK = new Geo();
   if (recipe.skyline) skyline(SK, recipe.skyline, plan);
   const bits = lightsAndBits(G, L, glow, plan, recipe);
-  // the crowd's three blocks: everyone (your share), the home curva, the away block
-  const { tex, table } = crowdTiles([
-    { ours: oursShare, seats: recipe.seats }, { ours: curvaOurs ? 0.95 : 0.05, packed: true, seats: recipe.seats }, { ours: curvaOurs ? 0.15 : 0.85, packed: true, seats: recipe.seats },
-  ], ours, theirs);
+  const crowd = CR.build(light, jump, recipe.seats);
   const atlas = structureAtlas();
-  const meshes = { structure: G.mesh(structureMaterial(atlas, light)), lattice: L.mesh(structureMaterial(atlas, light, true)), crowd: CG.mesh(crowdMaterial(tex, table, light, jump)), glows: glow.mesh(glowMaterial(light)) };
+  const meshes = { structure: G.mesh(structureMaterial(atlas, light)), lattice: L.mesh(structureMaterial(atlas, light, true)), seats: crowd.seats, fans: crowd.fans, glows: glow.mesh(glowMaterial(light)) };
   if (SK.count) meshes.skyline = SK.mesh(structureMaterial(skylineTex(recipe.skyline), light, true));
-  const end = plan.stands[0], ultras = buildUltras2({ f: frameAt(end.x, end.z, end.yaw), len: end.len, tier: end.p.tiers[0], curva: plan.curva, block: plan.block }, home, away, light, hype, recipe.name.length);
+  const end = plan.stands[0], ultras = buildUltras2({ f: frameAt(end.x, end.z, end.yaw), len: end.len, curva: plan.curva, block: plan.block }, crowd.holders, home, away, light, { ...hype, ...jump }, recipe.name.length);
   group.add(...Object.values(meshes), ultras.group);
-  const tris = Object.values(meshes).reduce((n, m) => n + m.geometry.index.count / 3, 0) + ultras.tris;
+  const tris = Object.values(meshes).reduce((n, m) => n + (m === crowd.fans ? 0 : m.geometry.index.count / 3), 0) + crowd.count * 2 + ultras.tris;
   return {
     group, recipe, plan, topY: plan.topY, endZ: plan.endZ, sideX: plan.sideX, ultras, curvaOurs, board: plan.board,
-    lamps: meshes.glows.material, meshes, bits, crowdTex: tex,
-    stats: { draws: Object.keys(meshes).length + ultras.draws, tris, lamps: glow.pos.length / 12, ms: Math.round(performance.now() - t0) },
+    lamps: meshes.glows.material, meshes, bits,
+    stats: { draws: Object.keys(meshes).length + ultras.draws, tris, fans: crowd.count, lamps: glow.pos.length / 12, ms: Math.round(performance.now() - t0) },
   };
 }
