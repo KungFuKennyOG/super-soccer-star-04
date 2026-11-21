@@ -180,3 +180,69 @@ All shots are `tools/ps2look.html?shot=` with `&team=ID`, for example `PORT=81xx
   - `&cheer=1`: already celebrating;
   - `&counter=1`: their goal;
   - `&ooh=1`: a near miss at 0.1 s.
+
+# Second pass (branch `crowd2`)
+
+Kenny: "make them a bit more realistic (them being flat is fine) and have the appropriate teams colours like in 96".
+
+## Team colours (`sideWear` in `fans.js`)
+
+- Like the '96 crowd, every fan wears his side's colours. The kit colours arrive as `[shirt, alt, shorts, trim, off-white]`. The off-white is always added, so it is dropped.
+- **Tops:**
+  - A coloured shirt: shirt colour 64%, then the kit's second colour 26% (the alt or the stripes, else the trim, else the shorts), then a third colour 10%.
+  - A white shirt (Madrid, Germany, England): white only 50%, the trim / shorts colours 34% and 16%. So white sides read as white and navy, white and black, white, red and navy, not grey.
+  - White is never a top unless the shirt is white.
+- **Stripes:** striped shirts appear only when the kit has a pattern (alt is not the shirt).
+- **Scarves and caps:** in the second colour (60%) or the shirt colour. A red side with white trim (Liverpool) gets red and white scarves.
+- **Neutral jackets:** 5%, only in ordinary stands, never in the curva or the away block. Before, it was 28%, doubled for jackets.
+- `share` decides who sits where in ordinary stands, as before.
+
+## The figures (`fanpaint.js`, `fanhead.js`, `fantex.js`, `fanmat.js`)
+
+A fan is now three layers on his card, put together in the fragment shader: arms over head over torso. Each layer is sampled only where it is, so a fragment does 1 to 3 reads of A plus 1 of B.
+
+- **Torso** (16: 8 tops x slim / broad), 1 cm a pixel, drawn with canvas paths:
+  - shoulders sloping to the neck, deltoids, sides to the waist;
+  - folds from the armpits, creases over the belly, shade low down;
+  - the tops: replica shirts with a collar and badge, stripes, a chest band, a scarf wrapped round the neck with barred hanging ends and fringe, a zip jacket with a stand-up collar and scarf, a hoodie with drawstrings and a pocket, a track jacket with shoulder-to-cuff stripes, a polo with a collar and placket;
+  - trousers at the lap.
+- **Arms** (24 poses x short or long sleeves), 1 cm a pixel:
+  - limbs shaded round with the light from the upper left; sleeves with a hem shadow, cuffs and an elbow crease;
+  - hands as shapes: an open hand with fingers and a thumb, a fist, a flat hand on the lap, a pointing hand;
+  - two-colour bar scarves held between the hands, with fringes.
+  - **Poses:** sitting, leaning on the knees, talking with one hand up, standing, arms folded, clapping (3 frames), arms up (low V, V, straight), scarf held up (level and tilted, the tilt mirrored for the other way), fist pump (low, mid, high), hands on head, hands to face, the flag pole, clapping overhead (2 frames), arms wide, pointing, waving.
+- **Heads** (8 styles x 3 views x 3 mouths), 0.6 cm a pixel. Each is ray-marched in code from a few blended ellipsoids:
+  - skull, face, jaw, brow, nose, ears, neck, with eye sockets carved in;
+  - lit from the upper left, with the creases darkened (sockets, under the nose and jaw);
+  - eyes as a white with an iris and a lid line, inside darker sockets; brows; a mouth shut, open (shouting or singing) or an O (a gasp);
+  - hair as a shell with volume and a side parting: short, buzz, bald with a fringe ring, long, curly; a cap with a brim, a beanie, a hood (in the shirt's colour).
+  - A head is about 23 cm, 1/7.6 of a 1.75 m man.
+- **Where heads look:**
+  - Each fan looks at his own point near the play (`uBall`, from `stadium.update(dt, t, world.ball)`), offset by up to ±17 m along the pitch and ±10 m across.
+  - The vertex shader picks the view from where that is: facing you (within about 7.5 degrees), three-quarters, or near profile. The head is mirrored for left or right.
+  - 10% of seated fans turn to talk to the neighbour on one side now and then (near profile, mouth moving, a hand up).
+  - Without a ball (the look page passes one), they watch the viewer.
+  - The card itself still turns to face you, so nobody goes edge-on.
+- **Cheering** cycles through 3 or 4 frames (a b c b) instead of a hard flip between two:
+  - claps go open, mid, shut;
+  - arms go from shoulders, to a V, to straight up;
+  - fists go low, mid, high;
+  - scarves sway between tilted left, level and tilted right.
+  - The singing and shouting mouth opens and shuts in time.
+- **Atlas:** A (RGBA) and B (RG) are 1024 x 1176, 7.2 MB, about 9.6 MB with mips (it was 7.3 MB with mips).
+  - Painted once, in 403 ms in headless Chrome (the heads are about 350 ms of that).
+  - Per-ground builds: 46 to 146 ms.
+  - Still one instanced draw for every fan, alpha tested. Per fan: 2 triangles, 18 floats of instance data.
+
+## Main game
+
+- `game/main.js` changes one existing line: `stadium.update(dt, t, world.ball)`, so the crowd looks at the ball.
+
+## Short / not checked
+
+- **Nothing has been seen in a headset.**
+  - Fill cost went up: up to 3 texture reads of A per fragment where arms, head and torso overlap. Watch the fps at Barcelona and the national stadium.
+- **Close up** (5 m) they are clearly painted people, PS2-style: stiff torsos all the same shape, short sleeves reading as bands on the upper arm, arms a little thin.
+- **The torso doesn't turn** with the head. The body is always square to you; only the head turns.
+- **Heads are the same few shapes.** One face per view (no beards, glasses or ages beyond grey hair); skin and hair colours give the variety.
+- **The kit colours handed over** are the home kit's `[shirt, alt, shorts, trim]`. A nation's second colour that is only in `trim2` (Germany's red) never reaches the crowd.

@@ -2,8 +2,9 @@
 //   const stadium = buildStadium(scene);
 //   stadium.setGround(recipe, ours, theirs, oursShare)  -> ground { board: { y, z }, recipe, topY, ... }
 //   stadium.setWeather('clear' | 'rain' | 'snow')       (after setGround)
-//   stadium.netHit(x, y), stadium.cheer(on), stadium.theirs(), stadium.ooh(), stadium.update(dt, t), stadium.ground
-// (ooh: a near miss, a save or the woodwork: your fans' hands go to their heads; game/main.js calls it)
+//   stadium.netHit(x, y), stadium.cheer(on), stadium.theirs(), stadium.ooh(), stadium.update(dt, t, ball), stadium.ground
+// (ooh: a near miss, a save or the woodwork: your fans' hands go to their heads; game/main.js calls it.
+// ball: optional { x, y, z }, where the crowd looks; without it they watch you)
 // Recipes are game/grounds.js's (GROUNDS, groundFor, venueFor stay there). The time of day sets the
 // light every ground material shares (groundmat.js), the scene's two lights (they light the players
 // and the posts) and the sky; the weather sits on top of it. Rain and snow particles are
@@ -52,7 +53,7 @@ export function buildStadium(scene) {
   scene.fog = new THREE.Fog('#0d1328', 110, 440);
   const hemi = new THREE.HemisphereLight('#dfe6f0', '#38372c', 0.62); scene.add(hemi);
   const key = new THREE.DirectionalLight('#fff0d6', 0.68); key.position.copy(LIGHT_DIR).multiplyScalar(50); scene.add(key);
-  const light = groundLight(), jump = { uJumpOurs: { value: 0 }, uJumpTheirs: { value: 0 }, uOoh: { value: 0 }, uGoalT: { value: 99 }, uTheirT: { value: 99 } }, hype = { uHypeH: { value: 0 }, uHypeA: { value: 0 } };
+  const light = groundLight(), jump = { uJumpOurs: { value: 0 }, uJumpTheirs: { value: 0 }, uOoh: { value: 0 }, uGoalT: { value: 99 }, uTheirT: { value: 99 }, uBall: { value: new THREE.Vector3() }, uBallOn: { value: 0 } }, hype = { uHypeH: { value: 0 }, uHypeA: { value: 0 } };
   const sky = skyDome(); scene.add(sky.mesh);
   const turf = buildTurf(light); scene.add(turf.mesh);
   const marks = buildMarkings(light); scene.add(marks);
@@ -102,7 +103,8 @@ export function buildStadium(scene) {
     setWeather(kind) { weather = kind; light2(); },
     // how bright rain and snow should be drawn (game/ps2/weather.js bright()): lit by floodlights at night
     get weatherBright() { return time.wx; },
-    update(dt, t) {
+    update(dt, t, ball) {
+      if (ball) { jump.uBall.value.set(ball.x, ball.y || 0, ball.z); jump.uBallOn.value = 1; }
       goal.update(dt);
       light.uTime.value = t;
       jumpOurs += ((cheering ? 1 : 0) - jumpOurs) * Math.min(1, dt * 3);

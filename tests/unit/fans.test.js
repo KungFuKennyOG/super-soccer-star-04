@@ -88,3 +88,23 @@ test('budget: no ground has more than 30,000 fans (60,000 triangles, one draw)',
 test('banners carry generic words only', () => {
   for (const w of BANNER_WORDS) assert.ok(!/ALONE|WALK|YNWA/.test(w), w);
 });
+
+test('team colours: the shirt colour dominates, white only where the kit is white, few neutral jackets', async () => {
+  const { sideWear } = await import('../../game/ps2/fans.js');
+  const { byId } = await import('../../rules/teams.js');
+  const kitCols = id => { const k = byId(id).kit; return [k.shirt, k.alt, k.shorts, k.trim, '#f2f1ea']; };
+  for (const id of ['MRB', 'LIV', 'DOR', 'BAR', 'BRA', 'GER', 'ENG', 'MAD', 'ITA']) {
+    const w = sideWear(kitCols(id)), k = byId(id).kit, white = c => c.toLowerCase() === '#f2f1ea';
+    assert.equal(w.cols[w.top[0][0]], k.shirt, `${id}: the shirt colour is worn most`);
+    assert.ok(w.top[0][1] >= 0.5, id);
+    if (!white(k.shirt)) for (const [i] of w.top) assert.ok(!white(w.cols[i]), `${id}: nobody in a white top when the shirt isn't white`);
+    if (white(k.shirt)) assert.ok(w.top.some(([i, wt]) => !white(w.cols[i]) && wt > 0.3), `${id}: a white side leans on its other colours`);
+  }
+  // in the laid-out crowds: neutral jackets (palette 8..) about 5% of ordinary stands, none in the ends
+  for (const [id, { cr }] of grounds) {
+    const ord = cr.fans.filter(f => f.band === 0);
+    const n = ord.filter(f => f.col[0] >= 8).length / ord.length;
+    assert.ok(n > 0.02 && n < 0.08, `${id}: ${(n * 100).toFixed(1)}% neutral in ordinary stands`);
+    assert.equal(cr.fans.filter(f => f.band > 0 && f.col[0] >= 8).length, 0, `${id}: no neutral jackets in the curva or the away block`);
+  }
+});

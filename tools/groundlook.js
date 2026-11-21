@@ -69,7 +69,7 @@ export function groundLook(q, players, ball) {
       if (q.get('counter') && t >= 0.1 && t - dt < 0.1) stadium.theirs();
       if (q.get('ooh') && t >= 0.1 && t - dt < 0.1) stadium.ooh();
       if (q.get('goal') && t >= +q.get('goal') && t - dt < +q.get('goal')) stadium.cheer(true);   // &goal=secs: your goal goes in then (film it)
-      stadium.update(dt, t);
+      stadium.update(dt, t, { x: 1.5, y: 0, z: -15.9 });                     // the crowd watches the man on the ball
     };
     S[k] = s;
   }

@@ -70,7 +70,7 @@ uniform float uHypeH, uHypeA; varying vec2 vUv; varying float vCloth; varying fl
 ${FAN_STATE}
 ${FOG_V}
 void main() {
-  vec3 st = fanState(aPhase, aBig > 0.5 ? 4.0 : 3.0, aMine);
+  vec4 st = fanState(aPhase, aBig > 0.5 ? 4.0 : 3.0, aMine);
   float hype = mix(uHypeH, uHypeA, aSide), w = aBig > 0.5 ? 1.5 + 0.6 * hype : 2.3 + 1.6 * hype, ph = aPhase * 6.283 + uTime * w;
   float amp = (aBig > 0.5 ? 0.32 : 0.42) + 0.3 * hype;
   float ang = amp * sin(ph) - aCloth * aAlong * amp * 0.9 * cos(ph);     // the cloth comes round behind the pole

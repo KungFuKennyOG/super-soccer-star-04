@@ -342,7 +342,7 @@ const loop = startLoop(renderer, (dt, t) => {
   arrow.scale.setScalar(1 + callT * 1.2);              // the arrow over the carrier pops when you call for it
   if (carrier) { arrow.position.set(carrier.x, 2.35 + Math.sin(t * 6) * 0.06, carrier.z); arrow.lookAt(headPosNow()); }
 
-  stadium.update(dt, t);
+  stadium.update(dt, t, world.ball);
   weather.update(t, headPosNow());
   updateHud();
   radar.draw(world, match.goals, match.points);

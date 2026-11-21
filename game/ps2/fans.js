@@ -1,7 +1,7 @@
 // The crowd: a fan on every seat of every tier, as cards (fanmat.js) placed row by row on the tier's
 // own steps, so rows stand behind and above each other and hide each other as a real stand does. Each
-// fan is someone: yours or theirs, his look (fantex.js), what he wears in which colours, his skin and
-// hair, his size, a little off his seat's middle. A few seats are empty, stairways are kept clear. The
+// fan is someone: yours or theirs, in his side's colours (sideWear), his top, head and build
+// (fantex.js), his skin and hair, his size, a little off his seat's middle, where he looks. A few seats are empty, stairways are kept clear. The
 // home curva and the away end stand all game; some of them wave flags (ultras2.js draws the flags).
 // Two draws: the seats (the empty stand) and every fan in one instanced draw.
 import * as THREE from 'three';
@@ -11,21 +11,42 @@ import { LIGHT_DIR } from './player.js';
 
 // SEAT: one seat's width (m), a little under groundplan.js's 0.6 so shoulders nearly touch, as they do
 const PITCH_P = new THREE.Vector3(0, 3, -15), SEAT = 0.52, PACKED = 0.46, AISLE = 15;
-const NEUTRAL = ['#1c1e24', '#2b3550', '#4a4f58', '#7a7f88', '#3a4a38', '#6b5a44'];
-const SHAPE_W = [16, 14, 12, 12, 8, 10, 12, 16], JACKET = [2, 3, 5];
-const SKIN_W = [0.3, 0.25, 0.18, 0.12, 0.09, 0.06], HAIR_W = [0.22, 0.25, 0.18, 0.1, 0.08, 0.08, 0.04, 0.05], KIT_W = [0.56, 0.24, 0.08, 0.07, 0.05];
+const NEUTRAL = ['#1c1e24', '#2b3550', '#4a4f58', '#3a4a38', '#6b5a44', '#7a7f88'];
+// the tops (fantex.js TOPS): collar, stripes, band, scarf, zip jacket + scarf, hoodie, track jacket, polo
+const TOP_W = [22, 18, 8, 16, 12, 8, 8, 8], STYLE_W = [26, 14, 8, 10, 8, 10, 10, 0];   // head styles: short, buzz, bald, cap, beanie, long, curly, (hood)
+const SKIN_W = [0.3, 0.25, 0.18, 0.12, 0.09, 0.06], HAIR_W = [0.22, 0.25, 0.18, 0.1, 0.08, 0.08, 0.04, 0.05];
 const v = () => new THREE.Vector3();
 
 function seeded(s) { let r = (Math.abs(Math.floor(s)) * 16807 + 11) % 2147483647 || 1; return () => (r = (r * 16807) % 2147483647) / 2147483647; }
 const pick = (w, r) => { let x = r * w.reduce((a, b) => a + b, 0); for (let i = 0; i < w.length; i++) if ((x -= w[i]) < 0) return i; return w.length - 1; };
-const five = cols => { const c = cols.filter(Boolean); return [0, 1, 2, 3, 4].map(i => c[i % c.length]); };
+const lum = h => { const n = parseInt(h.slice(1), 16); return ((n >> 16) * 0.3 + ((n >> 8) & 255) * 0.59 + (n & 255) * 0.11) / 255; };
+
+// What one side's fans wear, from its kit colours as the game hands them over ([shirt, alt, shorts,
+// trim, off-white]; the off-white is always added, so it's dropped). The shirt colour dominates; the
+// rest wear the kit's second colour (or the stripes); scarves and caps are in the kit's colours. A
+// white shirt makes a grey crowd, so a white side leans on its trim and shorts colours too.
+// Returns { cols: up to 4 distinct colours, top: [[i, weight]], acc: [[i, weight]], stripes }.
+export function sideWear(kit) {
+  const [shirt, alt = shirt, shorts = shirt, trim = alt] = kit, cols = [];
+  const at = c => { const i = cols.indexOf(c); if (i >= 0) return i; cols.push(c); return cols.length - 1; };
+  const S = at(shirt), stripes = alt !== shirt, white = lum(shirt) > 0.82;
+  const others = [alt, trim, shorts].filter(c => c !== shirt && !(lum(c) > 0.82 && !white));
+  const second = others.length ? at(others[0]) : S, third = others.length > 1 ? at(others.find(c => c !== others[0]) || others[0]) : second;
+  const top = white ? [[S, 0.5], [second, 0.34], [third, 0.16]] : [[S, 0.64], [second, 0.26], [third, 0.1]];
+  // scarves and caps may be white where the kit has white in it (a red shirt with white trim: red and white scarves)
+  const lightAcc = [alt, trim, shorts].find(c => c !== shirt && lum(c) > 0.82), acc2 = second !== S ? second : lightAcc ? at(lightAcc) : S;
+  const acc = [[acc2, 0.6], [S, 0.3], [third, 0.1]];
+  return { cols, top, acc, stripes };
+}
 
 export class Crowd {
   // ours / theirs: fan colours (kit colours, most worn first); share: how much of an ordinary stand is
   // yours; curvaOurs: the home curva is yours.
   constructor(ours, theirs, share, curvaOurs, seed = 1) {
     this.rand = seeded(seed * 7919 + 13);
-    this.pal = [...five(ours), ...five(theirs), ...NEUTRAL];
+    this.wear = [sideWear(theirs), sideWear(ours)];
+    const four = w => [0, 1, 2, 3].map(i => w.cols[i] || w.cols[0]);
+    this.pal = [...four(this.wear[1]), ...four(this.wear[0]), ...NEUTRAL];          // 0..3 yours, 4..7 theirs, 8.. neutral
     this.share = [share, curvaOurs ? 0.95 : 0.05, curvaOurs ? 0.15 : 0.85];
     this.curvaOurs = curvaOurs;
     this.fans = []; this.ultras = [];
@@ -79,12 +100,19 @@ export class Crowd {
   }
 
   fan(p, band, role, shade, ultra, packed, k, t) {
-    const R = this.rand, mine = R() < this.share[band] ? 1 : 0, kit = mine ? 0 : 5;
-    const shape = pick(SHAPE_W, R()), neutral = R() < (packed ? 0.1 : 0.28) * (JACKET.includes(shape) ? 2 : 1);
-    const ks = pick(KIT_W, R()), shirt = neutral ? 10 + Math.floor(R() * 6) : kit + ks;
-    const acc = neutral ? (R() < 0.7 ? kit + pick(KIT_W, R()) : 10 + Math.floor(R() * 6)) : kit + (ks + 1 + Math.floor(R() * 2)) % 5;
-    const kid = !packed && R() < 0.03, scale = kid ? 0.8 : 0.94 + R() * 0.12, b = 0.9 + R() * 0.2;
-    const f = { p, shape: shape + (R() < 0.5 ? 8 : 0), mine, phase: R(), role, col: [shirt, acc, pick(SKIN_W, R()), pick(HAIR_W, R())], scale, shade: [shade[0] * b, shade[1] * b], band, k, t };
+    const R = this.rand, mine = R() < this.share[band] ? 1 : 0, w = this.wear[mine], base = mine ? 0 : 4;
+    const W = TOP_W.slice(); if (!w.stripes) W[1] = 0;
+    const top = pick(W, R()), neutral = band === 0 && R() < 0.05;            // a few plain jackets, only in ordinary stands
+    const shirt = neutral ? 8 + Math.floor(R() * 6) : base + (top === 1 ? w.top[0][0] : w.top[pick(w.top.map(q => q[1]), R())][0]);
+    let acc = base + w.acc[pick(w.acc.map(q => q[1]), R())][0];
+    if (acc === shirt) { const o = w.top.map(q => q[0]).find(i => base + i !== shirt); if (o !== undefined) acc = base + o; }
+    const style = top === 5 && R() < 0.5 ? 7 : pick(STYLE_W, R()), broad = R() < 0.4 ? 8 : 0;
+    const kid = !packed && R() < 0.03, scale = kid ? 0.8 : 0.95 + R() * 0.1, b = 0.9 + R() * 0.2;
+    const chat = !packed && R() < 0.1 ? (R() < 0.5 ? 1 : 2) : 0;
+    const f = {
+      p, torso: top + broad + (top >= 4 && top <= 6 ? 16 : 0), mine, phase: R(), role, scale, shade: [shade[0] * b, shade[1] * b], band, k, t,
+      col: [shirt, acc, pick(SKIN_W, R()) + 8 * pick(HAIR_W, R()), style], look: [R() < 0.5 ? -1 : 1, (R() - 0.5) * 34, (R() - 0.5) * 20, chat],
+    };
     this.fans.push(f);
     if (ultra) this.ultras.push(f);
   }
@@ -120,9 +148,9 @@ export class Crowd {
     sg.setIndex(S.idx); sg.computeBoundingSphere();
     const seatMesh = new THREE.Mesh(sg, seatMaterial(seatTile(), seats, light)); seatMesh.matrixAutoUpdate = false;
     const holders = this.flags();
-    const n = this.fans.length, seat = new Float32Array(n * 4), fan = new Float32Array(n * 4), col = new Float32Array(n * 4), sh = new Float32Array(n * 2);
+    const n = this.fans.length, seat = new Float32Array(n * 4), fan = new Float32Array(n * 4), col = new Float32Array(n * 4), look = new Float32Array(n * 4), sh = new Float32Array(n * 2);
     this.fans.forEach((f, i) => {
-      seat.set([f.p.x, f.p.y, f.p.z, f.scale], i * 4); fan.set([f.shape, f.mine, f.phase, f.role], i * 4); col.set(f.col, i * 4); sh.set(f.shade, i * 2);
+      seat.set([f.p.x, f.p.y, f.p.z, f.scale], i * 4); fan.set([f.torso, f.mine, f.phase, f.role], i * 4); col.set(f.col, i * 4); look.set(f.look, i * 4); sh.set(f.shade, i * 2);
     });
     const g = new THREE.InstancedBufferGeometry();
     g.setAttribute('position', new THREE.Float32BufferAttribute([-0.5, 0, 0, 0.5, 0, 0, 0.5, 1, 0, -0.5, 1, 0], 3));
@@ -130,6 +158,7 @@ export class Crowd {
     g.setAttribute('aSeat', new THREE.InstancedBufferAttribute(seat, 4));
     g.setAttribute('aFan', new THREE.InstancedBufferAttribute(fan, 4));
     g.setAttribute('aCol', new THREE.InstancedBufferAttribute(col, 4));
+    g.setAttribute('aLook', new THREE.InstancedBufferAttribute(look, 4));
     g.setAttribute('aShade', new THREE.InstancedBufferAttribute(sh, 2));
     g.instanceCount = n;
     const atlas = fanAtlas(), mat = fanMaterial(atlas, light, crowd);
