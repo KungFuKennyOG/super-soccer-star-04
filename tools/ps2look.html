@@ -21,6 +21,7 @@
      recorded kick alone, as baked.
      squad (&team=ID, &seed=N): six players of that team as rules/looks.js picks a side.
      your own hands (tools/handlook.js): handeye | handraise | handgrid | handposes | handcmp | handfilm, &pose=open|point|fist|hold, &d=, &side=left.
+     trophies: see tools/trophylook.js (worldheld, clubspin, pair ...).
      tools/ps2shots.mjs renders them all to files. -->
 <style>html,body{margin:0;background:#101830;overflow:hidden}canvas{display:block}#i{position:fixed;left:8px;top:8px;font:12px monospace;color:#fff;text-shadow:0 0 3px #000}
 .bar{position:fixed;bottom:6%;width:27%;display:none;font:600 2.3vw 'Trebuchet MS',Arial,sans-serif;color:#fff}.bar b{display:block;padding:.25em .9em;border-radius:.6em;background:linear-gradient(#3a4250e6,#151a22e6);box-shadow:0 0 0 2px #0006}.bar i{display:block;height:.5vw;margin:.5vw .4em 0;background:repeating-linear-gradient(90deg,#f2f2f2 0 1.5vw,#0000 1.5vw 1.9vw)}</style>
@@ -50,6 +51,7 @@ import { heldBall } from '../game/keeperpose.js';
 import { sampleOnce } from '../game/keepercap.js';
 import { pickSquad } from '../rules/looks.js';
 import { handLook } from './handlook.js';
+import { trophyShots } from './trophylook.js';
 
 const q = new URLSearchParams(location.search);
 let shot = q.get('shot') || 'duel';
@@ -242,6 +244,7 @@ function keepPose(s, t, dt) {
   const v = s.keep.view; camera.fov = v.fov; camera.aspect = W / H; camera.updateProjectionMatrix(); camera.position.set(...v.cam); camera.lookAt(...v.at);
 }
 const val = (v, t) => (typeof v === 'function' ? v(t) : v);
+const TROPHY = trophyShots(scene, q); Object.assign(SHOTS, TROPHY.shots);   // the trophies (tools/trophylook.js lists the shots)
 // the carrier's stride and his touches are the sim's own (strides: a 'dribble' event on the touch frame); the ball is where the sim's carry puts it
 const DW = { players: [], owner: 'you', dead: false, wind: null }, rollQ = new THREE.Quaternion(), rollAxis = new THREE.Vector3();
 let touchAt = -9;
@@ -280,6 +283,7 @@ function pose(t, dt) {
   HL.hide(); ball.visible = true;
   if (SHOTS[shot].keep) return keepPose(SHOTS[shot], t, dt);
   const s = SHOTS[shot], set = s.set(t), b = s.trick ? [0, 0] : val(s.ball, t);
+  if (s.tick) s.tick(t); else TROPHY.hide();
   if (b) { bp.x = b[0]; bp.z = b[1]; bp.y = b[2] ?? 0.11; ball.position.set(bp.x, bp.y, bp.z); ball.rotation.set(t * 9, 0.4, t * 3); }
   if (s.trick) {
     // every sim step since the last frame is played to the model (its events), then he is posed once as he is now
@@ -323,7 +327,7 @@ function pose(t, dt) {
   camera.position.set(...val(s.cam, t)); camera.lookAt(...val(s.at, t));
 }
 // poses ease in over time (speed, lean, the head's turn), so a still is run up to, not jumped to (a shot's `warm`: for how many seconds)
-function warm() { for (const pl of players) { pl.p.stride = null; pl.m.gait = pl.m.strike = pl.m.special = pl.m.trick = null; pl.m.sway = null; pl.m.kickK = pl.m.onBallK = pl.m.cheerK = pl.m.driveT = 0; } played = 1e9; for (let k = Math.round(((SHOTS[shot] || {}).warm || 1.5) * 60); k >= 0; k--) pose(time - k / 60, 1 / 60); }   // (the last step is the moment itself: a still of the frame a ball is struck on is that frame)
+function warm() { if (!SHOTS[shot] && !HL.active(shot)) { console.warn(`no shot '${shot}', showing duel`); shot = 'duel'; } for (const pl of players) { pl.p.stride = null; pl.m.gait = pl.m.strike = pl.m.special = pl.m.trick = null; pl.m.sway = null; pl.m.kickK = pl.m.onBallK = pl.m.cheerK = pl.m.driveT = 0; } played = 1e9; for (let k = Math.round(((SHOTS[shot] || {}).warm || 1.5) * 60); k >= 0; k--) pose(time - k / 60, 1 / 60); }   // (the last step is the moment itself: a still of the frame a ball is struck on is that frame)
 function frame(dt) {
   time += dt; pose(time, dt); if (HL.active(shot)) HL.render(renderer, camera, W, H); else renderer.render(scene, camera);
   document.getElementById('i').textContent = q.get('info') ? `${shot}  calls ${renderer.info.render.calls}  tris ${renderer.info.render.triangles}` : '';
@@ -331,7 +335,7 @@ function frame(dt) {
 window.__look = {
   ready: false, step: frame, note: () => (SHOTS[shot] && SHOTS[shot].drib !== undefined ? `ph ${(players[SHOTS[shot].drib].p.stride % (Math.PI * 2)).toFixed(2)}${time - touchAt < 1e-6 ? ' TOUCH' : ''}` : ''),
   shot(name, t = 0) { shot = name; time = t; warm(); frame(0); },
-  info: () => ({ calls: renderer.info.render.calls, triangles: renderer.info.render.triangles, textures: renderer.info.memory.textures, buildMs, playerTris: players[0].m.mesh.geometry.index.count / 3, ...HL.info() }),
+  info: () => ({ calls: renderer.info.render.calls, triangles: renderer.info.render.triangles, textures: renderer.info.memory.textures, buildMs, playerTris: players[0].m.mesh.geometry.index.count / 3, ...HL.info(), trophies: TROPHY.info }),
   sheet: (i, k = 0) => players[i].m.mesh.material[k].map.image.toDataURL('image/png'),
 };
 addEventListener('keydown', e => { const n = Object.keys(SHOTS)[+e.key - 1]; if (n) { shot = n; time = 0; } });
