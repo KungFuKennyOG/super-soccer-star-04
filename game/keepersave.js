@@ -17,7 +17,8 @@
 import * as THREE from 'three';
 import { stepBall } from '../rules/ball.js';
 import { reachLeg, aimFoot } from './legik.js';
-import { grip, placeHands, lookAt, pathAt, keyAt, mono, ankleFor, BALL_R } from './keeperhands.js';
+import { grip, placeHands, lookAt, keyAt, mono, ankleFor, BALL_R, readyGrip, lerpGrip, chestPoint } from './keeperhands.js';
+import { standing, STAND, standMode, standGrip } from './keeperstand.js';
 
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v)), mix = (a, b, k) => a + (b - a) * k;
 const ease = x => { x = clamp(x, 0, 1); return x * x * (3 - 2 * x); };
@@ -26,7 +27,7 @@ const ZD = 0.12, ZS = 0.36;                  // the plane he meets the ball in, 
 export const SAVE = { zDive: ZD, zStand: ZS, hold: { catch: 0.45, parry: 0.25, beaten: 0.3, wide: 0.3 } };
 
 // world ↔ the save's frame (origin O, turned Y): x his left, z the way he faced
-const toModel = (sv, x, y, z, out) => { const dx = x - sv.O.x, dz = z - sv.O.z, c = Math.cos(sv.Y), s = Math.sin(sv.Y); return out.set(dx * c - dz * s, y, dx * s + dz * c); };
+export const toModel = (sv, x, y, z, out) => { const dx = x - sv.O.x, dz = z - sv.O.z, c = Math.cos(sv.Y), s = Math.sin(sv.Y); return out.set(dx * c - dz * s, y, dx * s + dz * c); };
 export const toWorld = (sv, v, out) => { const c = Math.cos(sv.Y), s = Math.sin(sv.Y); return out.set(sv.O.x + v.x * c + v.z * s, v.y, sv.O.z - v.x * s + v.z * c); };
 
 // When and where the ball meets his hands: where it crosses the plane `zc` in front of him, or where it is when the
@@ -52,7 +53,10 @@ function contact(sv, ball, eta, zc) {
 export function startSave(m, p, ball, root) {
   const sv = { id: p.save.id, kind: p.save.kind, y: p.save.y, stand: !p.dive, s: p.dive || 1, t: 0, O: root.position.clone(), Y: root.rotation.y, dt0: 0 };
   sv.feet = { L: m.kf.L.p.clone(), R: m.kf.R.p.clone() };
-  const zc = sv.stand ? ZS : ZD, k = contact(sv, ball, p.save.eta, zc);
+  sv.yaws = { L: m.kf.L.yaw ?? root.rotation.y, R: m.kf.R.yaw ?? root.rotation.y };
+  // (a standing save: which technique by the height it comes at, and each meets the ball its own distance in front of him)
+  if (sv.stand) { sv.mode = standMode(contact(sv, ball, p.save.eta, ZS).c.y, sv.kind); sv.zc = STAND.z[sv.mode === 'w' && sv.kind !== 'catch' ? 'block' : sv.mode]; } else sv.zc = ZD;
+  const k = contact(sv, ball, p.save.eta, sv.zc);
   sv.T = Math.max(sv.stand ? 0.12 : 0.18, k.t); sv.c = k.c;
   if (!sv.stand && Math.sign(sv.c.x) && Math.abs(sv.c.x) > 0.25) sv.s = Math.sign(sv.c.x);       // the way the ball really is
   if (sv.stand) sv.s = sv.c.x >= 0 ? 1 : -1;
@@ -68,9 +72,7 @@ function shape(sv) {
   if (sv.kind === 'beaten') { sv.reach = c.clone(); sv.reach.x -= s * 0.38; sv.reach.y = mix(sv.reach.y, 0.9, 0.15); } else sv.reach = c;
   const r = sv.reach;
   sv.h = clamp((r.y - 0.25) / 1.6, 0, 1);
-  if (sv.stand) sv.grip = r.y < 0.45 ? 'scoop' : r.y < 1.05 ? 'basket' : 'behind';
-  else sv.grip = sv.kind === 'catch' ? (r.y < 0.75 ? 'low' : 'behind') : 'parry';
-  if (sv.kind !== 'catch' && sv.stand) sv.grip = r.y < 0.45 ? 'scoop' : 'behind';
+  sv.grip = sv.stand ? standGrip(sv) : sv.kind === 'catch' ? (r.y < 0.75 ? 'low' : 'behind') : 'parry';
 }
 
 // Plays the save on. Returns false once he's done with it (standing again, or the ball in his arms).
@@ -79,7 +81,7 @@ export function poseSave(m, p, dt, ball) {
   sv.t += dt;
   // until the hands are nearly there, keep reading the ball's path (a frame of the sim's own timing at most)
   if (ball && sv.t < sv.T * 0.8 && sv.t > 0) {
-    const k = contact(sv, ball, p.save && p.save.id === sv.id ? p.save.eta : sv.T - sv.t + 0.03, sv.stand ? ZS : ZD);
+    const k = contact(sv, ball, p.save && p.save.id === sv.id ? p.save.eta : sv.T - sv.t + 0.03, sv.zc);
     if (k.t > 0) { sv.T = sv.t + k.t; sv.c.copy(k.c); shape(sv); }
   }
   return sv.stand ? standing(m, sv, dt, ball) : dive(m, sv, dt, ball);
@@ -213,85 +215,4 @@ function poseUp(bn, gt, s, land) {
     aimFoot(bn, n, qa.setFromEuler(e1.set(0, (n === 'L' ? 1 : -1) * 0.12, 0)));
     U.quaternion.copy(keep.u.slerp(U.quaternion, k)); L.quaternion.copy(keep.l.slerp(L.quaternion, k)); F.quaternion.copy(keep.f.slerp(F.quaternion, k));
   }
-}
-
-/* ---------- standing saves ---------- */
-
-function standing(m, sv, dt, ball) {
-  const bn = m.bone, s = sv.s, T = sv.T, r = sv.reach, t = sv.t, kind = sv.grip;
-  const end = T + (sv.kind === 'catch' ? 0.42 : 0.45);
-  if (t > end) return false;
-  const hx = clamp(r.x * 0.85, -0.38, 0.38), over = r.y > 1.75;
-  const P = { scoop: [0.8, 0.95, 0.25], basket: [0.82, 0.45, 0.2], behind: [over ? 0.95 : 0.86, 0.12, 0.04] }[kind];
-  const jump = over ? Math.max(0, r.y - 1.95) * 0.9 + 0.12 : 0;
-  const keys = over ? [[0, sv.h0], [0.5 * T, V(hx * 0.5, 0.74, 0)], [T, V(hx, P[0] + jump, 0.02)], [T + 0.3, V(hx, 0.86, 0)], [end, V(hx, 0.9, 0)]]
-    : [[0, sv.h0], [0.85 * T, V(hx, P[0], -0.03)], [T + 0.15, V(hx, P[0] + 0.02, -0.03)], [end, V(hx, 0.88, 0)]];
-  pathAt(keys, t, bn.hips.position);
-  const pitch = keyAt([[0, sv.p0], [0.8 * T, P[1]], [T + 0.12, P[1]], [end, 0.12]], t);
-  bn.hips.rotation.set(pitch, 0, 0);
-  bn.spine.rotation.set(keyAt([[0, 0.1], [0.8 * T, P[2]], [T + 0.15, P[2]], [end, 0.06]], t), 0, 0);
-  // feet: a quick step across behind the ball (the near foot first), closer together for a scoop; off the grass for a high one
-  const lift = Math.max(0, bn.hips.position.y - 0.9);
-  for (const n of ['L', 'R']) {
-    const sd = n === 'L' ? 1 : -1, nearFoot = sd === s, f = sv.feet[n], at = toModel(sv, f.x, 0, f.z, V(0, 0, 0));
-    const u = ease((t - (nearFoot ? 0.05 : 0.3) * T) / (0.45 * T));
-    const want = V(hx + sd * (kind === 'scoop' ? 0.1 : 0.2), 0, 0.04);
-    at.lerp(want, u * (Math.abs(at.x - want.x) > 0.05 ? 1 : 0.5));
-    const toes = lift > 0.02 ? 0.5 : 0.1;
-    reachLeg(bn, n, at.setY(ankleFor(toes) + Math.sin(Math.PI * u) * 0.04 + lift));
-    aimFoot(bn, n, qa.setFromEuler(e1.set(toes, sd * 0.12, 0)));
-  }
-  // hands: ready → the grip on the ball at the moment it arrives → (a catch) into his chest, or pushed away
-  const ready = readyGrip(bn), G = grip(kind, r, s);
-  const u = clamp((t - 0.05 * T) / (0.95 * T), 0, 1), wk = 1 - (1 - u) ** 3;
-  let g = lerpGrip(ready, G, wk);
-  m.held = null;
-  if (t >= T) {
-    const a = t - T;
-    if (sv.kind === 'catch') {
-      chestPoint(bn, hp);
-      const b = r.clone().lerp(hp, ease(a / 0.3));
-      g = lerpGrip(grip(kind, b, s), grip('sides', b, s), ease(a / 0.25));
-      m.held = b;
-    } else {
-      const c2 = r.clone().add(V(0, 0.08, 0.15).multiplyScalar(ease(a / 0.1)));
-      g = lerpGrip(grip(kind, c2, s), ready, ease((a - 0.12) / 0.3));
-      if (a < 0.05) m.held = r.clone();
-    }
-  }
-  placeHands(bn, g, 1, 1, kind === 'behind' ? 0.6 : 0.2);
-  lookAt(bn, m.held || r, 0.9);
-  return true;
-}
-
-/* ---------- shared ---------- */
-
-// where his hands are carried through a save before they go to the ball: in front of his chest off bent elbows,
-// fingers forward, palms turned in and half to the ball, wrists straight. Carried with the chest, not the hips: as
-// he sinks into the load his thighs come up, and hands hung off the hips went into his lap and his stomach.
-const rq = new THREE.Quaternion(), rI = new THREE.Quaternion(), rp = new THREE.Vector3();
-function readyGrip(bn) {
-  const out = {};
-  rq.copy(bn.hips.quaternion); rp.copy(bn.spine.position).applyQuaternion(rq).add(bn.hips.position);
-  rq.multiply(bn.spine.quaternion); rp.add(w1.copy(bn.chest.position).applyQuaternion(rq)); rq.multiply(bn.chest.quaternion);
-  // (hung from the chest but only a third turned with it: bent well forward, hands that followed the chest all the
-  // way came down onto his knees)
-  rq.slerp(rI, 0.65);
-  for (const [lo, sd] of [['L', 1], ['R', -1]]) {
-    const palm = V(sd * 0.17, -0.2, 0.36).applyQuaternion(rq).add(rp);
-    const N = V(-sd * 0.75, -0.25, 0.6).normalize().applyQuaternion(rq), F = V(sd * 0.12, -0.3, 1).normalize().applyQuaternion(rq);
-    out[lo] = { palm, N, F: F.addScaledVector(N, -F.dot(N)).normalize() };
-  }
-  return out;
-}
-function lerpGrip(a, b, k) {
-  const out = {};
-  for (const lo of ['L', 'R']) out[lo] = { palm: a[lo].palm.clone().lerp(b[lo].palm, k), N: a[lo].N.clone().lerp(b[lo].N, k).normalize(), F: a[lo].F.clone().lerp(b[lo].F, k).normalize() };
-  return out;
-}
-// in front of his chest, where a caught ball is held (carried with the trunk)
-export function chestPoint(bn, out) {
-  qa.copy(bn.hips.quaternion).multiply(bn.spine.quaternion);
-  out.set(0, 0.34, 0.26).applyQuaternion(qa).add(bn.hips.position);
-  return out;
 }

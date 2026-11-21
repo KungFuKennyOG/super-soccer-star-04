@@ -46,7 +46,7 @@ import { buildStand, buildSky } from '../game/ps2/stand.js';
 import { CLIPS, sampleStride, applyPose, newPose } from '../game/mocap.js';
 import { createWorld, stepSim } from '../rules/sim.js';
 import { sampleKick } from '../game/kickcap.js';
-import { keeperLog, buildGoal, parseKeepShot, KEEP_SHOTS, toPage } from './keeplook.js';
+import { keeperLog, buildGoal, parseKeepShot, keepView, KEEP_SHOTS, toPage } from './keeplook.js';
 import { heldBall } from '../game/keeperpose.js';
 import { sampleOnce } from '../game/keepercap.js';
 import { pickSquad } from '../rules/looks.js';
@@ -241,7 +241,7 @@ function keepPose(s, t, dt) {
   const bw = new THREE.Vector3(bp.x, bp.y, bp.z);
   heldBall(keeper, bw);                                       // in his gloves when he has it (as game/main.js draws it)
   ball.position.copy(bw);
-  const v = s.keep.view; camera.fov = v.fov; camera.aspect = W / H; camera.updateProjectionMatrix(); camera.position.set(...v.cam); camera.lookAt(...v.at);
+  const v = keepView(s.keep.view, keeper.root); camera.fov = v.fov; camera.aspect = W / H; camera.updateProjectionMatrix(); camera.position.set(...v.cam); camera.lookAt(...v.at);
 }
 const val = (v, t) => (typeof v === 'function' ? v(t) : v);
 const TROPHY = trophyShots(scene, q); Object.assign(SHOTS, TROPHY.shots);   // the trophies (tools/trophylook.js lists the shots)

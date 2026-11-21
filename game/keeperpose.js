@@ -14,31 +14,21 @@
 // Springs for weight (game/sway.js) work on him as on the others. Nothing goes under the grass (keepAboveGrass).
 import * as THREE from 'three';
 import { restPose } from './body.js';
-import { reachLeg, aimFoot } from './legik.js';
-import { sway } from './sway.js';
-import { placeHands, lookAt, keepAboveGrass, grip, ankleFor } from './keeperhands.js';
-import { startSave, poseSave, chestPoint } from './keepersave.js';
+import { keepAboveGrass } from './keeperhands.js';
+import { startSave, poseSave } from './keepersave.js';
+import { SET, stance, plantFeet, plantFromPose, toLocal, toWorldPt } from './keeperfeet.js';
 import { BONES } from './mocap.js';
 
+export { SET };
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v)), mix = (a, b, k) => a + (b - a) * k;
 const ease = x => { x = clamp(x, 0, 1); return x * x * (3 - 2 * x); };
-export const SET = {
-  // the set position as it is coached (m, rad): feet shoulder width, knees a little bent, on the balls of the feet,
-  // weight forward (nose in front of the toes), chest to the ball, elbows narrow and bent, hands in front of the
-  // body a ball's width apart, open and relaxed. Not a deep or wide squat.
-  hips: 0.85, hipsFar: 0.9, pitch: 0.36, width: 0.44, ahead: 0.05, heel: 0.1, toeOut: 0.12, kneeOut: 0.08,
-  hands: [0.15, 0.2, 0.38],                                                                // palms: out, above the hips, ahead (m, in the hips' own tilted frame)
-  step: { thr: 0.07, still: 0.11, time: [0.22, 0.17], lift: 0.05, gap: 0.27, rise: 0.05 },   // (lift, gap, rise and the quick time: measured from a recorded defensive slide, see the notes)                        // when a foot steps, how quick (slow, fast), how high
-  split: { hop: 0.07, land: 0.17, up: 0.03, wide: 0.08, sink: 0.04 },                       // s, s, m, m, m
-  recover: 1.8, run: 4.2,                                                                  // m/s back to his spot after a save; faster than this he runs
-};
-const V = (x, y, z) => new THREE.Vector3(x, y, z), tmp = new THREE.Vector3(), tq = new THREE.Quaternion(), te = new THREE.Euler();
+const V = (x, y, z) => new THREE.Vector3(x, y, z), tmp = new THREE.Vector3(), tq = new THREE.Quaternion();
 
 // Whether he's running (off his line for a loose ball): then he's posed as any runner is (game/actors.js).
 export function keeperRuns(m, p) {
   const run = !m.sv && !p.holding && Math.hypot(p.vx, p.vz) > SET.run;
   if (run !== (m.kState === 'run')) blendFrom(m, run ? 0.2 : 0.25);
-  if (run) { m.kState = 'run'; m.kf = null; m.off = null; }
+  if (run) { m.kState = 'run'; m.kf = null; m.kg = null; m.off = null; }
   return run;
 }
 
@@ -53,145 +43,46 @@ export function animateKeeper(m, p, dt, t, ball) {
     if (!m.kf) plantFeet(m);
     m.saveId = p.save.id;
     m.sv = startSave(m, p, ball, m.root);
-    blendFrom(m, 0.06);
+    blendFrom(m, m.sv.stand ? 0.12 : 0.06);
   } else if (p.holding && !m.wasHolding && !m.sv && ball) {
     // he gathers a loose ball: a quick scoop from where it is
     placeRoot(m, p, 0);
     if (!m.kf) plantFeet(m);
     m.sv = startSave(m, { save: { id: 'claim', kind: 'catch', y: ball.y, eta: 0.12 }, dive: 0 }, null, m.root);
-    m.sv.c = toLocal(m, ball, V(0, 0, 0)); m.sv.c.y = Math.max(0.13, m.sv.c.y); m.sv.reach = m.sv.c; m.sv.grip = 'scoop'; m.sv.T = 0.16;
+    m.sv.c = toLocal(m, ball, V(0, 0, 0)); m.sv.c.y = Math.max(0.13, m.sv.c.y); m.sv.c.z = Math.max(0.3, m.sv.c.z); m.sv.reach = m.sv.c; m.sv.mode = 'scoop'; m.sv.T = 0.16;
     blendFrom(m, 0.15);
-  }
+  } else if (!!p.holding !== !!m.wasHolding && !m.sv) blendFrom(m, 0.25);     // the ball leaves his hands
   m.wasHolding = !!p.holding;
   if (m.sv) {
     m.root.position.copy(m.sv.O); m.root.rotation.y = m.sv.Y;
     if (poseSave(m, p, dt, ball)) { finish(m, 'save', dt, p); return; }
-    // done: from where he's got to back toward his spot, stepping
+    // done: he carries on from where it left him (his feet where they are), back toward his spot, stepping
     m.root.updateMatrixWorld(true);
     const hw = bn.hips.getWorldPosition(V(0, 0, 0));
-    m.off = V(hw.x - p.x, 0, hw.z - p.z); m.yawOff = m.sv.Y - Math.atan2(p.fx, p.fz);
+    plantFromPose(m);
+    m.off = V(hw.x - p.x, 0, hw.z - p.z); m.offV = 0; m.yawOff = m.sv.Y - Math.atan2(p.fx, p.fz);
     m.yawOff -= Math.round(m.yawOff / (Math.PI * 2)) * Math.PI * 2;
-    m.sv = null; m.kf = null;
+    m.sv = null;
     blendFrom(m, 0.3);
     restPose(bn);
   }
+  placeRoot(m, p, dt);
   stance(m, p, dt, t, ball);
   finish(m, p.holding ? 'hold' : 'set', dt, p);
 }
 
-// His root: the sim's spot, plus what is left of the way back from a save, turned to the ball.
+// His root: the sim's spot, plus what is left of the way back from a save (a walk that starts and stops gently,
+// SET.recover at most), turned to the ball.
 function placeRoot(m, p, dt) {
-  if (m.off) {
-    const l = Math.hypot(m.off.x, m.off.z), k = l > 1e-4 ? Math.max(0, l - SET.recover * dt) / l : 0;
-    m.off.multiplyScalar(k); if (l * k < 0.01) m.off = null;
+  if (m.off && dt > 0) {
+    const l = Math.hypot(m.off.x, m.off.z), want = Math.min(SET.recover, l * 5 + 0.05);
+    m.offV = Math.min(want, (m.offV || 0) + 7 * dt);
+    const k = l > 1e-4 ? Math.max(0, l - m.offV * dt) / l : 0;
+    m.off.multiplyScalar(k); if (l * k < 0.004) m.off = null;
   }
   if (m.yawOff) { m.yawOff *= Math.exp(-dt * 5); if (Math.abs(m.yawOff) < 1e-3) m.yawOff = 0; }
   m.root.position.set(p.x + (m.off ? m.off.x : 0), 0, p.z + (m.off ? m.off.z : 0));
   m.root.rotation.y = Math.atan2(p.fx, p.fz) + (m.yawOff || 0);
-}
-const toLocal = (m, w, out) => { m.root.updateMatrixWorld(true); return m.root.worldToLocal(out.set(w.x, w.y, w.z)); };
-const toWorldPt = (m, v, out) => { m.root.updateMatrixWorld(true); return m.root.localToWorld(out.copy(v)); };
-// feet where the set position puts them, planted (world)
-function plantFeet(m) {
-  m.kf = {};
-  for (const [n, sd] of [['L', 1], ['R', -1]]) m.kf[n] = { p: toWorldPt(m, V(sd * SET.width / 2, 0, SET.ahead), V(0, 0, 0)), air: null };
-}
-
-// Swings a knee out (or in) round the line from hip to ankle, so the foot stays where it is.
-const kq = new THREE.Quaternion(), kv = new THREE.Vector3();
-function kneeOut(bn, n, a) {
-  const up = bn['upperLeg' + n], lo = bn['lowerLeg' + n], ft = bn['foot' + n];
-  kv.copy(ft.position).applyQuaternion(lo.quaternion).add(lo.position).applyQuaternion(up.quaternion).normalize();
-  up.quaternion.premultiply(kq.setFromAxisAngle(kv, -a));
-}
-
-/* ---------- the set position and the shuffle ---------- */
-
-function stance(m, p, dt, t, ball) {
-  const bn = m.bone;
-  placeRoot(m, p, dt);
-  if (!m.kf) plantFeet(m);
-  const far = ball ? clamp((Math.hypot(ball.x - p.x, ball.z - p.z) - 18) / 10, 0, 1) : 0, hold = p.holding ? 1 : 0;
-  const v = V(p.vx, 0, p.vz), sp = v.length();
-  // split step: up off the grass a little, down wider and lower
-  let up = 0, wide = 0, sink = 0;
-  if (m.split !== undefined && m.split < SET.split.land + 0.25) {
-    m.split += dt;
-    const S = SET.split, a = m.split;
-    up = a < S.hop ? Math.sin(Math.PI * a / S.hop) * S.up : 0;
-    wide = ease((a - S.hop * 0.5) / (S.land - S.hop * 0.5)) * S.wide * (1 - ease((a - 0.5) / 0.4));
-    sink = Math.sin(Math.PI * clamp((a - S.hop) / (S.land + 0.2 - S.hop), 0, 1)) * S.sink;
-    if (a >= S.hop && a - dt < S.hop) for (const n of ['L', 'R']) m.kf[n].air = null;     // he lands: replanted below
-  }
-  // the feet: each stays where it is planted until the body has left it behind, then steps (the lead foot first)
-  const width = mix(SET.width, 0.3, hold) + wide, home = {}, lead = sp > 0.3 ? Math.sign(toLocal(m, { x: p.x + v.x, y: 0, z: p.z + v.z }, tmp).x - toLocal(m, { x: p.x, y: 0, z: p.z }, V(0, 0, 0)).x) : 0;
-  for (const [n, sd] of [['L', 1], ['R', -1]]) home[n] = toWorldPt(m, V(sd * width / 2, 0, SET.ahead), V(0, 0, 0));
-  const S = SET.step, T = mix(S.time[0], S.time[1], clamp(sp / 3, 0, 1));
-  const busy = m.kf.L.air || m.kf.R.air;
-  if (!busy || sp > 2.4) {
-    let pick = null, worst = sp > 0.2 ? S.thr : S.still;
-    for (const [n, sd] of [['L', 1], ['R', -1]]) {
-      const f = m.kf[n]; if (f.air) continue;
-      const e = f.p.distanceTo(tmp.copy(home[n]).addScaledVector(v, T * 0.5)) + (sd === lead ? 0.03 : 0);
-      if (e > worst) { worst = e; pick = n; }
-    }
-    if (pick) { const f = m.kf[pick]; f.air = { from: f.p.clone(), t: 0, T }; m.phase = (m.phase || 0) + Math.PI; }
-  }
-  const at = {};
-  for (const n of ['L', 'R']) {
-    const f = m.kf[n];
-    let lift = 0;
-    if (f.air) {
-      f.air.t += dt;
-      const u = Math.min(1, f.air.t / f.air.T), to = tmp.copy(home[n]).addScaledVector(v, (f.air.T - f.air.t) * 0.5 + 0.04);
-      f.p.copy(f.air.from).lerp(to, ease(u)); lift = Math.sin(Math.PI * u) * (S.lift + 0.02 * Math.min(sp, 3));
-      if (u >= 1) f.air = null;
-    }
-    if (up) lift += up;
-    at[n] = toLocal(m, f.p, V(0, 0, 0));
-    // feet never cross: the left stays on his left
-    if (n === 'R' && at.R.x > at.L.x - S.gap) at.R.x = at.L.x - S.gap;
-    at[n].y = ankleFor(lift > 0.015 ? 0.35 : SET.heel * (1 - hold)) + lift;
-  }
-  // hips: low in the set, riding up a little as he pushes across (the recorded slide rises 10 cm and more between its stops), up and loose when the ball is far; never higher than the legs reach
-  const H = mix(mix(SET.hips, SET.hipsFar, far), 0.9, hold) - sink + Math.min(S.rise, sp * 0.022) + up + 0.005 * Math.sin(t * 2.3 + (m.phase || 0) * 0.1);
-  const mid = at.L.clone().add(at.R).multiplyScalar(0.5);
-  bn.hips.position.set(mid.x * 0.6, H, mid.z * 0.4 - mix(0.09, 0.03, Math.max(hold, far)));   // sat back a little: bent forward, his weight stays over the balls of his feet
-  const reach = 0.86;
-  for (const [n, sd] of [['L', 1], ['R', -1]]) {
-    const dx = at[n].x - (bn.hips.position.x + sd * 0.09), dz = at[n].z - bn.hips.position.z, dh = Math.hypot(dx, dz);
-    bn.hips.position.y = Math.min(bn.hips.position.y, at[n].y + 0.02 + Math.sqrt(Math.max(0.01, reach * reach - dh * dh)));
-  }
-  const weight = clamp((at.L.y - at.R.y) * 4, -1, 1);                  // over the planted foot
-  bn.hips.rotation.set(mix(SET.pitch, 0.08, hold) * mix(1, 0.55, far), 0, -weight * 0.05);
-  bn.spine.rotation.set(mix(0.16, 0.02, hold) * mix(1, 0.5, far), 0, weight * 0.04); bn.chest.rotation.set(mix(0.1, 0.03, Math.max(hold, far)), 0, 0);
-  for (const [n, sd] of [['L', 1], ['R', -1]]) {
-    reachLeg(bn, n, at[n]);
-    kneeOut(bn, n, sd * SET.kneeOut * (1 - hold));
-    aimFoot(bn, n, tq.setFromEuler(te.set(m.kf[n].air || up > 0.015 ? 0.35 : SET.heel * (1 - hold), sd * SET.toeOut, 0)));
-  }
-  // weight: springs on the trunk and arms (before the hands are put where they go)
-  sway(m, bn, p, dt, { mv: 0.6, run: 0 });
-  if (hold) {
-    // the ball held to his chest
-    const b = chestPoint(bn, V(0, 0, 0)); b.y -= 0.04;
-    placeHands(bn, grip('sides', b, 1), 1, 1, 0.2);
-    m.held = b;
-    lookAt(bn, V(0, 1.6, 12), 0.6);
-    return;
-  }
-  m.held = null;
-  // hands out in front at waist height, palms to the ball, a little alive; lower and looser when it's far away
-  const tb = ball ? toLocal(m, ball, V(0, 0, 0)) : V(0, 1, 10), g = {};
-  for (const [n, sd] of [['L', 1], ['R', -1]]) {
-    const palm = V(sd * mix(SET.hands[0], 0.24, far), SET.hands[1] - 0.12 * far + 0.01 * Math.sin(t * 3.1 + sd), mix(SET.hands[2], 0.26, far)).applyQuaternion(bn.hips.quaternion).add(bn.hips.position);
-    // the hands hang ready off bent elbows: fingers forward and a little down, palms turned in toward each other and
-    // half to the ball, wrists straight (palms square to the ball with the fingers up folded the wrists right back)
-    const N = V(-sd * 0.75, -0.25, 0.6).lerp(V(-sd, -0.1, 0.1), far).normalize(), F = V(sd * 0.12, mix(-0.3, -0.75, far), 1).normalize();
-    g[n] = { palm, N, F: F.addScaledVector(N, -F.dot(N)).normalize() };
-  }
-  placeHands(bn, g, 1, 0.55, 0.9);                                      // elbows narrow
-  lookAt(bn, tb, 0.9);
 }
 
 /* ---------- moving from one thing to the next without a pop ---------- */

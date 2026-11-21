@@ -91,3 +91,88 @@ how the arms come down after a parry, the head.
 - "whys the inside transparent?": the kit is drawn on both sides (game/ps2/player.js), the inside in shade, so you
   can't see through a sleeve or a short's leg.
 - Gloves: merged in from the `gloves` branch.
+
+## Standing saves and footwork rebuilt (branch `keeper2`, Nov 2026)
+
+Kenny's standard: "look up how gks do irl, man and replicate that". The dives, set position and get-up had been
+rebuilt to it; the standing saves, the shuffle and the split step had not. Rules untouched (`gk.save`, `gk.dive`,
+`gk.holding` as before). `game/main.js` untouched.
+
+| File | What |
+| --- | --- |
+| `game/keeperfeet.js` (new) | The set position, the shuffle, one-off steps, the split step, standing with the ball (`SET`, `GAIT`, `SPLIT`) |
+| `game/keeperstand.js` (new) | Standing saves by height: scoop, cup, W, overhead; parries (`STAND`) |
+| `game/keeperpose.js` | Now only: latching a save, the way back to his spot, blending between states |
+| `game/keepersave.js` | Dives and the get-up only (the standing saves moved out) |
+| `game/keeperhands.js` | New grips (`w`, `over`, `hug`, `block`, `lowblock`, `tip`); `readyGrip` / `lerpGrip` / `chestPoint` moved here; `placeHands(..., free, lim)` |
+| `tools/keeplook.js` | Shots `keepscoop`, `keepcup`, `keepw`, `keephead`, `keepover`, `keepjump`, `keepwside`, `keepcupside`, `keepblock`, `keeplowblock`, `keeptip`, `keeplrl`, `keepcreep`, `keepinout`, `keepsplit`; views that go with him: `...cfront`, `...cside`, `...cq`, `...chigh`, `...chighside` |
+| `tests/unit/keeperpose.test.js` | 60 tests: every standing save (gloves on the ball, arms out of the body, one smooth movement), four kinds of footwork, the split step |
+
+### Where each thing comes from
+
+**Coaching material** (read Nov 2026): Guam FA Goalkeeping Coaching Handbook (set position, the "K", cup, W, high ball,
+deflecting); FIFA Goalkeeping manual (ground balls with the arms inside the knees, stomach-height balls clamped to
+the chest, head-height balls caught in front of the head with elbows in, the high ball off one leg with the knee up,
+side steps for short distances and crossover steps for long ones, tipping over the bar with one open hand); Keeper
+Portal's guide to the W (thumbs behind the ball, hands on its top half, elbows bent, about 15 inches in front of the
+face); a US youth club's coaching points (thumbs together at chest height and above, little fingers together below;
+shuffle under 2 yards, cross-step over); KeeperStop on footwork (quick balanced steps, hips square, hands ready, on the
+balls of the feet).
+- Which technique at which height (`STAND`): scoop under 0.5 m, cup to 1.15 m (below the chest), W to 1.8 m, overhead
+  above. The heights themselves are ours, from the model's knee, chest and head.
+- Scoop: the foot nearest the ball beside its line, the far knee turned in and down behind it (the K), hands down,
+  palms to the ball, little fingers together, arms inside the knees, up the forearms into the chest, then up.
+- Cup: feet planted, palms up, elbows tucked, into the midriff, hips give back, chest over it.
+- W: hands early, thumbs behind, on the top half, elbows bent and low, met 35 to 40 cm in front of his chest and face
+  (coached: 15 to 18 inches), the arms give about 15 cm, then into the chest.
+- Overhead: at the top of his reach; over 2.02 m he jumps off the near foot with the far knee up.
+- Parries: open palms behind it, wrists stiff, pushed down and wide; over his head one palm under it, up and back.
+- Feet first: a side-step (near foot, then the far one closes) puts his body behind a ball up to 0.5 m wide of him.
+- Shuffle: never crossing, never together, low, hips level, hands kept in the set position.
+- Split step: a small hop landing on both forefeet as the ball is struck.
+
+**Measured from the recorded slide** (CMU 102_28, basketball "defensive move side to side", measured again from the
+raw BVH, scaled to our 0.86 m leg): at 2 to 3 m/s the ankles go from 0.12 to 0.97 m apart across him once per 0.46 s;
+he bounds (both feet off at the closest point, hips up 6 to 10 cm). Used: the cycle time (`GAIT.cycle` 0.44 s at top
+speed), that the far foot is off before the near one is down (`GAIT.lag`, `GAIT.duty`: both feet off about a third of
+the time at 3 m/s), the widest stance (ours 0.84 to 0.94 m). Not used, because goalkeeping coaching says otherwise:
+his feet nearly meeting (ours never under 0.275 m, `GAIT.gap`) and the bounce (ours: hips level; they only sit 6 cm
+lower at speed, smoothly).
+
+**Physics:** the split step's time in the air is what a 2 cm hop takes (0.128 s); a jump's rise time is from its
+height.
+
+**Guessed:** the slow shuffle's rhythm (0.36 s a cycle; nothing recorded at a creep), how far he sinks into the split
+step (5.5 cm), every timing after the ball is in his hands, the head.
+
+### Measured (bare skeleton, the real sim; `KEEPER_REPORT=1 node --test tests/unit/keeperpose.test.js`)
+
+- Feet: a planted foot moves 0.0 cm/s (it is fixed in the world; before: only 4% of planted frames were still in a
+  fast shuffle). Ankles 27.5 to 94 cm apart in a 3 m/s shuffle, 37 to 64 cm in a creep. 4.5 to 4.9 steps a second
+  flat out, 2.8 creeping (before: 8 to 10 a second). Hips: 14 to 15 m/s2 at most (before: 385 to 440, a visible
+  jerk), 5 to 6 cm between a stand and a flat-out shuffle and about 1 cm in a creep (before: 7 to 9 cm of bobbing).
+- Split step: feet off on the frame the wind-up begins, down 3 frames (42 ms) after the ball is struck, hips up 1 cm,
+  stance 44 to 52 cm.
+- Standing saves: both palms 0.4 to 0.5 cm from the ball's surface when they meet it and on the sim's save frame;
+  hips 2.0 m/s at most, hands 6.6 m/s at most (before: a 23 cm jump in one frame in the scoop); wrists 30 degrees at
+  most, 41 for the W and 35 for the chest-high parry; no arm more than 3 cm inside his body in any of them (2.6 cm at
+  most, the low parry).
+
+### Short of real
+
+- No crossover step. He shuffles at every speed up to the sim's 3.5 m/s; a real keeper crosses his feet to cover
+  more than about 2 m quickly. Not built: it needs the hips turned to the run with the chest kept square, and a way
+  in and out of it.
+- The split step can't land exactly as the ball is struck: the page hears of a shot 83 ms before it (the wind-up),
+  and a 2 cm hop takes 128 ms. A real keeper reads the backswing. Starting it when you begin charging a shot would
+  need the sim to say so (`intent.charging` is not an event the page sees for him).
+- The sim gives a standing save 0.3 to 0.5 s. With 0.5 s he gets down into the K; with 0.3 s (a hard shot) he only
+  stoops behind it with his palms down.
+- A parried ball leaves his hands where the sim sends it, not where his palms pushed it.
+- One version of each save. The scoop always kneels on the leg away from the ball.
+- Holding: he stands with it hugged to his chest and looks up the pitch; no bounce, no walk to the edge of the box.
+- Low dives: the far upper arm still passes 4 to 8 cm into the top of his chest for 3 frames at take-off. Tried: the
+  far hand brought round further forward (worse: 8 to 9 cm), the chest turned to the ball (no better). It wants the
+  shoulder itself to come forward (the collarbone), which `placeHand` only does a little.
+- Getting up after a dive (not part of this job): a hand passes 4 to 8 cm into his head's sphere for about ten frames.
+- Nothing has been seen in a headset.
