@@ -138,7 +138,7 @@ export function standing(m, sv, dt, ball) {
       m.held = b.clone();
     } else {
       // pushed away, wrists stiff: down and wide (over his head: up and back over the bar); then the hands come back
-      const push = mode === 'over' ? V(0, 0.12, -0.14) : mode === 'scoop' ? V(s * 0.12, 0.02, 0.12) : V(s * 0.12, -0.06, 0.14);
+      const push = mode === 'over' ? V(0, 0.12, -0.14) : mode === 'scoop' ? V(s * 0.12, 0.02, 0.12) : V(s * 0.12, -0.05, 0.09);
       const c2 = r.clone().addScaledVector(push, ease(a / 0.09));
       // (round in front of him on the way back: straight down from over his head, the hands went past his ears)
       const back = ease((a - 0.14) / 0.32);
