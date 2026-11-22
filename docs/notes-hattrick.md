@@ -25,7 +25,8 @@ of yours** you can pick one of six celebrations; teammates join in, the beaten s
 - With replays ON, the big screen and a small TV set off to one side of your view show the celebration live from
   the touchline with a whole-bodied you (the replay's copies). With replays OFF there is no picture.
 
-How long from goal to restart (measured in the real game, headless, 30 steps a second):
+How long from goal to restart. Measured in the real game (headless, 30 steps a second): pick to back in play, 5.0 to
+6.0 s. The rest of the table is those plus the constants (0.7 s wait, 2.5 s prompt, replay length), not timed runs:
 
 | | replays off | replays on (replay not skipped) |
 | --- | --- | --- |
@@ -129,3 +130,10 @@ canvas redrawn about 16 times a second while it's up.
 - Faces close to yours in the pile-on (the kneeling teammate's head passes your left shoulder about 0.3 m away),
   the other's forearms over your shoulders, near-plane clipping.
 - Frame rate with the live picture on.
+
+## Not exercised in the real game (only by unit tests or not at all)
+
+- A real goal leading into the prompt (the films start it with the `__sss.celebrate()` hook), and the order replay →
+  prompt with replays on.
+- The default firing after 2.5 s, B skipping, the hat trick's +600 banner and commentator line, picking by arm pose.
+- The smoke test passes but does not score a goal.
