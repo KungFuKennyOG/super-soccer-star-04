@@ -122,3 +122,32 @@ export function buildPlayer2(kit, num, look = 0, { ap = null, style = [0, 2, 1, 
   root.add(mesh, cast);
   return { root, mesh, bone: by, shadow: blob(), phase: Math.random() * 6, strike: null, cloth: mats[0].userData.cloth };
 }
+
+// You, in first person: the same body in your kit, but only the boots and the lower socks (under FEET_TOP,
+// as the PS1 one cut it) are kept, on their own index over the shared geometry. Your boot color from the locker.
+export const FEET_TOP = 0.21;
+const feetGeos = new Map();
+function feetGeometry(geo) {
+  if (feetGeos.has(geo)) return feetGeos.get(geo);
+  const p = geo.attributes.position.array, ix = geo.index.array, kit = geo.groups[0], keep = [];
+  for (let i = kit.start; i < kit.start + kit.count; i += 3) {
+    if (p[ix[i] * 3 + 1] < FEET_TOP && p[ix[i + 1] * 3 + 1] < FEET_TOP && p[ix[i + 2] * 3 + 1] < FEET_TOP) keep.push(ix[i], ix[i + 1], ix[i + 2]);
+  }
+  const g = new THREE.BufferGeometry();
+  for (const [k, a] of Object.entries(geo.attributes)) g.setAttribute(k, a);
+  g.setIndex(keep); g.addGroup(0, keep.length, 0);
+  feetGeos.set(geo, g);
+  return g;
+}
+export function buildFeet2(kit, boots = 0) {
+  const m = buildPlayer2(kit, 7, 1, { boots, style: 0 });
+  const g = feetGeometry(m.mesh.geometry);
+  m.mesh.geometry = g; m.root.children[1].geometry = g;   // the body and its flat shadow: feet only
+  // the sock is open at the cut, so looking down you see inside it: lit like the outside (the body's
+  // material darkens the inside of the cloth), so the cut reads as the top of a sock, not a hole
+  const kitM = m.mesh.material[0];
+  m.mesh.material = new THREE.MeshPhongMaterial({ map: kitM.map, vertexColors: true, specular: kitM.specular, shininess: kitM.shininess, side: THREE.DoubleSide });
+  m.cloth = null;                                           // (the sheet's cloth uniforms may be a teammate's too)
+  m.firstPerson = true;
+  return m;
+}
