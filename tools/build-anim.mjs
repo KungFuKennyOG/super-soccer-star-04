@@ -18,7 +18,9 @@ import { fileURLToPath } from 'node:url';
 import { buildSkeleton } from '../game/body.js';
 
 const [dir = 'bvh', ...flags] = process.argv.slice(2), REPORT = flags.includes('--report');
-const OUT = fileURLToPath(new URL('../game/assets/anim/clips.js', import.meta.url));
+// --set cheer bakes the trophy ceremony's clips (CHEER below) into their own file, game/assets/anim/cheer.js
+const SET = flags.includes('--set') ? flags[flags.indexOf('--set') + 1] : null;
+const OUT = fileURLToPath(new URL(`../game/assets/anim/${SET || 'clips'}.js`, import.meta.url));
 
 // name: [file, kind, options]. Strides are sampled N times round the cycle.
 const N = 36;
@@ -58,6 +60,19 @@ export const CLIPS = {
   sad: ['91_13', 'stride'], sadB: ['82_10', 'stride'],
   // a 'loop' is [from, to] seconds of a capture played round and round, e.g. stand: ['137_28', 'loop', { from: 2, to: 12 }].
   // None is baked: the library's standing takes (113_21, 77_02, 141_20, 137_28) have a tilted or bowed head, fidgeting or hands on hips.
+};
+
+// The squad at the trophy presentation (game/cheercap.js): people being happy, standing. All loops, 20 poses a second (the clapping 30).
+// 80_43 'happy' (a woman bouncing on her toes with her hands clasped at her chest, then clapping fast at her chin),
+// 79_69 'very happy' (both arms thrown overhead twice, then fists pumped), 14_07 and 13_10 'jump up to grab, reach for,
+// tiptoe' (both arms overhead, up on the toes and small jumps), 49_02 / 49_03 'jump up and down' (arms at the sides:
+// used for the legs). The library has no clapping take by name, no hugging and no group celebration.
+const S = [0.3, 0.7];       // every one of these takes stands still here
+export const CHEER = {
+  clap: ['80_43', 'loop', { from: 5.62, to: 6.86, hz: 30, stand: S }], giddy: ['80_43', 'loop', { from: 1.4, to: 5.0, hz: 20, stand: S }],
+  yes: ['79_69', 'loop', { from: 0.9, to: 5.9, hz: 20, stand: S }],
+  armsUp: ['14_07', 'loop', { from: 6.3, to: 10.0, hz: 20, stand: S }], reach: ['13_10', 'loop', { from: 6.0, to: 10.2, hz: 20, stand: S }],
+  jump: ['49_03', 'loop', { from: 9.3, to: 12.5, hz: 20, stand: S }], bounce: ['49_02', 'loop', { from: 8.3, to: 10.1, hz: 20, stand: S }],
 };
 
 // game bone ← captured joint, and whether it is matched by direction (to the joint's first child)
@@ -225,11 +240,13 @@ function stride(name, bvh, want, flip = false) {
 /* ---------- a loop: a stretch of someone standing ---------- */
 
 const HZ = 12;
-function loop(name, bvh, { from, to }) {
+function loop(name, bvh, { from, to, hz = HZ, stand }) {
   const R = rig(bvh), src = newPose(bvh), f0 = Math.round(from / bvh.dt), f1 = Math.min(bvh.frames - 1, Math.round(to / bvh.dt)), feet = [], org = new THREE.Vector3(), fwd = new THREE.Vector3();
   for (let f = f0; f <= f1; f++) { pose(bvh, f, src); feet.push(src.p[R.id.LeftFoot].y, src.p[R.id.RightFoot].y); org.add(src.p[R.id.Hips]); fwd.add(new THREE.Vector3(0, 0, 1).applyQuaternion(src.q[R.id.Hips])); }
   R.floor = median(feet); org.multiplyScalar(1 / (f1 - f0 + 1)).setY(0);
-  const yaw = Math.atan2(fwd.x, fwd.z), n = Math.round((f1 - f0) * bvh.dt * HZ), A = newOut(), first = newOut(), last = newOut(), q = [], h = [];
+  // (a stretch of jumping or tiptoe has no standing ankles in it: `stand` is [from, to] seconds of the take where he stands flat)
+  if (stand) { const st = []; for (let f = Math.round(stand[0] / bvh.dt); f <= Math.round(stand[1] / bvh.dt); f++) { pose(bvh, f, src); st.push(src.p[R.id.LeftFoot].y, src.p[R.id.RightFoot].y); } R.floor = median(st); }
+  const yaw = Math.atan2(fwd.x, fwd.z), n = Math.round((f1 - f0) * bvh.dt * hz), A = newOut(), first = newOut(), last = newOut(), q = [], h = [];
   retarget(bvh, R, pose(bvh, f0, src), yaw, org, first); retarget(bvh, R, pose(bvh, f1, src), yaw, org, last);
   for (let i = 0; i < n; i++) {
     const ph = i / n, w = Math.max(0, (ph - 0.75) / 0.25), e = w * w * (3 - 2 * w);       // the last quarter eases onto the first pose
@@ -321,7 +338,7 @@ function kick(name, bvh, { at, lead = 0.3, tail = 0.6 } = {}) {
 /* ---------- write ---------- */
 
 const clips = {};
-for (const [name, [file, kind, opt]] of Object.entries(CLIPS)) {
+for (const [name, [file, kind, opt]] of Object.entries(SET === 'cheer' ? CHEER : CLIPS)) {
   // (subjects 141 and 143 were captured at 60 Hz though their files say 120: checked against gravity in their runs' flight)
   const bvh = parseBVH(await readFile(`${dir}/${file}.bvh`, 'utf8'), /^14[13]_/.test(file) ? 60 : 0);
   try { clips[name] = kind === 'kick' ? kick(name, bvh, opt) : kind === 'once' ? once(name, bvh, opt) : kind === 'loop' ? loop(name, bvh, opt) : stride(name, bvh, opt?.want); } catch (e) { console.log(String(e.message)); }

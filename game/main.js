@@ -64,7 +64,7 @@ const celebration = createCelebration(scene, camera);
 const menus = createMenus(scene, camera, renderer);
 const squads = createSquads(scene);
 const hands = createHands(renderer, rig);
-const ceremony = createCeremony(scene, camera, hands);
+const ceremony = createCeremony(scene, camera, hands, { rig, stadium, renderer });
 const commentary = createCommentary(camera);
 commentary.setMode(settings.commentary);
 const replay = createReplay(scene, renderer);
@@ -211,7 +211,7 @@ function startCeremony() {
   ball.mesh.visible = ball.shadow.visible = arrow.visible = false;
   stadium.cheer(true);
   hands.setKit(game.team.kit);
-  ceremony.start(game.cup.kind, game.team);
+  ceremony.start(game.cup.kind, game.team, renderer.xr.isPresenting);
 }
 function endCeremony() {
   ceremony.stop(); stadium.cheer(false);
@@ -392,7 +392,7 @@ function updateHud() {
   const line = match.scenario ? `${game.team.id} ${match.us}-${match.them} ${game.opp.id}` : '';
   const clock = training.active ? 'DRILL' : clockText(match.clock);
   // the stadium's board, and the scoreboard bug (top left: on the headset's view, or the page's #bug)
-  hud.scoreboard(match.goals, clock, match.points, flashT > 0 ? 'GOAL!' : '', line, {
+  hud.scoreboard(match.goals, clock, match.points, mode === 'ceremony' ? 'CHAMPIONS' : flashT > 0 ? 'GOAL!' : '', line, {
     home: game.team, away: game.opp, us: match.scenario ? match.us : undefined, them: match.them, show: mode === 'play' && !training.active, vr: renderer.xr.isPresenting,
   });
 }
@@ -406,6 +406,6 @@ function placeOnHands() {
 
 
 // hooks for the smoke test and for poking at it from the console
-const hooks = { paused: false, get world() { return world; }, get models() { return models; }, get match() { return match; }, get mode() { return mode; }, celebration, celebrate: (hat = false, delay = 0.1) => { world.dead = true; world.owner = null; celebration.start(world, hat, delay); }, replay, desk, menus, game, intents, startMatch, startCeremony, training, stadium, settings, placeBoard: (y, z) => hud.placeScoreboard(y, z), loop, renderer, GOAL, camera };
+const hooks = { paused: false, get world() { return world; }, get models() { return models; }, get match() { return match; }, get mode() { return mode; }, celebration, celebrate: (hat = false, delay = 0.1) => { world.dead = true; world.owner = null; celebration.start(world, hat, delay); }, replay, desk, menus, game, intents, startMatch, startCeremony, training, stadium, settings, ceremony, rig, placeBoard: (y, z) => hud.placeScoreboard(y, z), loop, renderer, GOAL, camera };
 window.__sss = hooks;
 window.__sssOK = true;
