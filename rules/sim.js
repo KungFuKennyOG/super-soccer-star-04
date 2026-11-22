@@ -21,6 +21,7 @@ import { makeBall, stepBall, ballSpeed } from './ball.js';
 import { gradePass, choosePass } from './pass.js';
 import { shotVelocity, ballistic, chargeOf } from './shot.js';
 import { strides, carry } from './dribble.js';
+import { gatherCelebration, chooseCelebration, stepCelebration, carry as carried, mateTarget as cheerMate, oppTarget } from './celebrate.js';
 import { ballOnHead, canVolley, canBicycle, headerVelocity, volleyVelocity, bicycleVelocity, inBox, crossVelocity, flickVelocity } from './aerial.js';
 import { mateTarget, mateDecision, mateDribbleTarget, closest } from './ai.js';
 import { keeperTarget, keeperCheck, keeperClaim, shotPlan } from './keeper.js';
@@ -73,6 +74,7 @@ export function stepSim(w, it, dt, rnd = Math.random) {
   w.boostT = Math.max(0, w.boostT - dt);
   w.dragGrace = Math.max(0, w.dragGrace - dt);
 
+  if (w.celebrate) stepCelebration(w.celebrate, dt, w.you);
   moveYou(w, it, dt);
   if (w.wind && (w.dead || w.owner !== 'you')) w.wind = null;
   if (w.hold && ((w.hold.t += dt) >= w.hold.T || w.dead || w.owner !== 'you')) w.hold = null;
@@ -119,7 +121,9 @@ function moveYou(w, it, dt) {
   if (w.boostT > 0) top += MOVE.knockBoost;
   const m = it.move || { x: 0, z: 0 }, ml = Math.min(1, Math.hypot(m.x, m.z));
   const dir = norm(m.x, m.z);
-  if (w.dead) steer(p, 0, 0, MOVE.accel, dt);
+  const cv = w.dead && w.celebrate ? carried(w.celebrate) : null;      // a celebration carries you: a run, a knee slide (rules/celebrate.js)
+  if (cv || (w.dead && w.celebrate && w.celebrate.kind)) { p.vx = cv ? cv.x : 0; p.vz = cv ? cv.z : 0; }     // (and where it doesn't, you stand: a landing is a landing)
+  else if (w.dead) steer(p, 0, 0, MOVE.accel, dt);
   else if (w.dash && w.dash.t > 0) { p.vx = w.dash.x; p.vz = w.dash.z; w.dash.t -= dt; }   // a skill's burst
   else steer(p, dir.x * ml * top, dir.z * ml * top, MOVE.accel, dt);
   p.x += p.vx * dt + (it.physical ? it.physical.x : 0);
@@ -231,14 +235,14 @@ function aerial(w, it, rnd, ev) {
   return true;
 }
 
-// After a goal: your teammates run over and line up in front of you for the dance.
-export function startCelebration(w) {
-  const y = w.you;
-  w.celebrate = { x: y.x + y.fx * 2.6, z: y.z + y.fz * 2.6, rx: -y.fz, rz: y.fx };
-}
+// After a goal of yours: your teammates run over and the other side trudges back to its places; then the
+// celebration you pick (rules/celebrate.js) moves everyone. Only while the ball is dead.
+export function startCelebration(w, rnd = Math.random) { w.celebrate = gatherCelebration(w.you, rnd); }
+export function pickCelebration(w, kind) { return !!w.celebrate && chooseCelebration(w.celebrate, kind, w.you); }
+const HOME = Object.fromEntries(START.map(s => [s.id, s]));
 function celebrationSpot(w, p) {
-  const c = w.celebrate, side = p.lane || 1;
-  return { x: c.x + c.rx * 1.3 * side, z: c.z + c.rz * 1.3 * side, speed: 6.5 };
+  if (p.role === 'mate') return cheerMate(w.celebrate, w.you, p.lane || 1);
+  return oppTarget(w.celebrate, p, HOME[p.id], p.num);
 }
 
 /* ---------- the computer players ---------- */
@@ -262,7 +266,7 @@ function updateAI(w, dt, rnd, ev) {
     }
     p.stun = Math.max(0, p.stun - dt);
     let t = null;
-    if (w.dead && w.celebrate && p.role === 'mate') t = celebrationSpot(w, p);
+    if (w.dead && w.celebrate && p.role !== 'gk') t = celebrationSpot(w, p);
     else if (w.dead) t = { x: p.x, z: p.z, speed: 0 };
     else if (p.role === 'def') t = dtargets.get(p.id);
     else if (p.role === 'gk') t = keeperTarget(w, p);
@@ -277,10 +281,11 @@ function updateAI(w, dt, rnd, ev) {
     else speed = Math.min(speed, d * 4);
     // the keeper eases into position (no twitching) but snaps across when he dives
     const accel = p.role === 'gk' ? (p.dive ? 40 : 12) : 18;
-    steer(p, d > 1e-6 ? dx / d * speed : 0, d > 1e-6 ? dz / d * speed : 0, accel, dt);
+    if (t.exact && dt > 0) { p.vx = dx / dt; p.vz = dz / dt; }          // a landing: there to the centimetre
+    else steer(p, d > 1e-6 ? dx / d * speed : 0, d > 1e-6 ? dz / d * speed : 0, accel, dt);
     p.x += p.vx * dt; p.z += p.vz * dt;
     const s = Math.hypot(p.vx, p.vz);
-    if (w.celebrate && p.role === 'mate' && s < 0.6) { const f = norm(you.x - p.x, you.z - p.z); p.fx = f.x; p.fz = f.z; }
+    if (w.dead && w.celebrate && p.role === 'mate' && (s < 0.6 || t.exact)) { const f = t.face || norm(you.x - p.x, you.z - p.z); p.fx = f.x; p.fz = f.z; }
     else if (p.role === 'gk') { const f = norm(b.x - p.x, b.z - p.z); p.fx = f.x; p.fz = f.z; p.holding = w.owner === 'gk'; } // always square to the ball
     else if (s > 0.4) { p.fx = p.vx / s; p.fz = p.vz / s; }
     else if (p.role === 'gk' || p.role === 'def') { const f = norm(b.x - p.x, b.z - p.z); p.fx = f.x; p.fz = f.z; }
