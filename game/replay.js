@@ -226,7 +226,7 @@ export function createReplay(scene, renderer) {
       const c = world && buf && world.dead && world.celebrate && world.celebrate.kind ? world.celebrate : null;
       if (!c) { if (live) this.stop(); return; }
       const you = world.you;
-      if (!live) { live = true; fresh(); look.set(you.x, 0, you.z); side = you.x > 6 ? -1 : 1; tvYaw = null; label('Live'); tv.scale.setScalar(0.62); }
+      if (!live) { live = true; fresh(); look.set(you.x, 0, you.z); side = you.x > 6 ? -1 : 1; tvYaw = null; label('Live'); tv.scale.setScalar(0.5); }
       ball.update(world.ball, dt);
       for (const id of ids) {
         const m = ghosts[id], p0 = world.byId[id];
@@ -240,9 +240,9 @@ export function createReplay(scene, renderer) {
       cam.position.set(look.x + side * 9.5, 2.4, look.z + 6.5);
       cam.lookAt(look.x, 1.0, look.z);
       camera.getWorldPosition(headPos); camera.getWorldDirection(headDir);
-      const yaw = Math.atan2(headDir.x, headDir.z) + 0.66;
+      const yaw = Math.atan2(headDir.x, headDir.z) + 0.95;
       tvYaw = tvYaw === null ? yaw : tvYaw + Math.atan2(Math.sin(yaw - tvYaw), Math.cos(yaw - tvYaw)) * Math.min(1, dt * 3);
-      tv.position.set(headPos.x + Math.sin(tvYaw) * 2.1, headPos.y - 0.2, headPos.z + Math.cos(tvYaw) * 2.1);
+      tv.position.set(headPos.x + Math.sin(tvYaw) * 2.1, headPos.y - 0.35, headPos.z + Math.cos(tvYaw) * 2.1);
       tv.lookAt(headPos.x, headPos.y - 0.2, headPos.z);
       tv.visible = jumbo.visible = true; tag.m.visible = true;
     },

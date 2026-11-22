@@ -245,7 +245,7 @@ function pile(m, bn, ch, p, t) {
     const w = arrived(m, p, near && c.t > 0.5, 2.5, 5) * (1 - smooth((u - 0.9) / 0.1)), late = 0.18;
     blend(bn, w, () => {
       kneel(bn, -0.2, 0.1, 0.15);
-      bn.neck.rotation.set(-0.15, 0, 0.2);
+      bn.spine.rotation.z = 0.16; bn.chest.rotation.z = 0.12; bn.neck.rotation.set(-0.15, 0, 0.1);      // his head goes past your left shoulder, not at your face
       for (const n of ['L', 'R']) { const sd = n === 'L' ? 1 : -1; reachArm(bn, n, v2.set(yx + sd * 0.22, 1.02 - 0.1 * sd, yz + 0.1), pole.set(sd, -0.6, -0.3)); }
       if (u > late) rise(bn, clamp((u - late) / (1 - late), 0, 1));
     });

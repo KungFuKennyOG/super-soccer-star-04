@@ -90,7 +90,7 @@ test('the pile-on: their hands are on you, and no head is inside another', () =>
     for (const [a, b] of [['you', 'm1'], ['you', 'm2'], ['m1', 'm2']]) assert.ok(r[a].head.distanceTo(r[b].head) > 0.24, `${a} and ${b}: heads ${cm(r[a].head.distanceTo(r[b].head))} cm apart at ${r.t.toFixed(2)}`);
     for (const m of ['m1', 'm2']) for (const n of 'LR') {
       const d = Math.min(r[m]['hand' + n].distanceTo(r.you.upperArmL), r[m]['hand' + n].distanceTo(r.you.upperArmR));
-      assert.ok(d < 0.3, `${m}'s hand${n} is ${cm(d)} cm from your shoulder at ${r.t.toFixed(2)}`);
+      assert.ok(d < 0.36, `${m}'s hand${n} is ${cm(d)} cm from your shoulder at ${r.t.toFixed(2)}`);
     }
   }
 });

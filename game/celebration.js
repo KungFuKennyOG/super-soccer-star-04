@@ -76,6 +76,7 @@ export function createCelebration(scene, camera) {
       if (!world.celebrate || !world.dead) { if (this.active) stop(); return null; }
       const skip = raw.nav.back || raw.drag;
       if (wait > 0) {
+        if (skip) { stop(); return { kind: null, by: 'skip', hat, bonus: 0, skipped: true }; }
         wait -= dt;
         if (wait <= 0) { pk = createPick(last + 1); drawn = ''; }
         return null;
