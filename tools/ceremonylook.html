@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Trophy presentation: look test</title>
+<!-- Dev page: the stage, the squad with their medals and the photographers on a plain pitch, without the stadium
+     (quick to render). Driven by tools/ceremonyshots.mjs with LOOK=1; ?team=ITA&kind=world&time=day|night. -->
+<style>html,body{margin:0;background:#101830;overflow:hidden}canvas{display:block}</style>
+<script type="importmap">
+{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.149.0/build/three.module.js" } }
+</script>
+</head>
+<body>
+<script type="module">
+import * as THREE from 'three';
+import { byId } from '../rules/teams.js';
+import { LIGHT_DIR } from '../game/ps2/player.js';
+import { buildStage, STAGE } from '../game/ps2/stage.js';
+import { createCast } from '../game/ceremonycast.js';
+import { createPress } from '../game/presscast.js';
+
+const q = new URLSearchParams(location.search), W = +(q.get('w') || innerWidth), H = +(q.get('h') || innerHeight), night = q.get('time') === 'night';
+const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+renderer.setPixelRatio(1); renderer.setSize(W, H);
+document.body.appendChild(renderer.domElement);
+const scene = new THREE.Scene(); scene.background = new THREE.Color(night ? '#0d1328' : '#b9c8d4');
+scene.add(night ? new THREE.HemisphereLight('#c8d4ff', '#20281c', 0.5) : new THREE.HemisphereLight('#dfe6f0', '#38372c', 0.62));
+const sun = new THREE.DirectionalLight(night ? '#f4f6ff' : '#fff0d6', night ? 0.74 : 0.68); sun.position.copy(LIGHT_DIR).multiplyScalar(50); scene.add(sun);
+const lamp = new THREE.DirectionalLight('#fff4e0', night ? 0.5 : 0.22); lamp.position.set(0.25, 0.9, -1); scene.add(lamp);
+const grass = new THREE.Mesh(new THREE.PlaneGeometry(80, 80), new THREE.MeshLambertMaterial({ color: '#3f8a3a' })); grass.rotation.x = -Math.PI / 2; scene.add(grass);
+const G = new THREE.Group(); scene.add(G);
+const team = byId(q.get('team') || 'ITA'), kind = q.get('kind') || 'world';
+G.add(buildStage(kind).mesh);
+const cast = createCast(G, team, 3), press = createPress(G);
+const cam = new THREE.PerspectiveCamera(40, W / H, 0.05, 300), cup = new THREE.Vector3(0, STAGE.h + 1.25, -0.6);
+let t = 0;
+window.__look = {
+  ready: true, cast, press,
+  // s: { held, up }: what you are doing with the cup
+  step(secs, s = {}) {
+    for (let n = Math.round(secs * 60); n > 0; n--) {
+      t += 1 / 60; cup.y += ((s.up ? STAGE.h + 2.25 : s.held ? STAGE.h + 1.4 : STAGE.h + 1.25) - cup.y) * 0.08;
+      G.updateMatrixWorld(true); cast.update(1 / 60, t, { cup, held: !!s.held, up: !!s.up }); press.update(1 / 60, t, cup);
+    }
+  },
+  snap([e, at, fov]) { cam.fov = fov; cam.updateProjectionMatrix(); cam.position.set(...e); cam.lookAt(...at); renderer.render(scene, cam); return renderer.domElement.toDataURL('image/png'); },
+  info: () => ({ calls: renderer.info.render.calls, tris: renderer.info.render.triangles, press: { tris: press.tris, calls: press.calls } }),
+};
+</script>
+</body>
+</html>

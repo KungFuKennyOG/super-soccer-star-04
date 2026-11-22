@@ -19,6 +19,7 @@ import { reachArm, ankleOf, footOf, reachLeg, aimFoot } from './legik.js';
 import { keeperKit } from '../rules/teams.js';
 import { pickSquad } from '../rules/looks.js';
 import { STAGE } from './ps2/stage.js';
+import { wearMedal } from './ps2/medal.js';
 
 const smooth = x => { const k = Math.min(1, Math.max(0, x)); return k * k * (3 - 2 * k); };
 const TOP = STAGE.h, UP = STAGE.h + STAGE.riser;
@@ -64,25 +65,6 @@ function shadowOn(y) {
   return (shadows[y] = m);
 }
 
-// A medal: a ribbon round the neck to a disc on the breastbone, in the chest bone's own frame. One instanced
-// draw for the whole squad.
-function medalGeometry(ribbon) {
-  const P = [], C = [], I = [], rc = new THREE.Color(ribbon), gold = new THREE.Color('#e6b93c'), dark = new THREE.Color('#a87a1c');
-  const v = (x, y, z, c) => { P.push(x, y, z); C.push(c.r, c.g, c.b); return P.length / 3 - 1; };
-  const band = (a, b, w) => {            // a strip from a to b, w wide, facing forward
-    const i0 = v(a[0] - w, a[1], a[2], rc), i1 = v(a[0] + w, a[1], a[2], rc), i2 = v(b[0] + w, b[1], b[2], rc), i3 = v(b[0] - w, b[1], b[2], rc);
-    I.push(i0, i1, i2, i0, i2, i3, i0, i2, i1, i0, i3, i2);
-  };
-  const neck = 0.2, mid = 0.1, low = 0.0;
-  for (const s of [-1, 1]) { band([s * 0.088, neck, 0.075], [s * 0.052, mid, 0.148], 0.016); band([s * 0.052, mid, 0.148], [0, low, 0.166], 0.016); }
-  const c0 = v(0, low - 0.036, 0.174, gold), n = 10;
-  for (let i = 0; i < n; i++) { const a = i / n * Math.PI * 2; v(Math.sin(a) * 0.036, low - 0.036 + Math.cos(a) * 0.036, 0.17, i % 2 ? gold : dark); }
-  for (let i = 0; i < n; i++) I.push(c0, c0 + 1 + (i + 1) % n, c0 + 1 + i);
-  const g = new THREE.BufferGeometry();
-  g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); g.setAttribute('color', new THREE.Float32BufferAttribute(C, 3)); g.setIndex(I); g.computeVertexNormals();
-  return g;
-}
-
 const PA = newPose(), PB = newPose(), PC = newPose(), PD = newPose();
 // The whole pose of an act at his time t → out: the legs' take, with the trunk and arms of another over it.
 function actPose(act, t, mirror, out) {
@@ -95,7 +77,7 @@ function actPose(act, t, mirror, out) {
 }
 const UPPER = BONES.map(n => PART.upper.has(n));
 
-const v1 = new THREE.Vector3(), v2 = new THREE.Vector3(), pole = new THREE.Vector3(), qa = new THREE.Quaternion(), qb = new THREE.Quaternion(), qc = new THREE.Quaternion(), m4 = new THREE.Matrix4(), inv = new THREE.Matrix4();
+const v1 = new THREE.Vector3(), v2 = new THREE.Vector3(), pole = new THREE.Vector3(), qa = new THREE.Quaternion(), qb = new THREE.Quaternion(), qc = new THREE.Quaternion();
 // A fist pumped over his head (built): from beside the ear to nearly straight up, about twice a second.
 function pumpFist(bn, n, t, w, hipY) {
   const sd = n === 'L' ? 1 : -1, k = 0.5 - 0.5 * Math.cos(t * 12.5), ua = bn['upperArm' + n], fa = bn['foreArm' + n];
@@ -157,8 +139,7 @@ export function createCast(group, team, seed = 1) {
     return { ...c, m, y, face, t: i * 1.37 + (seed % 7) * 0.31, act: 0, from: 0, k: 1, off: 0, mode: 'stand', p: { x: c.x, z: c.z, vx: 0, vz: 0, fx: Math.sin(face), fz: Math.cos(face), role: 'mate' }, snap: null, snapK: 0, head: [0, 0] };
   });
   cast[6].t = cast[5].t; cast[6].mirror = true;                                                    // the two with an arm round each other move as one
-  const medals = new THREE.InstancedMesh(medalGeometry(team.kit.alt && team.kit.alt !== team.kit.shirt ? team.kit.alt : '#f2f1ea'), new THREE.MeshPhongMaterial({ vertexColors: true, shininess: 40, specular: 0x554422 }), cast.length);
-  medals.frustumCulled = false; group.add(medals);
+  for (const c of cast) c.medal = wearMedal(c.m, c.gk ? gkKit : team.kit);               // (game/ps2/medal.js: on the shirt, the disc swinging)
   let upT = -1, level = 0;
 
   // his pose from his acts (the one he is leaving and the one he is in, mixed), then head, fists
@@ -210,13 +191,10 @@ export function createCast(group, team, seed = 1) {
         if (c.go) walk(c, dt, t, s); else { const bn = cheer(c, dt, s); look(c, bn, s, dt); }
       }
       for (const c of cast) if (c.link !== undefined) { const a = ACTS[c.acts[c.act]]; if (a.link) link(c, cast[c.link]); }
-      inv.copy(group.matrixWorld).invert();
-      cast.forEach((c, i) => { c.m.root.updateMatrixWorld(true); medals.setMatrixAt(i, m4.multiplyMatrices(inv, c.m.bone.chest.matrixWorld)); c.m.shadow.position.set(c.m.root.position.x, c.y + 0.008, c.m.root.position.z); });
-      medals.instanceMatrix.needsUpdate = true;
+      for (const c of cast) { c.m.root.updateMatrixWorld(true); c.medal.update(dt); c.m.shadow.position.set(c.m.root.position.x, c.y + 0.008, c.m.root.position.z); }
     },
     dispose() {
-      for (const c of cast) { group.remove(c.m.root, c.m.shadow); c.m.shadow.material.dispose(); }
-      group.remove(medals); medals.geometry.dispose(); medals.material.dispose();
+      for (const c of cast) { c.medal.dispose(); group.remove(c.m.root, c.m.shadow); c.m.shadow.material.dispose(); }
     },
   };
 
