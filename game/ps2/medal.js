@@ -84,6 +84,12 @@ function medalGeometry(geo, bones) {
   const l0 = vert(pivot.clone().addScaledVector(ax, -0.009), nz, 0.52, 0.02, point.skin, 1), l1 = vert(pivot.clone().addScaledVector(ax, 0.009), nz, 0.52, 0.02, point.skin, 1);
   const l2 = vert(at(0.011, 0, T).addScaledVector(up, DISC - 0.004), nz, 0.52, 0.02, point.skin, 1), l3 = vert(at(-0.011, 0, T).addScaledVector(up, DISC - 0.004), nz, 0.52, 0.02, point.skin, 1);
   I.push(l0, l3, l2, l0, l2, l1);
+  // every triangle wound to face the way its corners' normals say (both sides are drawn; the back is lit as a back)
+  const va = new THREE.Vector3(), vb = new THREE.Vector3(), vc = new THREE.Vector3();
+  for (let k = 0; k < I.length; k += 3) {
+    va.fromArray(P, I[k] * 3); vb.fromArray(P, I[k + 1] * 3).sub(va); vc.fromArray(P, I[k + 2] * 3).sub(va); vb.cross(vc);
+    if (vb.x * (N[I[k] * 3] + N[I[k + 1] * 3] + N[I[k + 2] * 3]) + vb.y * (N[I[k] * 3 + 1] + N[I[k + 1] * 3 + 1] + N[I[k + 2] * 3 + 1]) + vb.z * (N[I[k] * 3 + 2] + N[I[k + 1] * 3 + 2] + N[I[k + 2] * 3 + 2]) < 0) { const sw = I[k + 1]; I[k + 1] = I[k + 2]; I[k + 2] = sw; }
+  }
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); g.setAttribute('normal', new THREE.Float32BufferAttribute(N, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(U, 2));
   g.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(SI, 4)); g.setAttribute('skinWeight', new THREE.Float32BufferAttribute(SW, 4)); g.setAttribute('aSwing', new THREE.Float32BufferAttribute(SG, 1));
