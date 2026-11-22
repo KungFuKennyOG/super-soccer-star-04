@@ -241,7 +241,7 @@ export function startCelebration(w, rnd = Math.random) { w.celebrate = gatherCel
 export function pickCelebration(w, kind) { return !!w.celebrate && chooseCelebration(w.celebrate, kind, w.you); }
 const HOME = Object.fromEntries(START.map(s => [s.id, s]));
 function celebrationSpot(w, p) {
-  if (p.role === 'mate') return cheerMate(w.celebrate, w.you, p.lane || 1);
+  if (p.role === 'mate') return cheerMate(w.celebrate, w.you, p.lane || 1, p);
   return oppTarget(w.celebrate, p, HOME[p.id], p.num);
 }
 

@@ -88,7 +88,7 @@ export const PILE = { down: 0.35, mate: 0.5, up: 0.9 };
 // A celebration under way. Before one is picked (kind null) teammates come over and the other side trudges off.
 // (dx, dz): the way it travels, your facing when you picked. seed: who does what among the others.
 export function gatherCelebration(you, rnd = Math.random) {
-  return { kind: null, t: 0, T: 0, dx: you.fx, dz: you.fz, a: Math.atan2(you.fx, you.fz), bank: 0, plan: null, seed: rnd(), age: 0 };
+  return { kind: null, t: 0, T: 0, dx: you.fx, dz: you.fz, a: Math.atan2(you.fx, you.fz), bank: 0, plan: null, from: null, seed: rnd(), age: 0 };
 }
 export function chooseCelebration(c, kind, you) {
   const def = byKind(kind);
@@ -137,9 +137,9 @@ export function carry(c) {
   return null;
 }
 
-// Where a teammate goes. side: -1 the one on your left, +1 on your right (his lane). Returns { x, z, speed, face
+// Where a teammate goes. side: -1 the one on your left, +1 on your right (his lane); p: him. Returns { x, z, speed, face
 // (unit { x, z } to stand facing, or null: face you), exact (be there to the centimetre: a landing) }.
-export function mateTarget(c, you, side) {
+export function mateTarget(c, you, side, p = null) {
   const rx = -c.dz, rz = c.dx, at = (f, r) => ({ x: you.x + c.dx * f + rx * r * side, z: you.z + c.dz * f + rz * r * side, speed: 6.6, face: null, exact: false });
   const same = { x: c.dx, z: c.dz };
   if (!c.kind) return { ...at(2.4, 2.0), speed: 7.4 };                                   // coming over: either side of the way ahead, leaving it clear
@@ -155,13 +155,12 @@ export function mateTarget(c, you, side) {
     return c.t < PILE.mate ? at(-2.5, 0.6) : { ...at(-0.56, 0.16), speed: 6.8, face: same };     // then the other, over your back
   }
   if (c.kind === 'flip') {
-    const o = at(1.7, 2.1);
-    if (side > 0 && c.t >= FLIP.mateAt) {                              // he follows you over: back from where he stood, facing you
-      const fx = you.x - o.x, fz = you.z - o.z, d = Math.hypot(fx, fz) || 1, k = flipShift(c.t - FLIP.mateAt);
-      o.x += (-fx / d * FLIP.back + fz / d * FLIP.left) * k; o.z += (-fz / d * FLIP.back - fx / d * FLIP.left) * k;
-      o.exact = c.t - FLIP.mateAt > FLIP.air[0] - 0.05; o.face = { x: fx / d, z: fz / d };
+    if (side > 0 && c.t >= FLIP.mateAt && p) {                         // he follows you over: back from where he stands, the way he faces
+      if (!c.from) { const d = Math.hypot(p.fx, p.fz) || 1; c.from = { x: p.x, z: p.z, fx: p.fx / d, fz: p.fz / d }; }
+      const { x, z, fx, fz } = c.from, k = flipShift(c.t - FLIP.mateAt);
+      return { x: x + (-fx * FLIP.back + fz * FLIP.left) * k, z: z + (-fz * FLIP.back - fx * FLIP.left) * k, speed: 0, exact: true, face: { x: fx, z: fz } };
     }
-    return o;
+    return at(1.7, 2.1);
   }
   return at(1, 1.5);
 }

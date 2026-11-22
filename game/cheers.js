@@ -24,16 +24,16 @@ const JOY = CLIPS.joy, BACK = CLIPS.flip, SAD = [CLIPS.sad, CLIPS.sadB], P1 = ne
 const STAND = 0.93, ANKLE = 0.085, HIPX = 0.09;
 
 // fn poses the bones outright; `w` of that is laid over the pose they had.
-const names = new WeakMap(), saved = new Float32Array(32 * 4);
+const names = new WeakMap(), saved = new Float32Array(32 * 4), HB = new THREE.Vector3();
 function blend(bn, w, fn) {
   if (w <= 0.001) return;
   if (w >= 0.999) { fn(); return; }
   let ns = names.get(bn);
   if (!ns) names.set(bn, ns = Object.keys(bn).filter(n => n !== 'root'));
-  ns.forEach((n, i) => bn[n].quaternion.toArray(saved, i * 4)); H0.copy(bn.hips.position);
+  ns.forEach((n, i) => bn[n].quaternion.toArray(saved, i * 4)); HB.copy(bn.hips.position);
   fn();
   ns.forEach((n, i) => { q.copy(bn[n].quaternion); bn[n].quaternion.fromArray(saved, i * 4).slerp(q, w); });
-  bn.hips.position.lerpVectors(H0, v.copy(bn.hips.position), w);
+  bn.hips.position.lerpVectors(HB, v.copy(bn.hips.position), w);
 }
 // an arm by its angles: x swings it forward (-) or back, z lifts it out to the side (1.57 level, 3 overhead), f folds the elbow
 function arm(bn, n, x, z, f, tw = 0) {
@@ -85,6 +85,18 @@ function rise(bn, u) {
   v.set(HIPX + 0.02, ANKLE, -0.07).sub(aL).multiplyScalar(b).add(aL); v.y += 0.1 * Math.sin(Math.PI * b);
   reachLeg(bn, 'L', v); aimFoot(bn, 'L', q.copy(fL).slerp(FLAT, smooth(b * 1.3)));
   bn.spine.quaternion.slerp(FLAT, b); bn.chest.quaternion.slerp(FLAT, b);
+}
+// Half way into or out of kneeling nothing may be under the grass: the hips are lifted by whatever a knee, an ankle
+// or the ball of a foot is short.
+function unsink(bn) {
+  let low = 9;
+  for (const n of ['L', 'R']) {
+    q.copy(bn.hips.quaternion); v.copy(bn['upperLeg' + n].position).applyQuaternion(q).add(bn.hips.position);
+    q.multiply(bn['upperLeg' + n].quaternion); v.add(v2.copy(bn['lowerLeg' + n].position).applyQuaternion(q)); low = Math.min(low, v.y - 0.05);
+    q.multiply(bn['lowerLeg' + n].quaternion); v.add(v2.copy(bn['foot' + n].position).applyQuaternion(q)); low = Math.min(low, v.y - 0.045);
+    q.multiply(bn['foot' + n].quaternion); v.add(v2.copy(bn['toe' + n].position).applyQuaternion(q)); low = Math.min(low, v.y - 0.02);
+  }
+  if (low < 0) bn.hips.position.y -= low;
 }
 // how far down a kneeling celebration has him (0..1) and how far up again (0..1)
 const downUp = (c, at, len, up) => [smooth((c.t - at) / len), clamp((c.t - (c.T - up - 0.12)) / up, 0, 1)];
@@ -148,13 +160,14 @@ function slide(m, bn, ch, p, t) {
     for (const n of ['L', 'R']) arm(bn, n, 0.35 * going - 0.3 * up, 1.25 + 1.2 * up + shake, 0.15 + 0.7 * up);
     if (u - late > 0) rise(bn, clamp((u - late) / (1 - late), 0, 1));
   });
+  unsink(bn);
 }
 // arms out like wings, level, the whole of him banking with the turn
 function wings(bn, w, bank, level = 1) {
   if (w <= 0) return;
   for (const n of ['L', 'R']) {
     const sd = n === 'L' ? 1 : -1, ua = bn['upperArm' + n], fa = bn['foreArm' + n];
-    ua.quaternion.slerp(q.setFromEuler(eul.set(0.12, 0, sd * (1.5 * level + 0.9 * (1 - level)))), w); fa.quaternion.slerp(q.setFromEuler(eul.set(-0.08, 0, 0)), w);
+    ua.quaternion.slerp(q.setFromEuler(eul.set(0.12, 0, sd * (1.38 * level + 0.9 * (1 - level)))), w); fa.quaternion.slerp(q.setFromEuler(eul.set(-0.08, 0, 0)), w);
     bn['hand' + n].quaternion.slerp(FLAT, w); bn['clavicle' + n].rotation.z += sd * 0.08 * w;
   }
   bn.spine.rotation.z += bank * 0.45 * w; bn.chest.rotation.z += bank * 0.55 * w; bn.neck.rotation.z -= bank * 0.6 * w;
@@ -197,8 +210,8 @@ function ears(m, bn, ch, p, t) {
       skull(bn, v); q2.copy(q).multiply(bn.head.quaternion);                    // (q: the neck's frame, left by skull)
       for (const n of ['L', 'R']) {
         const sd = n === 'L' ? 1 : -1;
-        v2.set(sd * 0.135, 0.1, -0.035).applyQuaternion(q2).add(v);
-        reachArm(bn, n, v2, pole.set(sd, -0.45, 0.25));
+        v2.set(sd * 0.165, 0.075, 0.03).applyQuaternion(q2).add(v);
+        reachArm(bn, n, v2, pole.set(sd, -0.75, 0.05));
         aimHand(bn, n, q.setFromEuler(eul.set(0, sd * 0.5, Math.PI)).premultiply(q2));       // fingers up, the palm forward
       }
     });
@@ -223,6 +236,7 @@ function pile(m, bn, ch, p, t) {
       bn.neck.rotation.set(-0.15 * open, 0, 0);
       if (u > 0) rise(bn, u);
     });
+    unsink(bn);
     return;
   }
   local(m, ch.you.x, ch.you.z, v); const yx = v.x, yz = v.z, near = Math.hypot(yx, yz) < 1.15;
@@ -235,6 +249,7 @@ function pile(m, bn, ch, p, t) {
       for (const n of ['L', 'R']) { const sd = n === 'L' ? 1 : -1; reachArm(bn, n, v2.set(yx + sd * 0.22, 1.02 - 0.1 * sd, yz + 0.1), pole.set(sd, -0.6, -0.3)); }
       if (u > late) rise(bn, clamp((u - late) / (1 - late), 0, 1));
     });
+    unsink(bn);
     return;
   }
   // over your back: bent over you, a hand on each of your shoulders, bouncing
