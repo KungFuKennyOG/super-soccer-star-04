@@ -9,7 +9,8 @@ import { uiPlane, PAL, text, box, maroon, glyph, measure } from './ps2/ui.js';
 import { sfx } from './audio.js';
 import { buildHand } from './ps2/hands.js';
 import { buildTrophy2, buildPlinth2 } from './ps2/trophies.js';
-import { buildStage, STAGE, LENSES, CUP_NAME } from './ps2/stage.js';
+import { buildStage, STAGE, CUP_NAME } from './ps2/stage.js';
+import { createPress } from './presscast.js';
 import { buildConfetti, buildJets, buildFlashes } from './ps2/confetti.js';
 import { createCast } from './ceremonycast.js';
 import { playMusic } from './music.js';
@@ -55,7 +56,7 @@ export function createCeremony(scene, camera, hands, o = {}) {
 
   const jets = buildJets(); stageG.add(jets.mesh);
   const stages = {};
-  let stage = null, cast = null, confetti = null, flashes = null, key = null, hemi = null;
+  let stage = null, cast = null, press = null, confetti = null, flashes = null, key = null, hemi = null;
   let trophy = null, state = null, lifted = false, liftT = 0, upNow = false, roarT = 0, vrMode = false;
   const head = new THREE.Vector3(), dir = new THREE.Vector3(), hand = new THREE.Vector3(), tw = new THREE.Vector3(), cupS = new THREE.Vector3(), sun = new THREE.Vector3(), cKey = new THREE.Color(), cAmb = new THREE.Color();
   const rest = new THREE.Vector3(0, 1.02, NEAR);
@@ -78,12 +79,13 @@ export function createCeremony(scene, camera, hands, o = {}) {
   }
   // camera flashes: the photographers' lenses, and a few hundred seats round the ground
   function flashPoints() {
-    const pts = LENSES.map(p => [...p]), fans = stadium && stadium.ground && stadium.ground.meshes.fans, seat = fans && fans.geometry.attributes.aSeat;
+    const pts = press.lenses(), fans = stadium && stadium.ground && stadium.ground.meshes.fans, seat = fans && fans.geometry.attributes.aSeat;
     if (seat) for (let i = 0, n = 420, step = Math.max(1, Math.floor(seat.count / n)); i < seat.count; i += step) pts.push([seat.getX(i) - STAGE_AT.x, seat.getY(i) + 1.1, seat.getZ(i) - STAGE_AT.z]);
     return pts;
   }
   function clear() {
     if (cast) { cast.dispose(); cast = null; }
+    if (press) { press.dispose(); press = null; }
     if (confetti) { stageG.remove(confetti.mesh); confetti.mesh.geometry.dispose(); confetti.mesh.material.dispose(); confetti = null; }
     if (flashes) { stageG.remove(flashes.mesh); flashes.mesh.geometry.dispose(); flashes.mesh.material.dispose(); flashes = null; }
     if (stage) stageG.remove(stage.mesh);
@@ -96,7 +98,7 @@ export function createCeremony(scene, camera, hands, o = {}) {
     get cast() { return cast; },
     get stageGroup() { return stageG; },
     // what it adds to the frame, for the notes: { tris, calls }
-    get cost() { return { stage: stage && stage.tris, cast: cast && cast.tris, confetti: confetti && confetti.tris, jets: jets.tris }; },
+    get cost() { return { stage: stage && stage.tris, cast: cast && cast.tris, press: press && press.tris, confetti: confetti && confetti.tris, jets: jets.tris }; },
     // kind: 'world' | 'club'; team: your team (for the squad's kit and the confetti colors); vr: in the headset
     start(kind, team, vr = false) {
       vrMode = vr;
@@ -112,7 +114,8 @@ export function createCeremony(scene, camera, hands, o = {}) {
       cast = createCast(stageG, team, kind === 'world' ? 3 : 5);
       const k = team.kit;
       confetti = buildConfetti([k.shirt, k.shirt, k.alt || k.shorts, k.shorts, '#f2f1ea', '#e8c04a']); stageG.add(confetti.mesh);
-      flashes = buildFlashes(flashPoints(), LENSES.length); stageG.add(flashes.mesh);
+      press = createPress(stageG); stageG.updateMatrixWorld(true); press.update(0, 0, cupS.set(0, STAGE.h + 1.2, -NEAR));
+      flashes = buildFlashes(flashPoints(), press.men.length); stageG.add(flashes.mesh);
       key = scene.children.find(c => c.isDirectionalLight); hemi = scene.children.find(c => c.isHemisphereLight);
       lamp.intensity = stadium && stadium.ground && stadium.ground.recipe.time === 'day' ? 0.22 : 0.5; lamp.visible = true;
       card.position.set(0, rest.y + trophy.userData.height + 0.1, NEAR);
@@ -209,6 +212,7 @@ export function createCeremony(scene, camera, hands, o = {}) {
       stageG.updateMatrixWorld(true);
       cupS.copy(tw); stageG.worldToLocal(cupS);
       cast.update(dt, t, { cup: cupS, held: have, up: lifted && (upNow || liftT < 2.5) });
+      press.update(dt, t, cupS);
       if (key) { sun.copy(key.position).normalize(); cKey.copy(key.color).multiplyScalar(key.intensity); }
       if (hemi) cAmb.copy(hemi.color).multiplyScalar(hemi.intensity * 0.75);
       confetti.update(t, sun, cKey, cAmb); jets.update(t);

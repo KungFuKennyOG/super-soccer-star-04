@@ -7,9 +7,8 @@ stage like in real life)". The plinth-on-the-grass ceremony is replaced by a sta
 
 - `game/ps2/stage.js`: the stage. A carpeted platform 9 x 3.7 m, 0.5 m high, a riser 0.4 m higher behind it, a
   backdrop board 4.3 m tall with angled wings (step-and-repeat of the game's own mark and name, `WORLD CUP '04` /
-  `CHAMPIONS CUP '04` and `CHAMPIONS` across it), a fascia along the front, a carpet apron, a line of boards, 15
-  photographers as flat cards (front toward you, a back view toward the stands), two confetti cannons, four pyro
-  units. One mesh, one 1024 sheet painted in code, 236 triangles, 1 draw. Red and gold for the World Cup, navy
+  `CHAMPIONS CUP '04` and `CHAMPIONS` across it), a fascia along the front, a carpet apron, a line of boards, two confetti cannons, four pyro units (the photographers were flat cards here at first: see the
+  second pass below). One mesh, one 1024 sheet painted in code, 1 draw. Red and gold for the World Cup, navy
   and silver for the Champions Cup.
 - `game/ceremonycast.js`: the squad. Eight players in your kit (no. 1 in the keeper's), medals on (ribbon and
   disc, one instanced draw for all eight), four on the platform and four on the riser. Waiting: clapping,
@@ -96,3 +95,69 @@ stage like in real life)". The plinth-on-the-grass ceremony is replaced by a sta
 - The whole VR grab path: it is the old code moved into the new frame, exercised only through the browser keys.
 - The prompt's size and place over the cup, confetti and jets in stereo, flashes (point sprites) in stereo.
 - Sound levels of the fanfare and cannon.
+
+## Second pass (branch `ceremony2`): medals and photographers
+
+Kenny: "the medals are weird on the players and the photographers should be real models imo".
+
+### Medals (`game/ps2/medal.js`)
+
+What was wrong with the first ones (`docs/ceremony-shots/medal-before.png`): a stiff white V stuck to the chest
+bone, standing a centimetre or two off the shirt, starting half way down the chest with nothing round the neck,
+its two strips tapering like blades, a flat ten-sided coin fixed at its point; it turned as one piece with the
+chest, and hands went through it.
+
+Now: a ribbon 3.6 cm wide round the back of the neck, over the shoulders beside the collar and down the chest in a
+V to the breastbone, with a gold disc 6.6 cm across (rim, raised star, a loop at the top) hanging from the point.
+- The ribbon is laid on the player's own body: each of its points is dropped onto the nearest triangle of the
+  shirt in the bind pose, lifted 4.5 to 9 mm, and given that triangle's skin weights. So it goes exactly where the
+  collar, shoulders and chest go. Colours: whichever of white, the kit's second colour and its shorts stands out
+  most on the shirt, with the shirt's colour as one stripe down the middle.
+- The disc is skinned to the same spot and turned about the ribbon's point in the vertex shader by a small pendulum
+  (per player, driven by how the chest is accelerating): side to side up to 40 degrees, and lifted off the chest up
+  to 45 degrees when he drops away under it. It can only lift outward, never into him.
+- One small skinned mesh per player on his skeleton (146 triangles, 1 draw each; the first version was one
+  instanced draw for all eight).
+- Looked at (`medal-after-front-side-back.png`, `medal-after-film.png`: every sixth frame through the jump): on
+  the shirt from the front and side, round the neck from behind, the disc swinging and never inside the body, no
+  clipping with arms raised. Not solved: a man clapping or with his hands together at his chest has his hands and
+  wrists in front of the medal and now and then touching the ribbon (the take puts his hands there).
+- Built, not captured. The pendulum is a guess at how a 50 g disc on a ribbon moves, tuned by eye.
+
+### Photographers (`game/ps2/press.js`, `game/presscast.js`)
+
+The 15 flat cards are gone from the stage's mesh. Seven people now, on the carpet between the platform and the
+boards, 2.5 to 3 m in front of you: three down on one knee, four standing in the gaps behind them, two of those
+holding the camera up over their heads.
+- The '04 body with its kit sheet painted as working clothes: one dark cloth for jacket, trousers and shoes (the
+  sheet's "skin" is that cloth too, so arms are sleeves and knees are trouser legs), and a hi-vis tabard in one of
+  four invented colours with PHOTO and a number on the back, a small PHOTO and the number on the chest. Their own
+  faces and hair. Three wear a cap.
+- A modelled camera each (body, grip, prism, a long pale lens with a dark hood, a flash on top), all seven in one
+  instanced draw; the caps in another; their soft shadows in one.
+- Poses are built with IK from how the job is done (no photographer in the mocap library): on one knee with the
+  other foot flat in front, back upright, elbows down and in, right hand on the grip, left under the lens, the
+  camera at the eye; standing with feet apart and one ahead; overhead with both arms up and the camera tipped
+  down. They turn and tilt to keep the cup in frame (so they all follow it up when you lift it) and shift a little.
+  The flashes come from their flash units.
+- Honest: the hands are in the cloth's colour (they read as gloves); the legs are the football body's, so shorts
+  hems and sock tops show in the cloth as seams; fingers don't wrap the grip or the lens (the hand just follows
+  the forearm to it); they never lower the camera, change place or stand up; no flat projected shadow, only a
+  soft blob each.
+
+### Numbers (headless Chrome, no fps)
+
+- The whole ceremony frame is now 63 to 77 draw calls and about 200,000 to 213,000 triangles (it was 53 to 55 and
+  163,000 to 166,000).
+- Photographers: 17 draws (7 x kit + head, cameras, caps, shadows), about 46,100 triangles.
+- Medals: 8 draws, 1,168 triangles (was 1 draw).
+- The stage's mesh is down to 176 triangles.
+
+### Not checked
+
+- fps on the Quest with fifteen skinned people in view at once. If it is short, the first things to cut are two of
+  the standing photographers, or the squad's flat shadows (8 draws, about 51,000 triangles).
+- The Champions Cup at night was still not rendered; World Cup night and Champions Cup day were.
+- The exit back to the menu was re-checked on the World Cup night run only.
+- `tools/ceremonylook.html` (LOOK=1 in `tools/ceremonyshots.mjs`) is a quick page without the stadium for
+  looking at the squad, medals and press; its lighting is the day or night lights but not the stadium's.

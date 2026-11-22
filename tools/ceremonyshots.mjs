@@ -19,6 +19,8 @@ const VIEWS = {
   squadL: [[-1.3, 2.25, -0.6], [-1.6, 1.7, 2.2], 50], squadR: [[1.3, 2.25, -0.6], [1.6, 1.7, 2.2], 50], pair: [[0, 2.5, 0.6], [0, 2.3, 2.66], 42],
   feet: [[0, 1.0, -1.2], [0, 0.75, 2], 60], press: [[0, 3.0, 0.6], [0, 0.6, -4], 60], side: [[7.5, 2.4, 1.6], [0, 1.6, 1.8], 40], top: [[0, 13, 0.4], [0, 0, 0.5], 50],
   yes: [[-2.3, 1.9, -1.9], [-2.55, 1.55, 1.2], 38], gk: [[2.3, 1.9, -1.9], [2.55, 1.55, 1.2], 38],
+  medalF: [[-1.75, 2.3, 1.0], [-1.85, 2.24, 2.62], 24], medalS: [[-3.1, 2.3, 2.2], [-1.85, 2.22, 2.62], 22], medalB: [[-1.6, 2.5, 3.25], [-1.85, 2.4, 2.62], 50],
+  pressF: [[0, 1.6, -0.9], [0, 0.9, -2.9], 62], pressL: [[-2.2, 1.5, -1.3], [-1.6, 0.95, -3.0], 50], pressS: [[5.2, 1.3, -2.8], [0, 0.9, -2.8], 34], pressBk: [[0.6, 2.2, -6.2], [0, 1.0, -2.8], 40],
   behind: [[0, 3.3, 3.1], [0, 1.9, -1], 62],
 };
 const EYES = { eyes: [0, 0], eyesup: [0, 0.75], back: [Math.PI, 0.1], left: [2.1, 0.05], right: [-2.1, 0.05] };
@@ -30,6 +32,22 @@ page.setDefaultTimeout(240000);
 page.on('pageerror', e => console.log('[page error]', e.message));
 page.on('console', m => { if (m.type() === 'error') console.log('[page]', m.text()); });
 await page.route(THREE_URL, r => r.fulfill({ path: LOCAL_THREE, contentType: 'text/javascript' }));
+const save = async (name, data) => { await writeFile(`${out}/${name}.png`, Buffer.from(data.split(',')[1], 'base64')); };
+// LOOK=1: the quick page (tools/ceremonylook.html: stage, squad and press on a plain pitch, no stadium). Stills of
+// VIEWS at each of T (seconds; the cup is taken at 1.5 and up from 2), or FILM=view:secs.
+if (process.env.LOOK) {
+  await page.goto(`${server.url}/tools/ceremonylook.html?team=${team}&kind=${kind}&time=${time}`, { waitUntil: 'load' });
+  await page.waitForFunction(() => window.__look && window.__look.ready);
+  const st = t => ({ held: t >= 1.5, up: t >= 2 }), views = (process.env.VIEWS || 'squad,pressF').split(',');
+  let now = 0;
+  const to = async t => { while (now < t - 1e-6) { const d = Math.min(0.25, t - now, now < 1.5 ? 1.5 - now : now < 2 ? 2 - now : 9); await page.evaluate(([a, b]) => window.__look.step(a, b), [d, st(now)]); now += d; } };
+  if (process.env.FILM) {
+    const [view, secs = 5] = process.env.FILM.split(':'), dir = `${out}/film-${view}`; await mkdir(dir, { recursive: true });
+    for (let i = 0; i < secs * 30; i++) { await to((i + 1) / 30); await writeFile(`${dir}/f${String(i).padStart(4, '0')}.png`, Buffer.from((await page.evaluate(v => window.__look.snap(v), VIEWS[view])).split(',')[1], 'base64')); }
+  } else for (const t of (process.env.T || '1,3.2').split(',').map(Number)) { await to(t); for (const v of views) { await save(`look-${time}-${v}-${t}`, await page.evaluate(d => window.__look.snap(d), VIEWS[v])); } }
+  console.log(JSON.stringify(await page.evaluate(() => window.__look.info())));
+  await browser.close(); await server.close(); process.exit(0);
+}
 await page.goto(`${server.url}/index.html?film=1`, { waitUntil: 'load' });
 await page.waitForFunction(() => window.__sssOK === true);
 await page.click('#play');
@@ -68,7 +86,6 @@ await page.evaluate(async ({ kind, team, time, VIEWS }) => {
   };
 }, { kind, team, time, VIEWS });
 const tag = `${kind}-${time}`;
-const save = async (name, data) => { await writeFile(`${out}/${name}.png`, Buffer.from(data.split(',')[1], 'base64')); };
 const snap = async (view, label) => { await save(`${tag}-${label}-${view}`, await page.evaluate(([v, e]) => window.__cer.shot(v, e), [view, EYES[view] || null])); console.log(`${tag}-${label}-${view}`); };
 const step = (secs, keys) => page.evaluate(([a, b]) => window.__cer.step(a, b), [secs, keys || {}]);
 const want = (process.env.VIEWS || 'eyes,back,left,stands,wide,squad,squadL,squadR,feet,press,side').split(',');
