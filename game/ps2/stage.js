@@ -37,7 +37,7 @@ function weave(ctx, [x, y, w, h], base, seed) {
 }
 // a photographer seen from the front: bib over dark clothes, the camera at his face, its lens toward you
 function pressman(ctx, [x, y, w, h], i, kneel) {
-  const cx = x + w / 2, skin = ['#c99673', '#8a5a3c', '#e0b08c', '#a87552'][i % 4], bib = ['#d8d23a', '#e8e6de', '#4f7fd0', '#d8d23a'][i % 4], dark = ['#39414f', '#5a5046', '#2f4866', '#44464c'][i % 4];
+  const cx = x + w / 2, skin = ['#c99673', '#8a5a3c', '#e0b08c', '#a87552'][i % 4], bib = ['#d8d23a', '#e8e6de', '#4f7fd0', '#d8d23a'][i % 4], dark = ['#a9b2c2', '#c4b49c', '#8fb0d8', '#b9bbc2'][i % 4];
   const top = y + (kneel ? h * 0.42 : h * 0.07), hr = w * 0.11, sh = top + hr * 2.5, hip = kneel ? y + h * 0.8 : y + h * 0.55;
   ctx.fillStyle = dark;
   if (kneel) { ctx.fillRect(cx - w * 0.26, hip - 4, w * 0.24, h - (hip - y) + 4); ctx.fillRect(cx + 2, hip - 4, w * 0.3, (y + h - hip) * 0.55); ctx.fillRect(cx + w * 0.1, hip + (y + h - hip) * 0.4, w * 0.24, (y + h - hip) * 0.6); }
@@ -52,9 +52,9 @@ function pressman(ctx, [x, y, w, h], i, kneel) {
   ctx.strokeStyle = dark; ctx.lineWidth = w * 0.11; ctx.lineCap = 'round';
   for (const s of [-1, 1]) { ctx.beginPath(); ctx.moveTo(cx + s * w * 0.27, sh + 12); ctx.lineTo(cx + s * w * 0.3, sh + (hip - sh) * 0.42); ctx.lineTo(cx + s * w * 0.13, cy + 4); ctx.stroke(); }
   ctx.fillStyle = skin; for (const s of [-1, 1]) { ctx.beginPath(); ctx.arc(cx + s * w * 0.13, cy + 4, w * 0.055, 0, Math.PI * 2); ctx.fill(); }
-  ctx.fillStyle = '#101012'; ctx.fillRect(cx - w * 0.15, cy - hr * 0.75, w * 0.3, hr * 1.5);
-  ctx.fillStyle = '#26262a'; ctx.beginPath(); ctx.arc(cx, cy, hr * 0.78, 0, Math.PI * 2); ctx.fill();
-  ctx.fillStyle = '#07080c'; ctx.beginPath(); ctx.arc(cx, cy, hr * 0.55, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#16161a'; ctx.fillRect(cx - w * 0.14, cy - hr * 0.5, w * 0.28, hr * 1.0);
+  ctx.fillStyle = '#26262a'; ctx.beginPath(); ctx.arc(cx, cy, hr * 0.6, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#07080c'; ctx.beginPath(); ctx.arc(cx, cy, hr * 0.42, 0, Math.PI * 2); ctx.fill();
   ctx.fillStyle = 'rgba(190,210,255,0.8)'; ctx.beginPath(); ctx.arc(cx - hr * 0.2, cy - hr * 0.2, hr * 0.14, 0, Math.PI * 2); ctx.fill();
   return (cy - y) / h;                               // how far down the card the lens is
 }
@@ -62,7 +62,7 @@ function pressman(ctx, [x, y, w, h], i, kneel) {
 // the same man from behind (what the stands see): hair, jacket, the bib's back, legs
 function pressBack(ctx, [x, y, w, h]) {
   const cx = x + w / 2, top = y + h * 0.07, hr = w * 0.11, sh = top + hr * 2.5, hip = y + h * 0.55;
-  ctx.fillStyle = '#39414f'; ctx.fillRect(cx - w * 0.2, hip - 4, w * 0.17, y + h - hip + 4); ctx.fillRect(cx + w * 0.03, hip - 4, w * 0.17, y + h - hip + 4);
+  ctx.fillStyle = '#a9b2c2'; ctx.fillRect(cx - w * 0.2, hip - 4, w * 0.17, y + h - hip + 4); ctx.fillRect(cx + w * 0.03, hip - 4, w * 0.17, y + h - hip + 4);
   ctx.beginPath(); ctx.moveTo(cx - w * 0.32, sh + 6); ctx.quadraticCurveTo(cx, sh - 8, cx + w * 0.32, sh + 6); ctx.lineTo(cx + w * 0.25, hip); ctx.lineTo(cx - w * 0.25, hip); ctx.closePath(); ctx.fill();
   ctx.fillStyle = '#d8d23a'; ctx.fillRect(cx - w * 0.19, sh + 10, w * 0.38, (hip - sh) * 0.72);
   ctx.fillStyle = 'rgba(0,0,0,0.7)'; ctx.font = font(w * 0.13, 900); ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('PRESS', cx, sh + 10 + (hip - sh) * 0.36);
@@ -95,7 +95,7 @@ function sheet(kind) {
     ctx.fillStyle = L.edge; ctx.fillRect(x, y, w, 6); ctx.fillRect(x, y + h - 5, w, 5); }
   // the boards in front (our name, facing the stands) and their plain backs with a frame (what you see)
   { const [x, y, w, h] = R.board; ctx.fillStyle = '#f2f1ea'; ctx.fillRect(x, y, w, h); text(ctx, `${NAME} ${YEAR}`, x + w / 2, y + h / 2, { size: 34, weight: 900, align: 'center', color: L.wall, max: w - 30, shadow: false }); }
-  { const [x, y, w, h] = R.boardBack; ctx.fillStyle = '#4a4f58'; ctx.fillRect(x, y, w, h); ctx.strokeStyle = '#8a9099'; ctx.lineWidth = 3; for (let i = 0; i < 4; i++) ctx.strokeRect(x + i * w / 4 + 3, y + 3, w / 4 - 6, h - 6); ctx.beginPath(); for (let i = 0; i < 4; i++) { ctx.moveTo(x + i * w / 4 + 3, y + h - 3); ctx.lineTo(x + (i + 1) * w / 4 - 3, y + 3); } ctx.stroke(); }
+  { const [x, y, w, h] = R.boardBack; ctx.fillStyle = '#b4bac3'; ctx.fillRect(x, y, w, h); ctx.strokeStyle = '#e4e8ee'; ctx.lineWidth = 3; for (let i = 0; i < 4; i++) ctx.strokeRect(x + i * w / 4 + 3, y + 3, w / 4 - 6, h - 6); ctx.beginPath(); for (let i = 0; i < 4; i++) { ctx.moveTo(x + i * w / 4 + 3, y + h - 3); ctx.lineTo(x + (i + 1) * w / 4 - 3, y + 3); } ctx.stroke(); }
   for (let i = 0; i < 5; i++) lensAt[i] = pressman(ctx, R.press(i), i, i >= 3);
   pressBack(ctx, R.pressBack);
   { const [x, y, w, h] = R.wing; ctx.fillStyle = L.wall; ctx.fillRect(x, y, w, h); ctx.fillStyle = L.edge; ctx.fillRect(x, y, w, 4); ctx.fillRect(x, y + h - 4, w, 4); mark(ctx, x + w / 2, y + 60, 34); for (let i = 0; i < 3; i++) star(ctx, x + w / 2, y + 130 + i * 40, 26); }

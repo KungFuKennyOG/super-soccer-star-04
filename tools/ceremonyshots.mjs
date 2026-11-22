@@ -18,6 +18,7 @@ const VIEWS = {
   stands: [[5, 11, -31], [0, 1.6, 0.5], 24], wide: [[13, 4.5, -13], [0, 1.8, 0.6], 38], squad: [[0, 2.3, -2.6], [0, 1.75, 2], 52],
   squadL: [[-1.3, 2.25, -0.6], [-1.6, 1.7, 2.2], 50], squadR: [[1.3, 2.25, -0.6], [1.6, 1.7, 2.2], 50], pair: [[0, 2.5, 0.6], [0, 2.3, 2.66], 42],
   feet: [[0, 1.0, -1.2], [0, 0.75, 2], 60], press: [[0, 3.0, 0.6], [0, 0.6, -4], 60], side: [[7.5, 2.4, 1.6], [0, 1.6, 1.8], 40], top: [[0, 13, 0.4], [0, 0, 0.5], 50],
+  yes: [[-2.3, 1.9, -1.9], [-2.55, 1.55, 1.2], 38], gk: [[2.3, 1.9, -1.9], [2.55, 1.55, 1.2], 38],
   behind: [[0, 3.3, 3.1], [0, 1.9, -1], 62],
 };
 const EYES = { eyes: [0, 0], eyesup: [0, 0.75], back: [Math.PI, 0.1], left: [2.1, 0.05], right: [-2.1, 0.05] };
@@ -38,7 +39,7 @@ await page.evaluate(async ({ kind, team, time, VIEWS }) => {
   s.settings.commentary = 0; s.settings.weather = 1;
   s.game.kind = kind; s.game.team = t.byId(team); s.game.cup = c.createCup(kind, team); s.game.fixture = c.currentFixture(s.game.cup);
   s.game.opp = t.byId(s.game.fixture.opp); s.game.scenario = c.scenarioFor(s.game.cup, s.game.fixture); s.startMatch();
-  for (let i = 0; i < 10; i++) s.loop.step(1 / 30);
+  for (let i = 0; i < 120; i++) s.loop.step(1 / 30);
   s.startCeremony();
   const scene = s.camera.parent.parent, cam = new THREE.PerspectiveCamera(40, 16 / 9, 0.1, 400), G = s.ceremony.stageGroup, yaw0 = s.desk.yaw;
   window.__cer = {
@@ -98,5 +99,8 @@ try {
       for (const v of [...want, 'eyesup']) await snap(v, `lift${t}`);
     }
     console.log('lifted', JSON.stringify(await page.evaluate(() => window.__cer.info())));
+    // and out again: A / Enter once it says so, back to the menu with the rig on the grass
+    await step(2.5, { KeyW: false }); await step(0.1, { Enter: true }); await step(0.3, { Enter: false });
+    console.log('after', JSON.stringify(await page.evaluate(() => ({ mode: window.__sss.mode, rigY: window.__sss.rig.position.y, active: window.__sss.ceremony.active }))));
   }
 } finally { await browser.close(); await server.close(); }

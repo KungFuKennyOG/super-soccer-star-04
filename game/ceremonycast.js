@@ -3,7 +3,7 @@
 // goes up they clap, bounce on their toes and stand with an arm round each other, watching it; when it goes up
 // they erupt, each a moment after the other, and two of the front row come forward beside you.
 // What is recorded and what is built:
-//   recorded (CMU captures, game/cheercap.js): the clapping, the giddy bouncing, arms thrown up, reaching
+//   recorded (CMU captures, game/cheercap.js; its 'yes' take is baked but not used: it reads as a shrug): the clapping, the giddy bouncing, arms up, reaching
 //     overhead on the toes, the jumps and hops; the walk forward is the game's own captured gait (animate()).
 //   built: which arms go with which legs, the fist pumped overhead, the arm round a teammate (IK onto him),
 //     heads on the cup, who does what when.
@@ -27,22 +27,22 @@ const TOP = STAGE.h, UP = STAGE.h + STAGE.riser;
 // laid over it: fist 'L' | 'R' | 'LR' pumped overhead, link: his arm round the man beside him.
 const ACTS = {
   clap: { legs: 'clap', up: 'clap' }, giddy: { legs: 'giddy', up: 'giddy' },
-  yes: { legs: 'yes', up: 'yes' }, armsUp: { legs: 'armsUp', up: 'armsUp' }, reach: { legs: 'reach', up: 'reach' },
-  jumpUp: { legs: 'jump', up: 'armsUp' }, hopUp: { legs: 'bounce', up: 'reach' },
+  armsUp: { legs: 'armsUp', up: 'armsUp' }, reach: { legs: 'reach', up: 'reach' },
+  jumpUp: { legs: 'jump', up: 'armsUp' }, jumpR: { legs: 'jump', up: 'reach' }, hopUp: { legs: 'bounce', up: 'reach' },
   pump: { legs: 'bounce', up: 'giddy', fist: 'R' }, pump2: { legs: 'jump', up: 'giddy', fist: 'LR' },
   sway: { legs: 'giddy', up: 'giddy', link: true }, bounce: { legs: 'bounce', up: 'giddy', link: true, fist: 'out' },
 };
 // The cast: where he stands (x, z, on the riser?), his number, what he does waiting / once you hold the cup /
 // when it is up, how long after it goes up he goes off, his own pace, mirrored or not; go: where he comes forward to.
 const CAST = [
-  { x: -2.55, z: 1.2, num: 3, acts: ['clap', 'giddy', 'yes'], lag: 0.3, rate: 1.0 },
-  { x: -1.25, z: 1.3, num: 8, acts: ['giddy', 'clap', 'jumpUp'], lag: 0.12, rate: 1.06, go: [-1.12, 0.3] },
-  { x: 1.25, z: 1.25, num: 10, acts: ['clap', 'giddy', 'pump2'], lag: 0.22, rate: 0.94, mirror: true, go: [1.18, 0.38] },
-  { x: 2.55, z: 1.15, num: 1, gk: true, acts: ['clap', 'clap', 'reach'], lag: 0.5, rate: 0.9, mirror: true },
+  { x: -2.55, z: 1.2, num: 3, acts: ['clap', 'giddy', 'jumpR'], lag: 0.3, rate: 1.0, drop: 0.2 },
+  { x: -1.25, z: 1.3, num: 8, acts: ['giddy', 'clap', 'jumpUp'], lag: 0.12, rate: 1.06, go: [-1.45, 0.45], drop: 0.08 },
+  { x: 1.25, z: 1.25, num: 10, acts: ['clap', 'giddy', 'pump2'], lag: 0.22, rate: 0.94, mirror: true, go: [1.5, 0.5], drop: 0.13 },
+  { x: 2.55, z: 1.15, num: 1, gk: true, acts: ['clap', 'clap', 'reach'], lag: 0.5, rate: 0.9, mirror: true, drop: 0.24 },
   { x: -1.85, z: 2.62, up: true, num: 5, acts: ['giddy', 'giddy', 'armsUp'], lag: 0.4, rate: 0.97, mirror: true },
   { x: -0.37, z: 2.66, up: true, num: 4, acts: ['sway', 'sway', 'bounce'], lag: 0.18, rate: 1.0, link: 6 },
   { x: 0.37, z: 2.66, up: true, num: 6, acts: ['sway', 'sway', 'bounce'], lag: 0.18, rate: 1.0, link: 5 },
-  { x: 1.85, z: 2.6, up: true, num: 11, acts: ['clap', 'giddy', 'hopUp'], lag: 0.6, rate: 1.08 },
+  { x: 1.85, z: 2.6, up: true, num: 11, acts: ['clap', 'giddy', 'hopUp'], lag: 0.6, rate: 1.08, drop: 0.16 },
 ];
 
 // The players' flat shadows fall on the pitch (game/ps2/player.js); these fall on the floor they stand on.
@@ -107,13 +107,18 @@ function pumpFist(bn, n, t, w, hipY) {
 // Hands that have gone through each other (a take's arms on our wider shoulders cross at the wrists when its
 // hands met) are put back side by side: each arm is bent again to a wrist moved out, its elbow where it was.
 const wl = new THREE.Vector3(), wr = new THREE.Vector3(), el = new THREE.Vector3(), sh = new THREE.Vector3();
-function partHands(root, bn, need = 0.13) {
+function partHands(root, bn, drop = 0, need = 0.13) {
   root.updateMatrixWorld(true);
   root.worldToLocal(bn.handL.getWorldPosition(wl)); root.worldToLocal(bn.handR.getWorldPosition(wr));
-  if (wl.x - wr.x >= need || Math.abs(wl.y - wr.y) > 0.25 || Math.abs(wl.z - wr.z) > 0.25) return;
-  const mid = (wl.x + wr.x) / 2; wl.x = mid + need / 2; wr.x = mid - need / 2;
+  const k = 1 - smooth((wl.distanceTo(wr) - 0.28) / 0.17);                 // only while his hands are together
+  if (k <= 0 || (drop <= 0 && wl.x - wr.x >= need)) return;
+  // drop: this man claps that much lower than the take did (it clapped at the chin: not everyone does)
+  wl.y -= drop * k; wr.y -= drop * k; wl.z += drop * 0.35 * k; wr.z += drop * 0.35 * k;
+  const mid = (wl.x + wr.x) / 2, gap = Math.max(wl.x - wr.x, need * k);
+  wl.x = mid + gap / 2; wr.x = mid - gap / 2;
   for (const [n, w] of [['L', wl], ['R', wr]]) {
     root.worldToLocal(bn['foreArm' + n].getWorldPosition(el)); root.worldToLocal(bn['upperArm' + n].getWorldPosition(sh));
+    el.y -= drop * 0.5 * k;
     reachArm(bn, n, w, pole.copy(el).sub(sh.add(w).multiplyScalar(0.5)));
   }
 }
@@ -164,7 +169,7 @@ export function createCast(group, team, seed = 1) {
     actPose(a, c.t, c.mirror, PA);
     if (k < 1) mixPose(actPose(b, c.t, c.mirror, PB), PA, k, PA);
     restPose(bn); applyPose(bn, PA, 1, PART.body);
-    pinFeet(c, bn, dt); partHands(c.m.root, bn);
+    pinFeet(c, bn, dt); partHands(c.m.root, bn, c.drop || 0);
     for (const [act, w] of [[a, k], [b, 1 - k]]) {
       if (!act.fist || w <= 0.01) continue;
       const which = act.fist === 'out' ? (c.x < 0 ? 'L' : 'R') : act.fist;       // (the arm that isn't round his mate)
