@@ -1,5 +1,5 @@
 // Moves played over the run cycle (game/actors.js): the bicycle kick and the header (m.special), the
-// goal dance's guide, and celebrating. Each is laid over a body that is already posed.
+// arms and jumps of celebrating (the celebrations themselves: game/cheers.js). Each is laid over a body that is already posed.
 import * as THREE from 'three';
 import { ankleOf, footOf, reachLeg, aimFoot } from './legik.js';
 
@@ -9,7 +9,7 @@ const frac = x => x - Math.floor(x), smooth = x => { const k = Math.min(1, Math.
 
 // Moves the hips (dy up, dx to his left) with the feet staying where they are on the grass: the knees
 // bend as he sinks. Going up past standing the feet leave the ground, coming `tuck` of the way with him.
-function ride(bn, dy, dx = 0, tuck = 0.8) {
+export function ride(bn, dy, dx = 0, tuck = 0.8) {
   ankleOf(bn, 'L', aL); ankleOf(bn, 'R', aR); footOf(bn, 'L', fL); footOf(bn, 'R', fR);
   bn.hips.position.y += dy; bn.hips.position.x += dx;
   if (dy > 0) { aL.y += dy * tuck; aR.y += dy * tuck; }
@@ -37,26 +37,6 @@ export function specialPose(bn, sp) {
     bn.upperArmL.rotation.z += 0.75 * arms; bn.upperArmR.rotation.z -= 0.75 * arms;
     bn.foreArmL.rotation.x -= 0.4 * arms; bn.foreArmR.rotation.x -= 0.4 * arms;
   }
-}
-
-// Teammates lead the goal dance facing you, so they mirror the move: your "left" is their right arm.
-// The arms are the signal (straight and clear); the body bounces on the beat, swaying over planted feet.
-const ARM = { up: 2.8, down: 0.2, out: 1.55 };
-export function dancePose(bn, g) {
-  const bounce = Math.abs(Math.sin(Math.PI * g.beat)), sway = Math.sin(Math.PI * g.beat);
-  ride(bn, -0.1 * bounce, 0.035 * sway);
-  bn.hips.rotation.z = -0.05 * sway;
-  bn.spine.rotation.set(0.04 * bounce, 0, 0.07 * sway);
-  bn.chest.rotation.set(0, 0.15 * sway, 0);
-  bn.neck.rotation.set(0, 0, 0.12 * sway); bn.head.rotation.set(-0.05, 0, 0);
-  let l = 'down', r = 'down';                       // the mate's own arms
-  if (g.move === 'left') r = 'up';
-  if (g.move === 'right') l = 'up';
-  if (g.move === 'up') l = r = 'up';
-  if (g.move === 'out') l = r = 'out';
-  bn.upperArmL.rotation.set(0, 0, ARM[l]); bn.upperArmR.rotation.set(0, 0, -ARM[r]);
-  bn.foreArmL.rotation.set(l === 'down' ? -0.25 : 0, 0, 0); bn.foreArmR.rotation.set(r === 'down' ? -0.25 : 0, 0, 0);
-  bn.clavicleL.rotation.z = l === 'up' ? 0.25 : 0; bn.clavicleR.rotation.z = r === 'up' ? -0.25 : 0;
 }
 
 // Celebrating (gs: the gait state, game/gait.js; k: 0..1 how far into it he is, eased by the caller).

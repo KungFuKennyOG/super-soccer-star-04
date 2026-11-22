@@ -1,7 +1,7 @@
 // Screenshots of the '04 menus and HUD in the real game (index.html in headless Chromium, browser mode):
 // title, every menu screen, a match with the kick-off banner, bug and subtitle, a goal with its banner and
-// the replay CRT, the dance lane, a training card, the trophy card and full time.
-//   node tools/uigame.mjs out/dir [menus|match|dance|fulltime|ceremony|training ...]
+// the replay CRT, the celebration prompt, a training card, the trophy card and full time.
+//   node tools/uigame.mjs out/dir [menus|match|celebrate|fulltime|ceremony|training ...]
 import { chromium } from 'playwright';
 import { mkdir } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
@@ -65,10 +65,10 @@ try {
     await shot('goal-banner', 1200);
     await shot('replay-crt', 4000);
   }
-  if (want('dance')) {
+  if (want('celebrate')) {
     await fresh(); await cupMatch();
-    await S(() => window.__sss.startDance(0.1));
-    await shot('dance', 3000);
+    await S(() => window.__sss.celebrate(true, 0.1));
+    await shot('celebrate', 1200);
   }
   if (want('fulltime')) {
     await fresh(); await cupMatch();

@@ -47,6 +47,15 @@ export const CLIPS = {
   // 'A stumbles into B' (a walk), 91_59 '360 small stumble' (the stumble is the landing of a jump turn), 127_13 'run
   // side step left' (a clean side-step, no wrong foot), 90_17 / 90_18 (falls: he has no time to get up).
   stopA: ['127_05', 'once', { from: 0.45, to: 1.95, face: 'start' }], stopB: ['127_19', 'once', { from: 0.55, to: 1.8, face: 'start' }],
+  // hat-trick celebrations (game/cheers.js). joy: 79_69 'very happy', the stretch where he throws both arms up overhead twice,
+  // twisting from side to side the second time, feet on the floor throughout. flip: 88_01, a standing backflip (the sit, the
+  // take-off, tucked over at 1.5 m, the landing crouch, up). sad / sadB: 91_13 'SadWalk' (0.7 m/s, head bowed about 48 degrees,
+  // arms hanging) and 82_10 'sad walk forward' (0.94 m/s, stooped): the beaten side trudging back. Looked at and not used:
+  // 80_43 'happy' (hands clasped under the chin, wiggling), 79_71 'sad' (standing), 132_03 'walk with arms out, balancing'
+  // (a tightrope walk at 0.3 m/s, arms see-sawing), 20_11 'high-five' (a walk past). Nothing in the library is a knee slide,
+  // an aeroplane run, a pile-on, or anyone cupping an ear.
+  joy: ['79_69', 'once', { from: 0.85, to: 4.25, face: 'start' }], flip: ['88_01', 'once', { from: 0.13, to: 1.3, face: 'start' }],
+  sad: ['91_13', 'stride'], sadB: ['82_10', 'stride'],
   // a 'loop' is [from, to] seconds of a capture played round and round, e.g. stand: ['137_28', 'loop', { from: 2, to: 12 }].
   // None is baked: the library's standing takes (113_21, 77_02, 141_20, 137_28) have a tilted or bowed head, fidgeting or hands on hips.
 };

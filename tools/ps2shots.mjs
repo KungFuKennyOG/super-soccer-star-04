@@ -27,7 +27,8 @@ try {
     if (name === 'clip' || process.env.FILM) {              // FILM=seconds films any shot from its start
       const frames = Math.round(30 * +(process.env.FILM || 4));
       await mkdir(`${out}/${name}`, { recursive: true });
-      for (let f = 0; f < frames; f++) { await page.evaluate(() => window.__look.step(1 / 30)); await page.screenshot({ path: `${out}/${name}/${String(f).padStart(3, '0')}.png` }); }
+      const dt = +(process.env.DT || 1 / 30), jpg = !!process.env.JPG;   // DT: seconds per frame (slow motion: less than 1/30); JPG=1: JPEG frames
+      for (let f = 0; f < frames; f++) { await page.evaluate(d => window.__look.step(d), dt); await page.screenshot({ path: `${out}/${name}/${String(f).padStart(3, '0')}.${jpg ? 'jpg' : 'png'}`, ...(jpg ? { type: 'jpeg', quality: 92 } : {}) }); }
     } else {
       await page.screenshot({ path: `${out}/${shot}.png` });
       if (process.env.SHEETS) for (const i of [0, 1]) for (const k of [0, 1]) await writeFile(`${out}/sheet${i}${k ? 'head' : 'kit'}.png`, Buffer.from((await page.evaluate(([n, j]) => window.__look.sheet(n, j), [i, k])).split(',')[1], 'base64'));

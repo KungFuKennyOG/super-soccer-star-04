@@ -10,6 +10,7 @@ import { startStrike, struck } from './strike.js';
 import { buildSet } from './squad.js';
 import { STRIKE } from '../rules/tuning.js';
 import { startBeat, beatKind, BEATS } from './beaten.js';
+import { cheerOf } from './cheers.js';
 
 const FPS = 72, KEEP = 8;                          // record rate and seconds kept
 const SLOTS = FPS * KEEP;
@@ -55,7 +56,7 @@ function playTrick(m, code, f, o) {
 export function createReplay(scene, renderer) {
   let ids = [], stride = 0, buf = null, head = 0, count = 0, simT = 0;
   const stuns = {}, tackles = {};
-  let ghosts = {}, strikes = [], clip = null, cursor = 0, active = false, pendingT = -1, goalAt = 0, frameSkip = 0;
+  let ghosts = {}, strikes = [], clip = null, cursor = 0, active = false, pendingT = -1, goalAt = 0, frameSkip = 0, live = false, side = 1;
   const ball = buildBall();
   ball.mesh.visible = ball.shadow.visible = false;
   scene.add(ball.mesh, ball.shadow);
@@ -74,15 +75,19 @@ export function createReplay(scene, renderer) {
   // the REPLAY tag in the screen's corner: a red light and the word on a dark outlined tab
   const tag = uiPlane(256, 64, 0.34, 0.085);
   tag.m.position.set(-0.52, 0.33, 0.004); tv.add(tag.m);
-  box(tag.ctx, 2, 4, 252, 56, { r: 4, fill: 'rgba(8,8,10,0.85)' });
-  tag.ctx.beginPath(); tag.ctx.arc(34, 32, 12, 0, Math.PI * 2); tag.ctx.fillStyle = '#d8382c'; tag.ctx.fill();
-  text(tag.ctx, 'Replay', 60, 32, { size: 38, weight: 900 });
+  const label = s => {
+    tag.ctx.clearRect(0, 0, 256, 64); box(tag.ctx, 2, 4, 252, 56, { r: 4, fill: 'rgba(8,8,10,0.85)' });
+    tag.ctx.beginPath(); tag.ctx.arc(34, 32, 12, 0, Math.PI * 2); tag.ctx.fillStyle = '#d8382c'; tag.ctx.fill();
+    text(tag.ctx, s, 60, 32, { size: 38, weight: 900 }); tag.t.needsUpdate = true;
+  };
+  label('Replay');
+  const fresh = () => { for (const m of Object.values(ghosts)) { m.strike = null; m.dive = null; m.special = null; m.trick = null; m.gait = null; m.inert = m.charge = m.beat = m.land = null; m.phOff = m.chargeK = m.kickK = m.cheerK = m.cheerA = m.cheerW = 0; m.cheer = null; } };   // (the gait starts afresh: nobody turns round from where the last replay left him)
   tv.visible = false; scene.add(tv);
   // and on the stadium's big screen, over the scoreboard
   const jumbo = new THREE.Mesh(new THREE.PlaneGeometry(12, 6.75), ps1({ map: rt.texture, lit: false, fog: false }));
   jumbo.visible = false; scene.add(jumbo);
 
-  const headPos = new THREE.Vector3(), headDir = new THREE.Vector3();
+  const headPos = new THREE.Vector3(), headDir = new THREE.Vector3(), v3 = new THREE.Vector3();
   let tvYaw = null;
 
   function frameAt(i) { return buf.subarray(i * stride, i * stride + stride); }
@@ -91,6 +96,9 @@ export function createReplay(scene, renderer) {
     get active() { return active; },
     // playing, or about to start after a goal
     get busy() { return active || pendingT >= 0; },
+    get ghosts() { return ghosts; },
+    // something is on the screens: a replay, or a celebration's live picture
+    get showing() { return active || live; },
     // per match: who's playing, and fresh replay copies of the players (you as a whole player)
     // locker: { boots, heads, ballName } so the replay copies match what's on the pitch
     setup(world, home, away, board, locker = {}) {
@@ -154,16 +162,17 @@ export function createReplay(scene, renderer) {
         });
         return out;
       });
-      for (const m of Object.values(ghosts)) { m.strike = null; m.dive = null; m.special = null; m.trick = null; m.gait = null; m.inert = m.charge = m.beat = m.land = null; m.phOff = m.chargeK = m.kickK = m.cheerK = 0; }   // (the gait starts afresh: nobody turns round from where the last replay left him)
+      fresh(); live = false; label('Replay'); tv.scale.setScalar(1);
     },
     stop() {
-      active = false; pendingT = -1; tv.visible = jumbo.visible = false;
+      active = live = false; pendingT = -1; tv.visible = jumbo.visible = false;
       for (const m of Object.values(ghosts)) m.root.visible = m.shadow.visible = false;
       ball.mesh.visible = ball.shadow.visible = false;
     },
     // advance the playback; slow motion over the finish. camera: your head, to place the TV.
-    update(dt, t, camera) {
-      if (!active) return;
+    // world: the live one, for a celebration's picture when no replay is on (null: none wanted).
+    update(dt, t, camera, world = null) {
+      if (!active) { this.cut(dt, t, camera, world); return; }
       const speed = cursor > goalAt - SLOW_FROM ? SLOW : 1;
       const prev = cursor;
       cursor += dt * speed;
@@ -210,10 +219,37 @@ export function createReplay(scene, renderer) {
       tv.visible = jumbo.visible = true;
       tag.m.visible = Math.floor(t * 2) % 2 === 0;
     },
+    // A celebration, live: the replay's whole-bodied copies are posed as the players are right now (you too, who
+    // are only boots and hands in your own eyes), filmed from the touchline for the big screen and a small set
+    // floating off to one side of your view.
+    cut(dt, t, camera, world) {
+      const c = world && buf && world.dead && world.celebrate && world.celebrate.kind ? world.celebrate : null;
+      if (!c) { if (live) this.stop(); return; }
+      const you = world.you;
+      if (!live) { live = true; fresh(); look.set(you.x, 0, you.z); side = you.x > 6 ? -1 : 1; tvYaw = null; label('Live'); tv.scale.setScalar(0.5); }
+      ball.update(world.ball, dt);
+      for (const id of ids) {
+        const m = ghosts[id], p0 = world.byId[id];
+        let p = p0;
+        if (id === 'you') { p = Object.create(p0); p.role = 'mate'; p.fx = c.dx; p.fz = c.dz; }
+        cheerOf(m, p0, c, you);
+        placeModel(m, p);
+        animate(m, p, dt, t, false, true, null, false);
+      }
+      look.lerp(v3.set(you.x, 0, you.z), Math.min(1, dt * 5));
+      cam.position.set(look.x + side * 9.5, 2.4, look.z + 6.5);
+      cam.lookAt(look.x, 1.0, look.z);
+      camera.getWorldPosition(headPos); camera.getWorldDirection(headDir);
+      const yaw = Math.atan2(headDir.x, headDir.z) + 0.95;
+      tvYaw = tvYaw === null ? yaw : tvYaw + Math.atan2(Math.sin(yaw - tvYaw), Math.cos(yaw - tvYaw)) * Math.min(1, dt * 3);
+      tv.position.set(headPos.x + Math.sin(tvYaw) * 2.1, headPos.y - 0.35, headPos.z + Math.cos(tvYaw) * 2.1);
+      tv.lookAt(headPos.x, headPos.y - 0.2, headPos.z);
+      tv.visible = jumbo.visible = true; tag.m.visible = true;
+    },
     // film the replay: swap the live players for the replay copies, render into the screen's texture,
     // swap back. live: objects to hide while filming (live players, ball, HUD).
     render(live) {
-      if (!active) return;
+      if (!active && !this.showing) return;
       // a 24 fps TV picture in the headset (every third frame), every other frame in the browser
       frameSkip = (frameSkip + 1) % (renderer.xr.isPresenting ? 3 : 2);
       if (frameSkip) return;

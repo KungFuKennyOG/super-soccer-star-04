@@ -12,7 +12,8 @@ import { strideRate } from '../rules/dribble.js';
 import { poseStrike, poseTouch, poseHold } from './strike.js';
 import { faceBody, poseLegs, leanHips } from './gait.js';
 import { poseUpper, layerLean, layerReady, layerBreath, layerKick, layerLook, strikeSwing } from './carriage.js';
-import { specialPose, dancePose, celebratePose } from './poses.js';
+import { specialPose, celebratePose } from './poses.js';
+import { cheerPose } from './cheers.js';
 import { strideLegs, strideTrunk } from './mocap.js';
 import { kickTrunk, isKick } from './kickcap.js';
 import { sway } from './sway.js';
@@ -51,13 +52,18 @@ export function buildYou(kit, boots = 0) {
 
 // Standing, walking and running (game/gait.js for the hips and legs, game/carriage.js above them, captured
 // strides from game/mocap.js over both when he runs forward), strikes and dribbling touches
-// (game/strike.js), springs for weight (game/sway.js), headers, the dance and celebrating (game/poses.js).
+// (game/strike.js), springs for weight (game/sway.js), headers and celebrating arms (game/poses.js), and last a
+// goal celebration if one is on (m.cheer, game/cheers.js). cheer: one is on, so nobody watches the ball.
 // p is the sim player (his p.stride drives the run cycle, so the sim's touches are the boot's); the keeper
 // has his own (game/keeperpose.js). Place the model (placeModel) before posing it: the boot is sent to the
 // ball, and the model's heading is eased from the one placeModel gave it.
 // ball: the sim ball, for the keeper and for the boot to meet; onBall: he has it at his feet.
 // The boot that does the work is the right one, or the left for a left-footed player (below).
-export function animate(m, p, dt, t, celebrate, guide = null, ball = null, onBall = false) {
+export function animate(m, p, dt, t, celebrate, cheer = false, ball = null, onBall = false) {
+  animate0(m, p, dt, t, celebrate, cheer, ball, onBall);
+  if (m.cheer) cheerPose(m, p, dt, t);        // (after a left-footer has been mirrored back: celebrations are the same for both)
+}
+function animate0(m, p, dt, t, celebrate, guide, ball, onBall) {
   // the keeper has his own (game/keeperpose.js), except when he runs off his line flat out
   if (p.role === 'gk') { if (!keeperRuns(m, p)) animateKeeper(m, p, dt, t, ball); else { pose(m, p, dt, t, false, null, ball, false); keeperRan(m, dt); } return; }
   if (m.foot !== 'L' || m.firstPerson) return pose(m, p, dt, t, celebrate, guide, ball, onBall);
@@ -68,12 +74,11 @@ export function animate(m, p, dt, t, celebrate, guide = null, ball = null, onBal
   // frames (footprints, heading, springs) stays true in it.
   const r = m.root, st = m.strike, flip = v => (v === undefined ? v : -v);
   const pm = Object.create(p); pm.x = flip(p.x); pm.vx = flip(p.vx); pm.fx = flip(p.fx);
-  let bm = null, gm = guide;
+  let bm = null;
   if (ball) { bm = Object.create(ball); bm.x = -ball.x; bm.vx = flip(ball.vx); }
-  if (guide && (guide.move === 'left' || guide.move === 'right')) { gm = Object.create(guide); gm.move = guide.move === 'left' ? 'right' : 'left'; }   // the dance's arm signals stay on the side they were called
   r.position.x = -r.position.x; r.rotation.y = -r.rotation.y;
   if (st) st.dir.x = -st.dir.x;
-  pose(m, pm, dt, t, celebrate, gm, bm, onBall);
+  pose(m, pm, dt, t, celebrate, guide, bm, onBall);
   if (st) st.dir.x = -st.dir.x;
   r.position.x = -r.position.x; r.rotation.y = -r.rotation.y;      // (back out of the mirror, from wherever the pose left him: game/beaten.js moves a man thrown by a fake)
   mirrorPose(m.bone);
@@ -145,11 +150,10 @@ function posed(m, p, dt, t, celebrate, guide, ball, onBall) {
   layerCharge(m, bn);
   if (def) beatBody(m, bn);
   if (trk) trickBody(m, bn, trk);
-  layerLook(m, bn, g, celebrate || up ? null : ball, dt, 0.22 * (m.drive || 0));
+  layerLook(m, bn, g, celebrate || guide || up ? null : ball, dt, 0.22 * (m.drive || 0));
   if (trk) trickHead(bn, trk);
   if (def) beatHead(m, bn, ball);
   sway(m, bn, p, dt, g);
-  if (guide && p.role === 'mate') { dancePose(bn, guide); return; }
   if (sp && sp.kind === 'header') specialPose(bn, sp);
   m.cheerK = Math.min(1, Math.max(0, (m.cheerK || 0) + (celebrate ? dt : -dt) * 4));       // arms go up, and come down, in a quarter of a second
   if (m.cheerK > 0) celebratePose(bn, g, t, m.cheerK * m.cheerK * (3 - 2 * m.cheerK));
