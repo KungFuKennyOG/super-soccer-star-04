@@ -1,7 +1,6 @@
-// Chiptune music, sequenced live on WebAudio: an upbeat 90s sports-menu theme and a funky loop for the
-// goal dance. Original tunes. playMusic(name) after startAudio() has run from a click or trigger.
+// Chiptune music, sequenced live on WebAudio: an upbeat 90s sports-menu theme and the cup themes.
+// Original tunes. playMusic(name) after startAudio() has run from a click or trigger.
 import { audioOut } from './audio.js';
-import { DANCE } from '../rules/dance.js';
 
 const NOTE = { C: 0, 'C#': 1, D: 2, 'D#': 3, E: 4, F: 5, 'F#': 6, G: 7, 'G#': 8, A: 9, 'A#': 10, B: 11 };
 const midi = n => { const m = n.match(/^([A-G]#?)(\d)$/); return 12 * (+m[2] + 1) + NOTE[m[1]]; };
@@ -33,17 +32,9 @@ const TRACKS = {
     drums: 'K-h-S-h-K-h-S-hS',
     arp: true,
   },
-  dance: {
-    bpm: DANCE.bpm,
-    chords: ['Em', 'Em', 'C', 'D'],
-    lead: ['- - - - B4 - D5 -', 'E5 . D5 B4 - G4 A4 -', '- - G4 - E5 . D5 -', 'B4 . A4 G4 A4 . B4 -'],
-    bassRiff: 'R-RO--R-R-O-R-RO',  // R root, O octave
-    drums: 'K-hhC-hhK-hhC-hK',     // C clap
-    stabs: true,
-  },
 };
 
-let out = null, bus = null, timer = null, cur = null, step = 0, nextT = 0, startT = 0;
+let out = null, bus = null, timer = null, cur = null, step = 0, nextT = 0;
 
 export function playMusic(name) {
   const a = audioOut();
@@ -52,7 +43,7 @@ export function playMusic(name) {
   out = a;
   bus = out.ctx.createGain(); bus.gain.value = 0.2; bus.connect(out.master);
   cur = name; step = 0;
-  nextT = startT = out.ctx.currentTime + 0.08;
+  nextT = out.ctx.currentTime + 0.08;
   timer = setInterval(schedule, 25);
   schedule();
 }
@@ -67,8 +58,6 @@ export function stopMusic(fade = 0.5) {
 }
 
 export const musicPlaying = () => cur;
-// Seconds since the current track's first beat (for syncing the dance to the music).
-export const musicTime = () => (out && cur ? out.ctx.currentTime - startT : 0);
 
 function schedule() {
   const tr = TRACKS[cur];

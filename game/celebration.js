@@ -1,108 +1,106 @@
-// The goal dance on screen: waits for the teammates to come over, starts the dance music, reads your
-// pose (hands in the headset, arrow keys in the browser), and draws the rhythm lane in front of you.
+// Goal celebrations on screen: after a goal of yours (and its replay) a small prompt comes up in front of you.
+// Pick one with the stick and A / X (W, S and Enter in the browser), or strike its pose with your arms (wide for
+// the aeroplane, hands to your ears, one arm to the sky); do nothing and the highlighted one plays; B skips to the
+// restart. Never a trigger. The celebration itself is the sim's (rules/celebrate.js) and game/cheers.js poses it.
 import * as THREE from 'three';
-import { createDance, stepDance, poseFromHands, DANCE, beatLen } from '../rules/dance.js';
-import { controllers } from '../engine/input.js';
-import { uiPlane, PAL, text, box, maroon } from './ps2/ui.js';
-import { playMusic, stopMusic, musicPlaying, musicTime } from './music.js';
-import { sfx } from './audio.js';
+import { CELEBRATIONS, CELEBRATE, createPick, stepPick, gestureFromHands, celebrationDone, byKind } from '../rules/celebrate.js';
+import { startCelebration, pickCelebration } from '../rules/sim.js';
+import { uiPlane, PAL, text, box, maroon, stack, glyph } from './ps2/ui.js';
+import { viewDrop } from './cheers.js';
 
-const W = 512, H = 160, HIT_X = 88, PX_PER_S = 300;   // canvas px (redrawn every frame, so 2x the old lane, no mipmaps)
-const KEYS = { ArrowLeft: 'left', ArrowRight: 'right', ArrowUp: 'up', ArrowDown: 'out', Digit1: 'left', Digit2: 'right', Digit3: 'up', Digit4: 'out' };
+const W = 512, RH = 46, TOP = 50, H = TOP + CELEBRATIONS.length * (RH + 2) + 52;
+const HINT = { wide: 'or arms out wide', ears: 'or hands to ears', sky: 'or one arm up' };
 
 export function createCelebration(scene, camera) {
-  const { ctx, t: tex, m: lane } = uiPlane(W, H, 2.4, 0.75, { mips: false, mat: { depthTest: false } });
-  lane.renderOrder = 12; lane.visible = false; scene.add(lane);
+  const { ctx, t: tex, m: panel } = uiPlane(W, H, 1.02, 1.02 * H / W, { mat: { depthTest: false } });
+  panel.renderOrder = 12; panel.visible = false; scene.add(panel);
+  const cap = uiPlane(512, 64, 1.3, 0.1625, { mat: { depthTest: false } });
+  cap.m.renderOrder = 12; cap.m.visible = false; scene.add(cap.m);
 
-  let wait = 0, dance = null, clock = 0, judge = null, judgeT = 9;
+  let wait = 0, pk = null, on = null, last = -1, hat = false, drawn = '', capT = 0;
   const head = new THREE.Vector3(), dir = new THREE.Vector3(), hand = new THREE.Vector3();
 
-  function readPose(vr, keys) {
-    if (!vr) { for (const k in KEYS) if (keys[k]) return KEYS[k]; return null; }
+  function gesture(raw) {
+    if (!raw.vr || !raw.leftHand || !raw.rightHand) return null;
     camera.getWorldPosition(head); camera.getWorldDirection(dir);
-    const f = Math.hypot(dir.x, dir.z) || 1, rx = -dir.z / f, rz = dir.x / f;
-    const rel = c => { c.getWorldPosition(hand); return { x: (hand.x - head.x) * rx + (hand.z - head.z) * rz, y: hand.y - head.y }; };
-    const L = controllers.find(c => c.userData.hand === 'left'), R = controllers.find(c => c.userData.hand === 'right');
-    return poseFromHands(L ? rel(L) : null, R ? rel(R) : null);
+    const f = Math.hypot(dir.x, dir.z) || 1, fx = dir.x / f, fz = dir.z / f;
+    const rel = h => { hand.copy(h.pos).sub(head); return { x: -hand.x * fz + hand.z * fx, y: hand.y, z: hand.x * fx + hand.z * fz }; };
+    return gestureFromHands(rel(raw.leftHand), rel(raw.rightHand));
   }
-
-  function draw() {
+  function draw(vr) {
+    const left = Math.max(0, 1 - pk.t / CELEBRATE.pickTime), key = `${pk.i}|${Math.round(left * 40)}|${vr}`;
+    if (key === drawn) return;
+    drawn = key;
     ctx.clearRect(0, 0, W, H);
-    box(ctx, 0, 30, W, 106, { r: 5, fill: 'rgba(8,8,10,0.8)' });
-    maroon(ctx, 4, 2, 130, 36, 4); box(ctx, 4, 2, 130, 36, { r: 4, fill: null, lw: 1.5 });
-    text(ctx, 'Dance!', 69, 20, { size: 26, align: 'center', weight: 900 });
-    text(ctx, `+${dance.score}`, W - 10, 21, { size: 30, align: 'right', weight: 900 });
-    // hit zone, pulsing on the beat
-    const beat = clock / beatLen(), pulse = 1 - (beat - Math.floor(beat));
-    ctx.save(); ctx.lineWidth = 5; ctx.strokeStyle = pulse > 0.75 ? PAL.gold : 'rgba(220,220,220,0.6)';
-    ctx.beginPath(); ctx.roundRect ? ctx.roundRect(HIT_X - 34, 46, 68, 74, 12) : ctx.rect(HIT_X - 34, 46, 68, 74); ctx.stroke(); ctx.restore();
-    for (const m of dance.moves) {
-      const x = HIT_X + (m.t - clock) * PX_PER_S;
-      if (x < -40 || x > W + 40) continue;
-      if (m.grade && m.grade !== 'miss') continue;
-      icon(ctx, m.move, Math.round(x), 83, m.grade === 'miss' ? PAL.bad : PAL.ink);
-    }
-    if (judge && judgeT < 0.5) {
-      const col = judge === 'perfect' ? PAL.good : judge === 'good' ? PAL.gold : PAL.bad;
-      text(ctx, judge.charAt(0).toUpperCase() + judge.slice(1), HIT_X + 52, 66, { size: 38, weight: 900, color: col });
-    }
+    maroon(ctx, 0, 0, 236, 40, 4); box(ctx, 0, 0, 236, 40, { r: 4, fill: null, lw: 1.5 });
+    text(ctx, hat ? 'Hat trick!' : 'Celebrate', 118, 20, { size: 26, align: 'center', weight: 900 });
+    // the time left before the highlighted one plays
+    box(ctx, 250, 14, W - 250, 12, { r: 3, fill: 'rgba(8,8,10,0.8)', lw: 1.5 });
+    ctx.fillStyle = PAL.gold; ctx.fillRect(253, 17, (W - 256) * left, 6);
+    const bottom = stack(ctx, 0, TOP, W, RH, CELEBRATIONS.map(c => ({ label: c.name, value: vr && c.gesture ? HINT[c.gesture] : '', vcolor: PAL.muted })), pk.i, { glyphK: vr ? 'A' : null });
+    box(ctx, 0, bottom + 8, W, 40, { r: 5, fill: 'rgba(8,8,10,0.8)', lw: 1.5 });
+    let x = 12;
+    for (const [k, label] of vr ? [['A', 'Select'], ['B', 'Skip']] : [['Enter', 'Select'], ['C', 'Skip']]) { x += glyph(ctx, k, x, bottom + 28, 28) + 8; x += text(ctx, label, x, bottom + 28, { size: 21 }) + 22; }
+    text(ctx, 'Stick: choose', W - 12, bottom + 28, { size: 19, align: 'right', color: PAL.muted });
     tex.needsUpdate = true;
   }
+  // in front of your face: the prompt a little below your eye line, the caption lower still
+  function place(m, dist, down) {
+    camera.getWorldPosition(head); camera.getWorldDirection(dir);
+    const yaw = Math.atan2(dir.x, dir.z);
+    m.position.set(head.x + Math.sin(yaw) * dist, head.y - down, head.z + Math.cos(yaw) * dist);
+    m.lookAt(head.x, head.y - down * 0.5, head.z);
+  }
+  function caption(s) {
+    cap.ctx.clearRect(0, 0, 512, 64);
+    box(cap.ctx, 0, 6, 512, 52, { r: 5, fill: 'rgba(8,8,10,0.8)', lw: 1.5 });
+    text(cap.ctx, s, 256, 32, { size: 27, align: 'center', max: 488 });
+    cap.t.needsUpdate = true; capT = 2.2;
+  }
+  const stop = () => { wait = 0; pk = null; on = null; panel.visible = cap.m.visible = false; };
 
   return {
-    get active() { return wait > 0 || !!dance; },
-    // The move your teammates should be showing right now (a beat ahead of you), for their animation.
-    get guide() {
-      if (!dance) return null;
-      const m = dance.moves.find(x => x.t > clock - 0.25);
-      return { move: m ? m.move : null, beat: clock / beatLen() };
-    },
-    get state() { return dance ? { moves: dance.moves, clock, score: dance.score } : null; },
-    start(delay = 1.4) { wait = delay; dance = null; },
-    cancel() { wait = 0; if (dance) stopMusic(0.2); dance = null; lane.visible = false; },
-    // Returns { score, hits, count } on the frame the dance ends, otherwise null.
-    update(dt, vr, keys) {
+    get active() { return wait > 0 || !!pk || !!on; },
+    get picking() { return !!pk; },
+    overlays: [panel, cap.m],
+    // how far your eyes are moved up or down by the one playing (m): the page adds it to the rig
+    drop(world) { return on ? viewDrop(world.celebrate) : 0; },
+    get state() { return { wait, pick: pk && { i: pk.i, t: pk.t }, on, hat }; },
+    // a goal of yours: teammates start over; the prompt follows. hatTrick: this one pays the bonus.
+    start(world, hatTrick = false, delay = CELEBRATE.wait) { stop(); startCelebration(world); wait = delay; hat = hatTrick; },
+    cancel: stop,
+    // (for tests and the console) pick one now
+    pick(world, id) { if (!pk) return false; pk.force = id; return true; },
+    // Returns { kind, by, hat, bonus, skipped } on the frame it ends, otherwise null.
+    update(dt, raw, world) {
+      if (!world.celebrate || !world.dead) { if (this.active) stop(); return null; }
+      const skip = raw.nav.back || raw.drag;
       if (wait > 0) {
         wait -= dt;
-        if (wait <= 0) { dance = createDance(); clock = 0; judge = null; playMusic('dance'); }
+        if (wait <= 0) { pk = createPick(last + 1); drawn = ''; }
         return null;
       }
-      if (!dance) return null;
-      clock = musicPlaying() === 'dance' ? musicTime() : clock + dt;
-      judgeT += dt;
-      for (const j of stepDance(dance, clock, readPose(vr, keys))) {
-        judge = j.grade; judgeT = 0;
-        sfx(j.grade === 'miss' ? 'touch' : 'perfect');
+      if (pk) {
+        if (skip) { stop(); return { kind: null, by: 'skip', hat, bonus: 0, skipped: true }; }
+        const id = pk.force || stepPick(pk, dt, raw.nav, gesture(raw));
+        place(panel, 2.1, 0.42); panel.visible = true; draw(raw.vr);
+        if (!id) return null;
+        last = CELEBRATIONS.findIndex(c => c.id === id);
+        on = { kind: id, by: pk.force ? 'button' : pk.by };
+        pk = null; panel.visible = false;
+        pickCelebration(world, id);
+        if (raw.vr) caption(byKind(id).say);
+        return null;
       }
-      // keep the lane in front of the face, under the banner
-      camera.getWorldPosition(head); camera.getWorldDirection(dir);
-      const yaw = Math.atan2(dir.x, dir.z);
-      lane.position.set(head.x + Math.sin(yaw) * 2.6, head.y - 0.6, head.z + Math.cos(yaw) * 2.6);
-      lane.lookAt(head.x, head.y - 0.6, head.z);
-      lane.visible = true;
-      draw();
-      if (dance.done) {
-        const r = { score: dance.score, hits: dance.hits, count: DANCE.count };
-        dance = null; lane.visible = false; stopMusic(0.6);
+      if (!on) return null;
+      capT -= dt; cap.m.visible = capT > 0;
+      if (cap.m.visible) place(cap.m, 2.2, 0.62);
+      if (skip || celebrationDone(world.celebrate)) {
+        const r = { ...on, hat, bonus: hat && !skip ? CELEBRATE.bonus : 0, skipped: !!skip };
+        stop();
         return r;
       }
       return null;
     },
   };
-}
-
-// A little stick figure seen from behind (your left is on the left) for each move, on a dark disc.
-function icon(ctx, move, cx, cy, col) {
-  ctx.save();
-  ctx.beginPath(); ctx.arc(cx, cy, 30, 0, Math.PI * 2); ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fill();
-  ctx.strokeStyle = col; ctx.fillStyle = col; ctx.lineWidth = 5; ctx.lineCap = 'round';
-  ctx.beginPath(); ctx.arc(cx, cy - 17, 5, 0, Math.PI * 2); ctx.fill();                       // head
-  const seg = (x0, y0, x1, y1) => { ctx.beginPath(); ctx.moveTo(cx + x0, cy + y0); ctx.lineTo(cx + x1, cy + y1); ctx.stroke(); };
-  seg(0, -10, 0, 6); seg(0, 6, -6, 22); seg(0, 6, 6, 22);                                    // body, legs
-  const up = s => seg(0, -7, s * 13, -22), down = s => seg(0, -7, s * 9, 10), out = s => seg(0, -7, s * 19, -7);
-  if (move === 'left') { up(-1); down(1); }
-  if (move === 'right') { up(1); down(-1); }
-  if (move === 'up') { up(-1); up(1); }
-  if (move === 'out') { out(-1); out(1); }
-  ctx.restore();
 }

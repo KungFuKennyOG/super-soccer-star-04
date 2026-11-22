@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <title>SSS96 model lab</title>
 <!-- Dev page: a lineup of players for checking the models. npm run serve, then
-     /tools/lab.html?pose=idle|sprint|strike|dribble|keeper|dive|stand|celebrate|dance&kit=MAD,BAR&yaw=0&cam=x,y,z&at=x,y,z&fov=40
+     /tools/lab.html?pose=idle|sprint|strike|dribble|keeper|dive|stand|celebrate&kit=MAD,BAR&yaw=0&cam=x,y,z&at=x,y,z&fov=40
      keeper saves: &y=1.2 (height) &save=catch|parry &times=0.1,0.3,0.5 (one frozen moment per player, in seconds)
      the boot and the ball: pose=strike &kind=shot|pass &dir=0.4 (rad round from straight ahead) &times=0.03,0.083,0.15
      (seconds after letting go; the ball is struck at 0.083), or pose=dribble &times=0,0.1,0.2 (seconds after a touch);
@@ -105,8 +105,7 @@ function tick(dt) {
     if (GK.includes(pose) && pose !== 'keeper') { poseOne(m, p, dt, t); placeModel(m, p); continue; }
     const s = speeds[pose] || 0;
     p.vx = p.fx * s; p.vz = p.fz * s;
-    const guide = pose === 'dance' ? { beat: t * 1.5, move: ['left', 'right', 'up', 'out'][Math.floor(t * 1.5) % 4] } : null;
-    animate(m, p, dt, t, pose === 'celebrate', guide, ball);
+    animate(m, p, dt, t, pose === 'celebrate', false, ball);
     placeModel(m, p);
   }
   renderer.render(scene, camera);

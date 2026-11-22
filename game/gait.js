@@ -65,7 +65,7 @@ export function gaitOf(m) {
 // The body's heading. Call after placeModel (which sets the sim's facing) and before poseLegs. The model
 // turns after the sim's facing at a body's pace; a defender moving slowly near the ball faces the ball
 // instead. busy: he is on the ball or striking it, so the model stays tight to the sim. ball: the sim ball,
-// or null for no ball to watch (celebrating, the dance). Not for your own first-person legs.
+// or null for no ball to watch (celebrating). Not for your own first-person legs.
 export function faceBody(m, p, dt, ball = null, busy = false) {
   const g = gaitOf(m), s = Math.hypot(p.vx, p.vz);
   let want = m.root.rotation.y, near = 0;

@@ -4,7 +4,7 @@ import { createStage } from '../engine/stage.js';
 import { vrSupported, enterVR } from '../engine/xr.js';
 import { buzz } from '../engine/input.js';
 import { startLoop } from '../engine/loop.js';
-import { createWorld, stepSim, resetPlay, startCelebration, defenders } from '../rules/sim.js';
+import { createWorld, stepSim, resetPlay, defenders } from '../rules/sim.js';
 import { createMatch, createScenarioMatch, counterAttack, scoreEvent, tickMatch, clockText, isHatTrick } from '../rules/match.js';
 import { ALL, NATIONS, byId, teamsFor } from '../rules/teams.js';
 import { createCup, currentFixture, scenarioFor } from '../rules/cup.js';
@@ -34,6 +34,7 @@ import { createControls } from './controls.js';
 import { startAudio, sfx } from './audio.js';
 import { playMusic, stopMusic } from './music.js';
 import { createCelebration } from './celebration.js';
+import { cheerOf, hideBoots } from './cheers.js';
 import { createCommentary } from './commentary.js';
 import { createReplay } from './replay.js';
 import { createIntents } from './intent.js';
@@ -82,7 +83,7 @@ const ball = buildBall(); scene.add(ball.mesh, ball.shadow);
 const arrow = buildArrow(); scene.add(arrow);
 
 let mode = 'title';   // 'title' (browser start page) | 'menu' | 'play' | 'ceremony' | 'paused'
-let celebrateT = 0, flashT = 0, danceNext = false;   // danceNext: a hat-trick dance waiting for its replay to finish
+let celebrateT = 0, flashT = 0, cheerNext = null, dropY = 0;   // cheerNext: your celebration waiting for the goal's replay to finish ({ hat })
 const best = loadBest();
 const controls = createControls({ renderer, rig, canvas, isPlaying: () => mode === 'play', onUnlock: () => { if (mode === 'play') showPause(); } });
 const desk = controls.desk;
@@ -169,7 +170,7 @@ function setStage(level, wx) {
   applyWeather(world, wx); stadium.setWeather(wx); weather.set(wx); weather.bright?.(stadium.weatherBright); ball.setDesign(look.ballName);
   hud.placeScoreboard(stadium.ground.board.y, stadium.ground.board.z);
   replay.setup(world, game.team, game.opp, stadium.ground.board, look);
-  intents.reset(); slowT = 0; said10 = false; danceNext = false;
+  intents.reset(); slowT = 0; said10 = false; cheerNext = null;
   menus.close(); stopMusic(0.4); celebration.cancel(); stadium.cheer(false);
   hudEl.hidden = renderer.xr.isPresenting;
   if (!renderer.xr.isPresenting) { desk.yaw = 0; desk.pitch = 0; desk.lock(); }
@@ -263,12 +264,10 @@ function feedback(ev) {
     if (b && b.text === 'THEY SCORE!') commentary.event({ type: 'counterGoal' });
     else commentary.event(e, { us: match.us, them: match.them, scenario: !!match.scenario, hatTrick: hat });
     if (e.type === 'goal' && settings.replays && !training.active) replay.goal();
-    if (hat) { if (replay.busy) danceNext = true; else startDance(); }   // a hat trick's replay plays first, then the dance
+    // your goal: its replay plays first, then you pick a celebration (game/celebration.js); a hat trick's pays a bonus
+    if (e.type === 'goal' && e.by === 'you' && !training.active) { if (replay.busy) cheerNext = { hat }; else celebration.start(world, hat); }
   }
 }
-
-// The hat-trick dance: teammates come over, then the rhythm game starts.
-function startDance(delay = 1.6) { startCelebration(world); celebration.start(delay); }
 
 /* ---------- the frame ---------- */
 
@@ -287,9 +286,9 @@ const loop = startLoop(renderer, (dt, t) => {
 
   if (mode === 'play' && wasPlaying && !hooks.paused) {
     if (raw.skip) training.skip();
-    if (raw.restart) { if (training.active) training.reset(world); else resetPlay(world); match.deadT = 0; celebration.cancel(); danceNext = false; stadium.cheer(false); sfx('whistle', 0.6); }
-    if (replay.active && (raw.knock || raw.drag)) replay.stop();             // A or B skips the replay
-    if (danceNext && !replay.busy) { danceNext = false; startDance(); }     // replay over (or skipped): dance
+    if (raw.restart) { if (training.active) training.reset(world); else resetPlay(world); match.deadT = 0; celebration.cancel(); cheerNext = null; stadium.cheer(false); sfx('whistle', 0.6); }
+    if (replay.active && (raw.knock || raw.drag)) { replay.stop(); raw.nav.ok = raw.nav.back = raw.drag = false; }   // A or B skips the replay (and does nothing else)
+    if (cheerNext && !replay.busy) { celebration.start(world, cheerNext.hat); cheerNext = null; }     // replay over (or skipped): celebrate
     if (raw.vr) { raw.hand = hands.highest(camera.position.y); raw.rightHand = hands.hand('right', handW); raw.leftHand = hands.hand('left', handL); }
     const intent = intents.build(raw, dt, world);
     const ev = stepSim(world, intent, simDt);
@@ -302,12 +301,12 @@ const loop = startLoop(renderer, (dt, t) => {
     if (tr === 'next') sfx('whistle', 0.5);
     if (tr === 'finished') results.finishTraining();
     if (celebration.active) {
-      const d = celebration.update(dt, raw.vr, desk.keys);
+      const was = celebration.picking, d = celebration.update(dt, raw, world);
+      if (was && !celebration.picking && !d) { sfx('roar'); if (celebration.state.hat) { stadium.cheer(false); stadium.cheer(true); } }   // it begins: the crowd again (a hat trick: the whole end up once more)
       if (d) {
-        match.points += d.score;
-        hud.banner({ text: d.hits === d.count ? 'FULL COMBO!' : `DANCE ${d.hits}/${d.count}`, sub: `+${d.score}`, tone: d.hits ? 'good' : 'bad', big: true });
-        match.deadT = MATCH.deadTime - 1.2;
-        if (d.hits === d.count) commentary.event({ type: 'combo' });
+        // done, or skipped with B: the restart follows. A hat trick's celebration pays the flat bonus the dance used to
+        if (d.bonus) { match.points += d.bonus; hud.banner({ text: 'HAT TRICK!', sub: `CELEBRATION +${d.bonus}`, tone: 'good', big: true }); commentary.event({ type: 'combo' }); }
+        match.deadT = MATCH.deadTime - (d.skipped ? 0.5 : 1);
       }
     }
     const r = celebration.active || replay.active ? null : tickMatch(match, simDt, world.dead, !!world.shot && !world.shot.done);
@@ -322,16 +321,22 @@ const loop = startLoop(renderer, (dt, t) => {
   if (mode === 'ceremony') { /* the rig stays put */ } else if (raw.vr) {
     const c = Math.cos(rig.rotation.y), s = Math.sin(rig.rotation.y);
     const hx = camera.position.x * c + camera.position.z * s, hz = -camera.position.x * s + camera.position.z * c;
-    rig.position.set(you.x - hx, 0, you.z - hz);
-  } else rig.position.set(you.x, 0, you.z);
+    rig.position.set(you.x - hx, dropY, you.z - hz);
+  } else rig.position.set(you.x, dropY, you.z);
 
+  // a celebration (game/cheers.js): down on your knees or up through a backflip your view goes with you, never turning
+  const cheer = mode === 'play' && world.dead ? world.celebrate : null;
+  dropY += ((cheer ? celebration.drop(world) : 0) - dropY) * Math.min(1, dt * 14);
   celebrateT = Math.max(0, celebrateT - dt); flashT = Math.max(0, flashT - dt);
   for (const p of world.players) {
     const m = models[p.id];
     placeModel(m, p);
     // your own legs face where you're running, else where you look
-    if (p === you && Math.hypot(you.vx, you.vz) > 0.5) m.root.rotation.y = Math.atan2(you.vx, you.vz);
-    animate(m, p, simDt, t, celebrateT > 0 && p.team === 'home' && p.role !== 'you', celebration.guide, world.ball, world.owner === p.id && !world.dead);
+    if (p === you && mode === 'play') m.root.visible = !hideBoots(cheer);
+    if (p === you && cheer && cheer.kind) m.root.rotation.y = Math.atan2(cheer.dx, cheer.dz);
+    else if (p === you && Math.hypot(you.vx, you.vz) > 0.5) m.root.rotation.y = Math.atan2(you.vx, you.vz);
+    cheerOf(m, p, cheer, you);
+    animate(m, p, simDt, t, (celebrateT > 0 || !!cheer) && p.team === 'home' && p.role !== 'you', !!cheer, world.ball, world.owner === p.id && !world.dead);
   }
   ball.update(world.ball, simDt);
   holdInGloves(dt);
@@ -349,8 +354,8 @@ const loop = startLoop(renderer, (dt, t) => {
   if (raw.vr) { placeOnHands(); hands.update(); }
   commentary.update(dt);
   if (mode === 'play') {
-    replay.update(dt, t, camera);
-    if (replay.active) replay.render([rig, ball.mesh, ball.shadow, arrow, ...hud.overlays, ...Object.values(models).flatMap(m => [m.root, m.shadow])]);
+    replay.update(dt, t, camera, settings.replays ? world : null);
+    if (replay.showing) replay.render([rig, ball.mesh, ball.shadow, arrow, ...hud.overlays, ...celebration.overlays, ...Object.values(models).flatMap(m => [m.root, m.shadow])]);
   }
   renderer.render(scene, camera);
 }, { onFps: fps => { $('fps').textContent = `${fps} FPS`; } });
@@ -399,6 +404,6 @@ function placeOnHands() {
 
 
 // hooks for the smoke test and for poking at it from the console
-const hooks = { paused: false, get world() { return world; }, get match() { return match; }, get mode() { return mode; }, dance: celebration, startDance, desk, menus, game, intents, startMatch, startCeremony, training, stadium, settings, placeBoard: (y, z) => hud.placeScoreboard(y, z), loop, renderer, GOAL, camera };
+const hooks = { paused: false, get world() { return world; }, get match() { return match; }, get mode() { return mode; }, celebration, celebrate: (hat = false, delay = 0.1) => { world.dead = true; world.owner = null; celebration.start(world, hat, delay); }, replay, desk, menus, game, intents, startMatch, startCeremony, training, stadium, settings, placeBoard: (y, z) => hud.placeScoreboard(y, z), loop, renderer, GOAL, camera };
 window.__sss = hooks;
 window.__sssOK = true;
