@@ -1,15 +1,17 @@
-// The trophy lift. The cup sits on a plinth in front of you with your squad around you. In the
-// headset, grab it with your grips (one hand or both) and raise it above your head. In the browser,
-// press E to pick it up and hold Up to raise it. Lifting it sets off confetti, fireworks and the crowd.
+// The trophy presentation. A stage on the pitch facing the goal end (game/ps2/stage.js): you front and centre,
+// the cup on a plinth within reach, your squad on the platform and the riser behind you (game/ceremonycast.js),
+// photographers in front. In the headset, grab the cup with your grips (one hand or both) and raise it above
+// your head; in the browser Space (or E) takes it and W / Up raises it. When it goes up: confetti cannons, spark
+// jets, flashes round the ground (game/ps2/confetti.js), a fanfare, the squad erupts and the crowd with them.
 import * as THREE from 'three';
 import { BTN } from '../engine/input.js';
-import { ps1 } from './ps1.js';
-import { uiPlane, PAL, text, box, maroon, wrap, sc } from './ps2/ui.js';
-import { animate } from './actors.js';
-import { buildPlayer2 as buildPlayer } from './ps2/player.js';
+import { uiPlane, PAL, text, box, maroon, glyph, measure } from './ps2/ui.js';
 import { sfx } from './audio.js';
 import { buildHand } from './ps2/hands.js';
 import { buildTrophy2, buildPlinth2 } from './ps2/trophies.js';
+import { buildStage, STAGE, LENSES, CUP_NAME } from './ps2/stage.js';
+import { buildConfetti, buildJets, buildFlashes } from './ps2/confetti.js';
+import { createCast } from './ceremonycast.js';
 import { playMusic } from './music.js';
 
 // Where your hands go on each cup comes with the cup (game/ps2/trophies.js: userData.grips, index 0 on the cup's
@@ -19,92 +21,116 @@ import { playMusic } from './music.js';
 const HOLD = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(
   new THREE.Vector3(-1, 0, 0), new THREE.Vector3(0, 0, -1), new THREE.Vector3(0, -1, 0)));
 
-// hands: from game/hands.js, so the cup is held by your real grips.
 // how far in front of you the plinth stands: the hand-holds are in reach without a step (0.9 m was
 // right at the end of your arms)
 const NEAR = 0.6;
+// where the stage stands on the pitch (you, on it), facing the goal end, its big screen and the home curva
+export const STAGE_AT = { x: 0, z: -13 };
 
-export function createCeremony(scene, camera, hands) {
-  const root = new THREE.Group(); root.visible = false; scene.add(root);
+// hands: from game/hands.js, so the cup is held by your real grips. o.stadium: for the crowd and the flashes.
+export function createCeremony(scene, camera, hands, o = {}) {
+  const rig = o.rig || camera.parent, stadium = o.stadium || null;
+  // stageG: the stage's frame (you at its origin facing -z). root: the frame the cup is handled in, on the
+  // platform, turned round so that +z is ahead of you and +x your left.
+  const stageG = new THREE.Group(); stageG.visible = false; stageG.position.set(STAGE_AT.x, 0, STAGE_AT.z); scene.add(stageG);
+  const root = new THREE.Group(); root.position.y = STAGE.h; root.rotation.y = Math.PI; stageG.add(root);
   const plinth = buildPlinth2(); plinth.position.set(0, 0, NEAR); root.add(plinth);   // the '04 plinth and cups (game/ps2/trophies.js)
 
-  // the hint card over the plinth
-  const { ctx, t: tex, m: card } = uiPlane(768, 160, 1.5, 0.31, { mat: { depthTest: false } });
-  card.renderOrder = 12; card.position.set(0, 2.25, 1.6); card.rotation.y = Math.PI; root.add(card);
-  const say = (a, b, col = PAL.ink) => {
-    ctx.clearRect(0, 0, 768, 160); box(ctx, 0, 0, 768, 160, { r: 6, fill: 'rgba(8,8,10,0.86)' });
-    maroon(ctx, 2, 2, 764, 74); ctx.fillStyle = PAL.sep; ctx.fillRect(2, 76, 764, 2);
-    text(ctx, a, 384, 40, { size: 50, align: 'center', weight: 900, color: col === '#f2c21a' ? PAL.ink : col, max: 730 });
-    // the instruction wraps onto a second line when it's too wide for the sign
-    const lines = wrap(ctx, sc(b || ''), 720, 32).filter(Boolean).slice(0, 2);
-    lines.forEach((l, i) => text(ctx, l, 384, lines.length > 1 ? 100 + i * 36 : 118, { size: 32, align: 'center', max: 730 }));
-    tex.needsUpdate = true;
+  // the prompt: a small plate floating over the cup, gone once you have it
+  const PW = 640, PH = 132, { ctx, t: tex, m: card } = uiPlane(PW, PH, 0.36, 0.36 * PH / PW, { mat: { depthTest: false } });
+  card.renderOrder = 12; root.add(card);
+  // the television lights on the stage: from the front, so faces turned to the cup aren't in their own shade
+  const lamp = new THREE.DirectionalLight('#fff4e0', 0.5); lamp.position.set(0.25, 0.9, -1); lamp.visible = false; scene.add(lamp);
+  let cardA = 0, cardWant = 0;
+  // parts: strings, or [glyph] for a button or key
+  const say = (head, parts) => {
+    ctx.clearRect(0, 0, PW, PH); box(ctx, 0, 0, PW, PH, { r: 6, fill: 'rgba(8,8,10,0.88)' });
+    maroon(ctx, 2, 2, PW - 4, 50); ctx.fillStyle = PAL.sep; ctx.fillRect(2, 52, PW - 4, 2);
+    text(ctx, head, PW / 2, 28, { size: 30, align: 'center', weight: 900, max: PW - 30 });
+    const size = 27, gh = 40, w = p => (Array.isArray(p) ? (p[0].length === 1 ? gh : measure(ctx, p[0], gh * 0.48) + gh * 0.6) : measure(ctx, p, size)) + 10;
+    let x = (PW - parts.reduce((s, p) => s + w(p), 0)) / 2;
+    for (const p of parts) { if (Array.isArray(p)) glyph(ctx, p[0], x, 93, gh); else text(ctx, p, x, 93, { size }); x += w(p); }
+    tex.needsUpdate = true; cardWant = 1;
   };
 
-  // confetti: one instanced mesh of little paper squares
-  const N = 420, conf = new THREE.InstancedMesh(new THREE.PlaneGeometry(0.06, 0.04), ps1({ lit: false, side: THREE.DoubleSide }), N);
-  conf.frustumCulled = false; conf.visible = false; scene.add(conf);
-  const bits = Array.from({ length: N }, () => ({ p: new THREE.Vector3(), v: new THREE.Vector3(), r: Math.random() * 6, w: 2 + Math.random() * 4 }));
-  // fireworks: sparks in bursts over the stands
-  const S = 240, sparks = new THREE.InstancedMesh(new THREE.BoxGeometry(0.35, 0.35, 0.35), ps1({ lit: false }), S);
-  sparks.frustumCulled = false; sparks.visible = false; scene.add(sparks);
-  const sp = Array.from({ length: S }, () => ({ p: new THREE.Vector3(), v: new THREE.Vector3(), life: 0 }));
-  const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), one = new THREE.Vector3(1, 1, 1), col = new THREE.Color();
-
-  let trophy = null, squad = [], state = null, lifted = false, liftT = 0, palette = [], nextBurst = 0;
-  const head = new THREE.Vector3(), dir = new THREE.Vector3(), hand = new THREE.Vector3(), tw = new THREE.Vector3();
+  const jets = buildJets(); stageG.add(jets.mesh);
+  const stages = {};
+  let stage = null, cast = null, confetti = null, flashes = null, key = null, hemi = null;
+  let trophy = null, state = null, lifted = false, liftT = 0, upNow = false, roarT = 0, vrMode = false;
+  const head = new THREE.Vector3(), dir = new THREE.Vector3(), hand = new THREE.Vector3(), tw = new THREE.Vector3(), cupS = new THREE.Vector3(), sun = new THREE.Vector3(), cKey = new THREE.Color(), cAmb = new THREE.Color();
   const rest = new THREE.Vector3(0, 1.02, NEAR);
-  let held = { left: null, right: null }, deskHold = false, deskY = 1.25, deskHands = [], anchors = [];
+  let held = { left: null, right: null }, deskHold = false, deskY = 1.25, deskHands = [], anchors = [], rigWas = null;
   // the lift counts once a hand holding the cup is this far above your eyes (fists just over your head).
   // It used to wait for the cup's base to clear your head, which on the club cup meant arms locked
   // straight up, 44 cm over your eyes, and some lifts never counted.
   const LIFT_ABOVE = 0.12, SKIP_AFTER = 20;
   let waitT = 0, skipShown = false, topHand = -Infinity;
 
-  function burst(at) {
-    const c = palette[Math.floor(Math.random() * palette.length)];
-    let n = 0;
-    for (const s of sp) {
-      if (s.life > 0 || n > 60) continue;
-      s.p.copy(at); s.v.set(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5).normalize().multiplyScalar(9 + Math.random() * 4);
-      s.life = 1.4; s.c = c; n++;
-    }
-    sfx('kick', 0.4);
+  // You are put on the stage once, as it starts: turned to face the front with your head over the mark. After
+  // that the rig is left alone (pinning it cancelled real steps), so you walk about it for real.
+  function standYou() {
+    rigWas = { y: rig.rotation.y, vr: vrMode };
+    camera.getWorldDirection(dir);
+    rig.rotation.y += Math.PI - Math.atan2(dir.x, dir.z);
+    rig.position.y = STAGE.h; rig.updateMatrixWorld(true); camera.getWorldPosition(head);
+    rig.position.x += STAGE_AT.x - head.x; rig.position.z += STAGE_AT.z - head.z;
+    rig.updateMatrixWorld(true);
+  }
+  // camera flashes: the photographers' lenses, and a few hundred seats round the ground
+  function flashPoints() {
+    const pts = LENSES.map(p => [...p]), fans = stadium && stadium.ground && stadium.ground.meshes.fans, seat = fans && fans.geometry.attributes.aSeat;
+    if (seat) for (let i = 0, n = 420, step = Math.max(1, Math.floor(seat.count / n)); i < seat.count; i += step) pts.push([seat.getX(i) - STAGE_AT.x, seat.getY(i) + 1.1, seat.getZ(i) - STAGE_AT.z]);
+    return pts;
+  }
+  function clear() {
+    if (cast) { cast.dispose(); cast = null; }
+    if (confetti) { stageG.remove(confetti.mesh); confetti.mesh.geometry.dispose(); confetti.mesh.material.dispose(); confetti = null; }
+    if (flashes) { stageG.remove(flashes.mesh); flashes.mesh.geometry.dispose(); flashes.mesh.material.dispose(); flashes = null; }
+    if (stage) stageG.remove(stage.mesh);
+    jets.stop();
   }
 
   return {
     get active() { return !!state; },
-    // kind: 'world' | 'club'; team: your team (for the squad's kit and the confetti colors)
-    start(kind, team) {
+    get lifted() { return lifted; },
+    get stageGroup() { return stageG; },
+    // what it adds to the frame, for the notes: { tris, calls }
+    get cost() { return { stage: stage && stage.tris, cast: cast && cast.tris, confetti: confetti && confetti.tris, jets: jets.tris }; },
+    // kind: 'world' | 'club'; team: your team (for the squad's kit and the confetti colors); vr: in the headset
+    start(kind, team, vr = false) {
+      vrMode = vr;
       if (trophy) root.remove(trophy);
+      clear();
       trophy = buildTrophy2(kind); trophy.position.copy(rest); root.add(trophy);
       // posed hands that hold the cup properly: they replace your controller hands while you grip it
       // (and are your hands in the browser). Left hand on your left (+x here), fingers wrapping in.
       deskHands = ['left', 'right'].map(sd => buildHand(sd, 'hold', team.kit, undefined, { d: trophy.userData.holdD }));   // closed round what that cup is held by
       anchors = trophy.userData.grips.map(a => new THREE.Vector3(...a));
       deskHands.forEach((h, i) => { h.position.copy(anchors[i]); h.quaternion.copy(HOLD); h.visible = false; trophy.add(h); });
-      for (const m of squad) root.remove(m.root);
-      squad = [];
-      for (let i = 0; i < 6; i++) {
-        const m = buildPlayer(team.kit, [2, 4, 5, 8, 11, 14][i], i * 11 + 5);
-        const a = -1.1 + i * 0.44, r = 2.0;
-        m.root.position.set(Math.sin(a) * r, 0, Math.cos(a) * r * 0.6 + 0.9);
-        m.root.rotation.y = Math.atan2(-m.root.position.x, -m.root.position.z + 0.2);
-        m.phase = i; root.add(m.root); squad.push(m);
-      }
-      palette = [team.kit.shirt, team.kit.alt, team.kit.shorts, '#f2c21a', '#ffffff'];
-      camera.getWorldPosition(head); camera.getWorldDirection(dir);
-      root.position.set(head.x, 0, head.z); root.rotation.y = Math.atan2(dir.x, dir.z);
-      root.visible = true; state = 'waiting'; lifted = false; held = { left: null, right: null }; trophy.quaternion.identity(); deskHold = false; deskY = 1.25; waitT = 0; skipShown = false;
-      say('CHAMPIONS!', 'GRAB THE CUP AND LIFT IT ABOVE YOUR HEAD');
+      stage = stages[kind] || (stages[kind] = buildStage(kind)); stageG.add(stage.mesh);
+      cast = createCast(stageG, team, kind === 'world' ? 3 : 5);
+      const k = team.kit;
+      confetti = buildConfetti([k.shirt, k.shirt, k.alt || k.shorts, k.shorts, '#f2f1ea', '#e8c04a']); stageG.add(confetti.mesh);
+      flashes = buildFlashes(flashPoints(), LENSES.length); stageG.add(flashes.mesh);
+      key = scene.children.find(c => c.isDirectionalLight); hemi = scene.children.find(c => c.isHemisphereLight);
+      lamp.intensity = stadium && stadium.ground && stadium.ground.recipe.time === 'day' ? 0.22 : 0.5; lamp.visible = true;
+      card.position.set(0, rest.y + trophy.userData.height + 0.1, NEAR);
+      standYou();
+      stageG.visible = true; state = 'waiting'; lifted = upNow = false; liftT = 0; held = { left: null, right: null }; trophy.quaternion.identity(); deskHold = false; deskY = 1.25; waitT = 0; skipShown = false; cardA = 0;
+      say(`${CUP_NAME[kind]} CHAMPIONS`, vr ? ['HOLD BOTH ', ['GRIP'], ' ON THE CUP AND LIFT IT HIGH'] : [['SPACE'], ' TAKE THE CUP   ', ['W'], ' LIFT IT']);
     },
-    stop() { state = null; root.visible = conf.visible = sparks.visible = false; hands.hide('left', false); hands.hide('right', false); },
+    stop() {
+      if (!state) return;
+      state = null; stageG.visible = lamp.visible = false; clear(); hands.hide('left', false); hands.hide('right', false);
+      rig.position.y = 0; if (rigWas && !rigWas.vr) rig.rotation.y = rigWas.y;
+    },
     // raw: controls.read(); keys: desktop keys. Returns 'done' once you've lifted it and pressed on.
     update(dt, t, raw, keys) {
       if (!state) return null;
 
       camera.getWorldPosition(head);
       const local = v => root.worldToLocal(v);
+      let have = false;
 
       if (raw.vr) {
         // grab: squeeze a grip with your hand near one of the cup's hand-holds
@@ -126,10 +152,11 @@ export function createCeremony(scene, camera, hands) {
         topHand = -Infinity;
         for (const g of grips) if (held[g.side] !== null) topHand = Math.max(topHand, g.obj.getWorldPosition(new THREE.Vector3()).y);
         const holding = grips.filter(g => held[g.side] !== null).map(g => ({ p: local(g.obj.getWorldPosition(new THREE.Vector3())), a: anchors[held[g.side]] }));
+        have = holding.length > 0;
         if (holding.length === 2 && holding[0].a !== holding[1].a) {
           // two hands: the cup turns with the line between your hands (tilt it, turn it)
-          const [h0, h1] = holding, want = h1.p.clone().sub(h0.p).normalize(), have = h1.a.clone().sub(h0.a).normalize();
-          const q = new THREE.Quaternion().setFromUnitVectors(have, want);
+          const [h0, h1] = holding, want = h1.p.clone().sub(h0.p).normalize(), was = h1.a.clone().sub(h0.a).normalize();
+          const q = new THREE.Quaternion().setFromUnitVectors(was, want);
           trophy.quaternion.slerp(q, Math.min(1, dt * 15));
           const mid = h0.p.clone().add(h1.p).multiplyScalar(0.5), amid = h0.a.clone().add(h1.a).multiplyScalar(0.5).applyQuaternion(trophy.quaternion);
           trophy.position.lerp(mid.sub(amid), Math.min(1, dt * 25));
@@ -141,58 +168,51 @@ export function createCeremony(scene, camera, hands) {
           trophy.quaternion.slerp(new THREE.Quaternion(), Math.min(1, dt * 6));
         }
       } else {
-        if (keys.KeyE && !deskHold) { deskHold = true; deskHands.forEach(h => { h.visible = true; }); }
+        if ((keys.KeyE || keys.Space) && !deskHold) { deskHold = true; deskHands.forEach(h => { h.visible = true; }); }
         if (deskHold) {
-          if (keys.ArrowUp || keys.KeyW) deskY = Math.min(head.y + 0.45, deskY + dt * 0.9);
+          if (keys.ArrowUp || keys.KeyW) deskY = Math.min(head.y - STAGE.h + 0.45, deskY + dt * 0.9);
+          if (keys.ArrowDown || keys.KeyS) deskY = Math.max(1.25, deskY - dt * 0.9);
           trophy.position.lerp(new THREE.Vector3(0, deskY, 0.55), Math.min(1, dt * 8));
         }
+        have = deskHold;
       }
 
       trophy.getWorldPosition(tw);
-      const up = raw.vr ? topHand > head.y + LIFT_ABOVE : deskHold && tw.y > head.y + 0.05;
-      if (!lifted && up) {
-        lifted = true; liftT = 0; state = 'lifted';
-        sfx('roar'); sfx('net'); playMusic('champions');
-        say('CHAMPIONS!', '', '#ffffff');
-        conf.visible = sparks.visible = true;
-        for (const b of bits) {
-          b.p.set(head.x + (Math.random() - 0.5) * 8, head.y + 3 + Math.random() * 5, head.z + (Math.random() - 0.5) * 8);
-          b.v.set((Math.random() - 0.5) * 0.6, -0.6 - Math.random() * 0.6, (Math.random() - 0.5) * 0.6);
-          b.c = palette[Math.floor(Math.random() * palette.length)];
+      // up: it counts (over your eyes); upNow: it is still up there, with a little slack so it doesn't flicker
+      const slack = upNow ? 0.18 : 0;
+      const up = raw.vr ? topHand > head.y + LIFT_ABOVE - slack : deskHold && tw.y > head.y + 0.05 - slack;
+      if (up && !upNow) {
+        // every time it goes up: the jets, the roar, the stands again
+        jets.fire(t, lifted ? 3 : 5.5); sfx('roar'); sfx('cannon'); roarT = 0;
+        if (stadium) { stadium.cheer(false); stadium.cheer(true); }
+        if (!lifted) {
+          lifted = true; liftT = 0; state = 'lifted'; cardWant = 0;
+          sfx('fanfare'); confetti.fire(t);
+          setTimeout(() => { if (state) playMusic('champions'); }, 1900);
         }
       }
+      upNow = up;
       if (lifted) {
-        liftT += dt;
-        // confetti flutters down and loops back to the top
-        bits.forEach((b, i) => {
-          b.p.addScaledVector(b.v, dt); b.p.x += Math.sin(t * b.w + b.r) * dt * 0.4;
-          if (b.p.y < 0.05) b.p.y = head.y + 4;
-          q.setFromEuler(e.set(t * b.w, b.r + t * 2, 0));
-          conf.setMatrixAt(i, m4.compose(b.p, q, one)); conf.setColorAt(i, col.set(b.c));
-        });
-        conf.instanceMatrix.needsUpdate = true; if (conf.instanceColor) conf.instanceColor.needsUpdate = true;
-        nextBurst -= dt;
-        if (nextBurst <= 0) {
-          nextBurst = 0.5 + Math.random() * 0.6;
-          const a = Math.random() * Math.PI * 2;
-          burst(new THREE.Vector3(head.x + Math.sin(a) * 40, 22 + Math.random() * 12, head.z + Math.cos(a) * 40));
-        }
-        sp.forEach((s, i) => {
-          if (s.life > 0) { s.life -= dt; s.v.y -= 6 * dt; s.p.addScaledVector(s.v, dt); }
-          const k = Math.max(0, s.life);
-          sparks.setMatrixAt(i, m4.compose(s.p, q.identity(), one.clone().multiplyScalar(k)));
-          sparks.setColorAt(i, col.set(s.c || '#ffffff'));
-        });
-        sparks.instanceMatrix.needsUpdate = true; if (sparks.instanceColor) sparks.instanceColor.needsUpdate = true;
-        if (liftT > 6 && state === 'lifted') { state = 'ready'; say('CHAMPIONS!', 'PRESS A TO CONTINUE', '#ffffff'); }
+        liftT += dt; roarT += dt;
+        if (upNow && roarT > 3.2) { roarT = 0; sfx('roar'); }                 // the roar holds while the cup is up
+        if (liftT > 6 && state === 'lifted') { state = 'ready'; say('CHAMPIONS!', [['A'], ' CONTINUE']); }
       }
       // never a dead end: if the lift hasn't counted after a while, A carries on
       if (state === 'waiting') {
+        if (have) cardWant = 0;
         waitT += dt;
-        if (waitT > SKIP_AFTER && !skipShown) { skipShown = true; say('CHAMPIONS!', 'LIFT IT HIGH OR PRESS A TO CONTINUE'); }
+        if (waitT > SKIP_AFTER && !skipShown) { skipShown = true; say('LIFT IT OVER YOUR HEAD', ['OR ', ['A'], ' CONTINUE']); }
         if (skipShown && raw.nav && raw.nav.ok) return 'done';
       }
-      for (const m of squad) animate(m, { vx: 0, vz: 0, role: 'mate' }, dt, t, lifted);
+      // the squad, and what is in the air
+      stageG.updateMatrixWorld(true);
+      cupS.copy(tw); stageG.worldToLocal(cupS);
+      cast.update(dt, t, { cup: cupS, held: have, up: lifted && (upNow || liftT < 2.5) });
+      if (key) { sun.copy(key.position).normalize(); cKey.copy(key.color).multiplyScalar(key.intensity); }
+      if (hemi) cAmb.copy(hemi.color).multiplyScalar(hemi.intensity * 0.75);
+      confetti.update(t, sun, cKey, cAmb); jets.update(t);
+      flashes.update(t, upNow ? 0.55 : lifted ? 0.2 : have ? 0.16 : 0.05, o.renderer ? o.renderer.domElement.height : 900);
+      cardA += (cardWant - cardA) * Math.min(1, dt * 5); card.material.opacity = cardA; card.visible = cardA > 0.02;
       card.lookAt(head);
       if (state === 'ready' && raw.nav && raw.nav.ok) return 'done';
       return null;

@@ -25,7 +25,7 @@ const LOOKS = {
 const R = {
   carpet: [0, 0, 512, 256], riser: [512, 0, 256, 128], dark: [772, 4, 120, 120], steel: [900, 4, 120, 120],
   fascia: [0, 256, 1024, 64], wall: [0, 320, 1024, 384], board: [0, 704, 512, 64], boardBack: [512, 704, 512, 64],
-  press: i => [i * 128, 768, 128, 256], wing: [640, 768, 128, 256], apron: [768, 768, 256, 256],
+  press: i => [i * 128, 768, 128, 256], wing: [640, 768, 128, 256], pressBack: [768, 768, 128, 256], apron: [896, 768, 128, 256],
 };
 const S = 1024;
 
@@ -37,7 +37,7 @@ function weave(ctx, [x, y, w, h], base, seed) {
 }
 // a photographer seen from the front: bib over dark clothes, the camera at his face, its lens toward you
 function pressman(ctx, [x, y, w, h], i, kneel) {
-  const cx = x + w / 2, skin = ['#c99673', '#8a5a3c', '#e0b08c', '#a87552'][i % 4], bib = ['#d8d23a', '#e8e6de', '#4f7fd0', '#d8d23a'][i % 4], dark = ['#1c1e24', '#2a2622', '#20242c', '#181818'][i % 4];
+  const cx = x + w / 2, skin = ['#c99673', '#8a5a3c', '#e0b08c', '#a87552'][i % 4], bib = ['#d8d23a', '#e8e6de', '#4f7fd0', '#d8d23a'][i % 4], dark = ['#39414f', '#5a5046', '#2f4866', '#44464c'][i % 4];
   const top = y + (kneel ? h * 0.42 : h * 0.07), hr = w * 0.11, sh = top + hr * 2.5, hip = kneel ? y + h * 0.8 : y + h * 0.55;
   ctx.fillStyle = dark;
   if (kneel) { ctx.fillRect(cx - w * 0.26, hip - 4, w * 0.24, h - (hip - y) + 4); ctx.fillRect(cx + 2, hip - 4, w * 0.3, (y + h - hip) * 0.55); ctx.fillRect(cx + w * 0.1, hip + (y + h - hip) * 0.4, w * 0.24, (y + h - hip) * 0.6); }
@@ -57,6 +57,17 @@ function pressman(ctx, [x, y, w, h], i, kneel) {
   ctx.fillStyle = '#07080c'; ctx.beginPath(); ctx.arc(cx, cy, hr * 0.55, 0, Math.PI * 2); ctx.fill();
   ctx.fillStyle = 'rgba(190,210,255,0.8)'; ctx.beginPath(); ctx.arc(cx - hr * 0.2, cy - hr * 0.2, hr * 0.14, 0, Math.PI * 2); ctx.fill();
   return (cy - y) / h;                               // how far down the card the lens is
+}
+
+// the same man from behind (what the stands see): hair, jacket, the bib's back, legs
+function pressBack(ctx, [x, y, w, h]) {
+  const cx = x + w / 2, top = y + h * 0.07, hr = w * 0.11, sh = top + hr * 2.5, hip = y + h * 0.55;
+  ctx.fillStyle = '#39414f'; ctx.fillRect(cx - w * 0.2, hip - 4, w * 0.17, y + h - hip + 4); ctx.fillRect(cx + w * 0.03, hip - 4, w * 0.17, y + h - hip + 4);
+  ctx.beginPath(); ctx.moveTo(cx - w * 0.32, sh + 6); ctx.quadraticCurveTo(cx, sh - 8, cx + w * 0.32, sh + 6); ctx.lineTo(cx + w * 0.25, hip); ctx.lineTo(cx - w * 0.25, hip); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = '#d8d23a'; ctx.fillRect(cx - w * 0.19, sh + 10, w * 0.38, (hip - sh) * 0.72);
+  ctx.fillStyle = 'rgba(0,0,0,0.7)'; ctx.font = font(w * 0.13, 900); ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('PRESS', cx, sh + 10 + (hip - sh) * 0.36);
+  ctx.fillStyle = '#c99673'; ctx.fillRect(cx - hr * 0.5, top + hr * 1.8, hr, hr);
+  ctx.fillStyle = '#1a1410'; ctx.beginPath(); ctx.ellipse(cx, top + hr * 1.15, hr, hr * 1.2, 0, 0, Math.PI * 2); ctx.fill();
 }
 
 const lensAt = [];
@@ -84,8 +95,9 @@ function sheet(kind) {
     ctx.fillStyle = L.edge; ctx.fillRect(x, y, w, 6); ctx.fillRect(x, y + h - 5, w, 5); }
   // the boards in front (our name, facing the stands) and their plain backs with a frame (what you see)
   { const [x, y, w, h] = R.board; ctx.fillStyle = '#f2f1ea'; ctx.fillRect(x, y, w, h); text(ctx, `${NAME} ${YEAR}`, x + w / 2, y + h / 2, { size: 34, weight: 900, align: 'center', color: L.wall, max: w - 30, shadow: false }); }
-  { const [x, y, w, h] = R.boardBack; ctx.fillStyle = '#2a2d33'; ctx.fillRect(x, y, w, h); ctx.strokeStyle = '#6d737b'; ctx.lineWidth = 3; for (let i = 0; i < 4; i++) ctx.strokeRect(x + i * w / 4 + 3, y + 3, w / 4 - 6, h - 6); ctx.beginPath(); for (let i = 0; i < 4; i++) { ctx.moveTo(x + i * w / 4 + 3, y + h - 3); ctx.lineTo(x + (i + 1) * w / 4 - 3, y + 3); } ctx.stroke(); }
+  { const [x, y, w, h] = R.boardBack; ctx.fillStyle = '#4a4f58'; ctx.fillRect(x, y, w, h); ctx.strokeStyle = '#8a9099'; ctx.lineWidth = 3; for (let i = 0; i < 4; i++) ctx.strokeRect(x + i * w / 4 + 3, y + 3, w / 4 - 6, h - 6); ctx.beginPath(); for (let i = 0; i < 4; i++) { ctx.moveTo(x + i * w / 4 + 3, y + h - 3); ctx.lineTo(x + (i + 1) * w / 4 - 3, y + 3); } ctx.stroke(); }
   for (let i = 0; i < 5; i++) lensAt[i] = pressman(ctx, R.press(i), i, i >= 3);
+  pressBack(ctx, R.pressBack);
   { const [x, y, w, h] = R.wing; ctx.fillStyle = L.wall; ctx.fillRect(x, y, w, h); ctx.fillStyle = L.edge; ctx.fillRect(x, y, w, 4); ctx.fillRect(x, y + h - 4, w, 4); mark(ctx, x + w / 2, y + 60, 34); for (let i = 0; i < 3; i++) star(ctx, x + w / 2, y + 130 + i * 40, 26); }
   weave(ctx, R.apron, L.carpet2, 9);
   { const [x, y, w, h] = R.apron; ctx.strokeStyle = L.edge; ctx.lineWidth = 4; ctx.strokeRect(x + 8, y + 8, w - 16, h - 16); }
@@ -142,6 +154,8 @@ export function buildStage(kind = 'world') {
   const card = (x, z, i, sc) => {
     const kneel = i >= 3, w = 0.86 * sc, hh = 1.78 * sc, y0 = kneel ? -0.62 * sc : 0;      // (a kneeling card's top 58% holds the figure)
     quad([x - w / 2, y0, z], [x + w / 2, y0, z], [x + w / 2, y0 + hh, z], [x - w / 2, y0 + hh, z], R.press(i), 0.82, 1);
+    if (kneel) quad([x + w / 2, 0, z - 0.01], [x - w / 2, 0, z - 0.01], [x - w / 2, hh * 0.58, z - 0.01], [x + w / 2, hh * 0.58, z - 0.01], [R.pressBack[0], R.pressBack[1], 128, 148], 0.8, 1);
+    else quad([x + w / 2, y0, z - 0.01], [x - w / 2, y0, z - 0.01], [x - w / 2, y0 + hh, z - 0.01], [x + w / 2, y0 + hh, z - 0.01], R.pressBack, 0.8, 1);
     LENSES.push([x, y0 + hh * (1 - lensAt[i]), z + 0.05]);
   };
   [-3.6, -2.5, -1.5, -0.55, 0.5, 1.45, 2.4, 3.5].forEach((x, k) => card(x + 0.12 * Math.sin(k * 5.1), BZ - 0.5 - 0.07 * x * x * 0.2 - 0.1 * (k % 2), 3 + (k % 2), 0.97 + 0.05 * Math.sin(k * 2.3)));

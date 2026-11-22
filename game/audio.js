@@ -106,6 +106,23 @@ export function sfx(name, strength = 1) {
     bp.frequency.setValueAtTime(700, t); bp.frequency.exponentialRampToValueAtTime(3200, t + 0.18);
     env(g, 0.02, 0.35 * strength, 0.2, t);
     n.connect(bp); bp.connect(g); g.connect(master); n.start(t); n.stop(t + 0.3);
+  } else if (name === 'fanfare') {
+    // the cup goes up: a short brass call (our own: three pick-up notes, a rising chord, held)
+    const notes = [[392, 0, 0.13], [392, 0.15, 0.13], [392, 0.3, 0.13], [523.25, 0.45, 0.42], [659.25, 0.9, 0.2], [783.99, 1.12, 0.2], [1046.5, 1.35, 1.1], [659.25, 1.35, 1.1], [783.99, 1.35, 1.1]];
+    for (const [f, at, len] of notes) for (const det of [-4, 5]) {
+      const o = ctx.createOscillator(), g = ctx.createGain(), lp = ctx.createBiquadFilter();
+      o.type = 'sawtooth'; o.frequency.value = f; o.detune.value = det; lp.type = 'lowpass'; lp.frequency.setValueAtTime(900, t + at); lp.frequency.linearRampToValueAtTime(2600, t + at + 0.06);
+      g.gain.setValueAtTime(0.0001, t + at); g.gain.exponentialRampToValueAtTime(0.085 * strength, t + at + 0.03); g.gain.setValueAtTime(0.085 * strength, t + at + len * 0.8); g.gain.exponentialRampToValueAtTime(0.0001, t + at + len);
+      o.connect(lp); lp.connect(g); g.connect(master); o.start(t + at); o.stop(t + at + len + 0.05);
+    }
+  } else if (name === 'cannon') {
+    // confetti cannons and the jets: a thump of air, then a long hiss
+    const o = ctx.createOscillator(), g = ctx.createGain();
+    o.type = 'sine'; o.frequency.setValueAtTime(110, t); o.frequency.exponentialRampToValueAtTime(38, t + 0.25);
+    env(g, 0.004, 0.7 * strength, 0.3, t); o.connect(g); g.connect(master); o.start(t); o.stop(t + 0.4);
+    const n = ctx.createBufferSource(), ng = ctx.createGain(), hp = ctx.createBiquadFilter();
+    n.buffer = noiseBuffer(2.5); hp.type = 'highpass'; hp.frequency.value = 2600;
+    env(ng, 0.02, 0.35 * strength, 2.2, t); n.connect(hp); hp.connect(ng); ng.connect(master); n.start(t);
   } else if (name === 'roar') crowdSwell(0.9, 1100, 4);
   else if (name === 'ooh') crowdSwell(0.45, 500, 1.8);
   else if (name === 'ole') crowdSwell(0.5, 900, 1.0);       // a skill comes off: the crowd's OLE
