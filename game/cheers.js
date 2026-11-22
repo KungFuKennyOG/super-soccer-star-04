@@ -7,7 +7,7 @@
 //     aeroplane's arms and banking, hands to the ears, the arm to the sky, the arms round each other in the pile-on
 // m.cheer = { c: world.celebrate, role: 'you' | 'mate' | 'opp', side: -1 | 1 (a teammate's), you: the sim's you }.
 import * as THREE from 'three';
-import { CLIPS, sampleStride, newPose, applyPose } from './mocap.js';
+import { CLIPS, sampleStride, newPose, applyPose, mixPose } from './mocap.js';
 import { sampleOnce, newOnce } from './keepercap.js';
 import { ankleOf, footOf, reachLeg, aimFoot, reachArm, aimHand } from './legik.js';
 import { gaitOf } from './gait.js';
@@ -20,7 +20,7 @@ const aL = new THREE.Vector3(), aR = new THREE.Vector3(), fL = new THREE.Quatern
 const UPPER = new Set(['spine', 'chest', 'clavicleL', 'upperArmL', 'foreArmL', 'clavicleR', 'upperArmR', 'foreArmR']);
 const BOWED = new Set([...UPPER, 'neck', 'head']);
 const BODY = new Set([...BOWED, 'hips', 'upperLegL', 'lowerLegL', 'footL', 'toeL', 'upperLegR', 'lowerLegR', 'footR', 'toeR']);
-const JOY = CLIPS.joy, BACK = CLIPS.flip, SAD = [CLIPS.sad, CLIPS.sadB], P1 = newOnce(), P2 = newPose();
+const JOY = CLIPS.joy, BACK = CLIPS.flip, SAD = [CLIPS.sad, CLIPS.sadB], P1 = newOnce(), P2 = newPose(), P3 = newOnce();
 const STAND = 0.93, ANKLE = 0.085, HIPX = 0.09;
 
 // fn poses the bones outright; `w` of that is laid over the pose they had.
@@ -118,9 +118,15 @@ function backflip(bn, u) {
 }
 // Arms thrown up, twice, the second time twisting from side to side: the trunk and arms of the recording over his
 // own legs, the knees giving as the recording's do.
+// (The recording stands with his hands at his chest between the two: only the throws are played, one into the other.)
+const THROWS = [[0.1, 0.95], [2.05, 3.3]], FADE = 0.14, JLEN = THROWS[0][1] - THROWS[0][0] + THROWS[1][1] - THROWS[1][0] - 2 * FADE;
 function joy(bn, tt, w) {
   if (!JOY || w <= 0) return;
-  const len = (JOY.n - 1) / JOY.hz, P = sampleOnce(JOY, ((tt % len) + len) % len, P1);
+  const a = THROWS[0], b = THROWS[1], la = a[1] - a[0] - FADE, u = ((tt % JLEN) + JLEN) % JLEN;
+  // in the first throw, or the second; each begins with the tail of the other fading out
+  const [cur, prev, at] = u < la ? [a, b, u] : [b, a, u - la];
+  const P = sampleOnce(JOY, cur[0] + at, P1);
+  if (at < FADE) mixPose(sampleOnce(JOY, prev[1] - FADE + at, P3), P, smooth(at / FADE), P);
   applyPose(bn, P, w, UPPER);
   ride(bn, w * Math.min(0, P.h[1] - JOY.h[1]));
 }
@@ -224,9 +230,9 @@ function pile(m, bn, ch, p, t) {
     // in front of you and to one side: onto his knees and his arms round you, his head past your shoulder
     const w = arrived(m, p, near && c.t > 0.5, 2.5, 5) * (1 - smooth((u - 0.9) / 0.1)), late = 0.18;
     blend(bn, w, () => {
-      kneel(bn, -0.22, 0.12, 0.15);
-      bn.neck.rotation.set(-0.2, 0, 0);
-      for (const n of ['L', 'R']) { const sd = n === 'L' ? 1 : -1; reachArm(bn, n, v2.set(yx + sd * 0.25, 1.0, yz + 0.02), pole.set(sd, -0.5, -0.2)); }
+      kneel(bn, -0.2, 0.1, 0.15);
+      bn.neck.rotation.set(-0.15, 0, 0.2);
+      for (const n of ['L', 'R']) { const sd = n === 'L' ? 1 : -1; reachArm(bn, n, v2.set(yx + sd * 0.22, 1.02 - 0.1 * sd, yz + 0.1), pole.set(sd, -0.6, -0.3)); }
       if (u > late) rise(bn, clamp((u - late) / (1 - late), 0, 1));
     });
     return;

@@ -96,6 +96,7 @@ export function createReplay(scene, renderer) {
     get active() { return active; },
     // playing, or about to start after a goal
     get busy() { return active || pendingT >= 0; },
+    get ghosts() { return ghosts; },
     // something is on the screens: a replay, or a celebration's live picture
     get showing() { return active || live; },
     // per match: who's playing, and fresh replay copies of the players (you as a whole player)
@@ -233,7 +234,7 @@ export function createReplay(scene, renderer) {
         if (id === 'you') { p = Object.create(p0); p.role = 'mate'; p.fx = c.dx; p.fz = c.dz; }
         cheerOf(m, p0, c, you);
         placeModel(m, p);
-        animate(m, p, dt, t, p0.team === 'home' && id !== 'you', true, null, false);
+        animate(m, p, dt, t, false, true, null, false);
       }
       look.lerp(v3.set(you.x, 0, you.z), Math.min(1, dt * 5));
       cam.position.set(look.x + side * 9.5, 2.4, look.z + 6.5);

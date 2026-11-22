@@ -151,7 +151,7 @@ export function mateTarget(c, you, side) {
   if (c.kind === 'point') return { ...at(0.9, 1.5), speed: 7, face: side < 0 ? same : null };
   if (c.kind === 'ears') return { ...at(0.7, 1.6), face: same };
   if (c.kind === 'pile') {
-    if (side < 0) return { ...at(0.66, 0.34), speed: 6.8 };            // in front and to your left, on his knees, arms round you
+    if (side < 0) return { ...at(0.46, 0.3), speed: 6.8 };            // in front and to your left, on his knees, arms round you
     return c.t < PILE.mate ? at(-2.5, 0.6) : { ...at(-0.56, 0.16), speed: 6.8, face: same };     // then the other, over your back
   }
   if (c.kind === 'flip') {

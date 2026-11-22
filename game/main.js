@@ -336,7 +336,7 @@ const loop = startLoop(renderer, (dt, t) => {
     if (p === you && cheer && cheer.kind) m.root.rotation.y = Math.atan2(cheer.dx, cheer.dz);
     else if (p === you && Math.hypot(you.vx, you.vz) > 0.5) m.root.rotation.y = Math.atan2(you.vx, you.vz);
     cheerOf(m, p, cheer, you);
-    animate(m, p, simDt, t, (celebrateT > 0 || !!cheer) && p.team === 'home' && p.role !== 'you', !!cheer, world.ball, world.owner === p.id && !world.dead);
+    animate(m, p, simDt, t, (cheer ? !cheer.kind : celebrateT > 0) && p.team === 'home' && p.role !== 'you', !!cheer, world.ball, world.owner === p.id && !world.dead);
   }
   ball.update(world.ball, simDt);
   holdInGloves(dt);
@@ -404,6 +404,6 @@ function placeOnHands() {
 
 
 // hooks for the smoke test and for poking at it from the console
-const hooks = { paused: false, get world() { return world; }, get match() { return match; }, get mode() { return mode; }, celebration, celebrate: (hat = false, delay = 0.1) => { world.dead = true; world.owner = null; celebration.start(world, hat, delay); }, replay, desk, menus, game, intents, startMatch, startCeremony, training, stadium, settings, placeBoard: (y, z) => hud.placeScoreboard(y, z), loop, renderer, GOAL, camera };
+const hooks = { paused: false, get world() { return world; }, get models() { return models; }, get match() { return match; }, get mode() { return mode; }, celebration, celebrate: (hat = false, delay = 0.1) => { world.dead = true; world.owner = null; celebration.start(world, hat, delay); }, replay, desk, menus, game, intents, startMatch, startCeremony, training, stadium, settings, placeBoard: (y, z) => hud.placeScoreboard(y, z), loop, renderer, GOAL, camera };
 window.__sss = hooks;
 window.__sssOK = true;
