@@ -110,13 +110,13 @@ chest, and hands went through it.
 Now: a ribbon 3.6 cm wide round the back of the neck, over the shoulders beside the collar and down the chest in a
 V to the breastbone, with a gold disc 6.6 cm across (rim, raised star, a loop at the top) hanging from the point.
 - The ribbon is laid on the player's own body: each of its points is dropped onto the nearest triangle of the
-  shirt in the bind pose, lifted 4.5 to 7.5 mm, and given that triangle's skin weights. So it goes exactly where the
+  shirt in the bind pose, lifted 4.5 to 9 mm, and given that triangle's skin weights. So it goes exactly where the
   collar, shoulders and chest go. Colours: whichever of white, the kit's second colour and its shorts stands out
   most on the shirt, with the shirt's colour as one stripe down the middle.
 - The disc is skinned to the same spot and turned about the ribbon's point in the vertex shader by a small pendulum
   (per player, driven by how the chest is accelerating): side to side up to 40 degrees, and lifted off the chest up
   to 45 degrees when he drops away under it. It can only lift outward, never into him.
-- One small skinned mesh per player on his skeleton (228 triangles, 1 draw each; the first version was one
+- One small skinned mesh per player on his skeleton (146 triangles, 1 draw each; the first version was one
   instanced draw for all eight).
 - Looked at (`medal-after-front-side-back.png`, `medal-after-film.png`: every sixth frame through the jump): on
   the shirt from the front and side, round the neck from behind, the disc swinging and never inside the body, no
@@ -150,7 +150,7 @@ holding the camera up over their heads.
 - The whole ceremony frame is now 63 to 77 draw calls and about 200,000 to 213,000 triangles (it was 53 to 55 and
   163,000 to 166,000).
 - Photographers: 17 draws (7 x kit + head, cameras, caps, shadows), about 46,100 triangles.
-- Medals: 8 draws, 1,824 triangles (was 1 draw).
+- Medals: 8 draws, 1,168 triangles (was 1 draw).
 - The stage's mesh is down to 176 triangles.
 
 ### Not checked
