@@ -44,10 +44,10 @@ export function createCelebration(scene, camera) {
     text(ctx, 'Stick: choose', W - 12, bottom + 28, { size: 19, align: 'right', color: PAL.muted });
     tex.needsUpdate = true;
   }
-  // in front of your face: the prompt a little below your eye line, the caption lower still
-  function place(m, dist, down) {
+  // the prompt to the right of where you look, clear of the goal banner and the commentator's subtitle; the caption low in front
+  function place(m, dist, down, turn = 0) {
     camera.getWorldPosition(head); camera.getWorldDirection(dir);
-    const yaw = Math.atan2(dir.x, dir.z);
+    const yaw = Math.atan2(dir.x, dir.z) + turn;
     m.position.set(head.x + Math.sin(yaw) * dist, head.y - down, head.z + Math.cos(yaw) * dist);
     m.lookAt(head.x, head.y - down * 0.5, head.z);
   }
@@ -84,7 +84,7 @@ export function createCelebration(scene, camera) {
       if (pk) {
         if (skip) { stop(); return { kind: null, by: 'skip', hat, bonus: 0, skipped: true }; }
         const id = pk.force || stepPick(pk, dt, raw.nav, gesture(raw));
-        place(panel, 2.1, 0.42); panel.visible = true; draw(raw.vr);
+        place(panel, 2.1, 0.3, -0.42); panel.visible = true; draw(raw.vr);
         if (!id) return null;
         last = CELEBRATIONS.findIndex(c => c.id === id);
         on = { kind: id, by: pk.force ? 'button' : pk.by };

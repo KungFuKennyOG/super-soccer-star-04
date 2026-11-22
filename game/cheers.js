@@ -210,7 +210,7 @@ function ears(m, bn, ch, p, t) {
       skull(bn, v); q2.copy(q).multiply(bn.head.quaternion);                    // (q: the neck's frame, left by skull)
       for (const n of ['L', 'R']) {
         const sd = n === 'L' ? 1 : -1;
-        v2.set(sd * 0.165, 0.075, 0.03).applyQuaternion(q2).add(v);
+        v2.set(sd * 0.17, -0.015, 0.035).applyQuaternion(q2).add(v);
         reachArm(bn, n, v2, pole.set(sd, -0.75, 0.05));
         aimHand(bn, n, q.setFromEuler(eul.set(0, sd * 0.5, Math.PI)).premultiply(q2));       // fingers up, the palm forward
       }

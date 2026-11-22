@@ -10,7 +10,7 @@ import { cheerOf, viewDrop } from '../../game/cheers.js';
 import { createWorld, stepSim, resetPlay, startCelebration, pickCelebration } from '../../rules/sim.js';
 import { CELEBRATIONS, FLIP } from '../../rules/celebrate.js';
 
-const DT = 1 / 72, IDS = ['you', 'm1', 'm2', 'd1', 'd2', 'd3'], at = new THREE.Vector3();
+const DT = 1 / 72, IDS = ['you', 'm1', 'm2', 'd1', 'd2', 'd3'];
 const POINTS = ['head', 'handL', 'handR', 'lowerLegL', 'lowerLegR', 'footL', 'footR', 'toeL', 'toeR', 'upperArmL', 'upperArmR', 'hips'];
 // Plays a celebration. Returns one row a frame: { t, drop, [id]: { [bone]: Vector3 (world) } }.
 function play(kind, x = 4, z = -18) {
