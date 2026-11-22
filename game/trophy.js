@@ -93,6 +93,7 @@ export function createCeremony(scene, camera, hands, o = {}) {
   return {
     get active() { return !!state; },
     get lifted() { return lifted; },
+    get cast() { return cast; },
     get stageGroup() { return stageG; },
     // what it adds to the frame, for the notes: { tris, calls }
     get cost() { return { stage: stage && stage.tris, cast: cast && cast.tris, confetti: confetti && confetti.tris, jets: jets.tris }; },

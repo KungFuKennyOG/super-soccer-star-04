@@ -15,7 +15,7 @@ import { restPose } from './body.js';
 import { applyPose, aimHead, mixPose } from './mocap.js';
 import { cheerPose, newPose, PART } from './cheercap.js';
 import { BONES } from './assets/anim/cheer.js';
-import { reachArm } from './legik.js';
+import { reachArm, ankleOf, footOf, reachLeg, aimFoot } from './legik.js';
 import { keeperKit } from '../rules/teams.js';
 import { pickSquad } from '../rules/looks.js';
 import { STAGE } from './ps2/stage.js';
@@ -73,10 +73,10 @@ function medalGeometry(ribbon) {
     const i0 = v(a[0] - w, a[1], a[2], rc), i1 = v(a[0] + w, a[1], a[2], rc), i2 = v(b[0] + w, b[1], b[2], rc), i3 = v(b[0] - w, b[1], b[2], rc);
     I.push(i0, i1, i2, i0, i2, i3, i0, i2, i1, i0, i3, i2);
   };
-  const neck = 0.215, mid = 0.1, low = 0.005;
-  for (const s of [-1, 1]) { band([s * 0.082, neck, 0.03], [s * 0.05, mid, 0.118], 0.014); band([s * 0.05, mid, 0.118], [0, low, 0.142], 0.014); }
-  const c0 = v(0, low - 0.036, 0.152, gold), n = 10;
-  for (let i = 0; i < n; i++) { const a = i / n * Math.PI * 2; v(Math.sin(a) * 0.036, low - 0.036 + Math.cos(a) * 0.036, 0.148, i % 2 ? gold : dark); }
+  const neck = 0.2, mid = 0.1, low = 0.0;
+  for (const s of [-1, 1]) { band([s * 0.088, neck, 0.075], [s * 0.052, mid, 0.148], 0.016); band([s * 0.052, mid, 0.148], [0, low, 0.166], 0.016); }
+  const c0 = v(0, low - 0.036, 0.174, gold), n = 10;
+  for (let i = 0; i < n; i++) { const a = i / n * Math.PI * 2; v(Math.sin(a) * 0.036, low - 0.036 + Math.cos(a) * 0.036, 0.17, i % 2 ? gold : dark); }
   for (let i = 0; i < n; i++) I.push(c0, c0 + 1 + (i + 1) % n, c0 + 1 + i);
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3)); g.setAttribute('color', new THREE.Float32BufferAttribute(C, 3)); g.setIndex(I); g.computeVertexNormals();
@@ -107,7 +107,7 @@ function pumpFist(bn, n, t, w, hipY) {
 // Hands that have gone through each other (a take's arms on our wider shoulders cross at the wrists when its
 // hands met) are put back side by side: each arm is bent again to a wrist moved out, its elbow where it was.
 const wl = new THREE.Vector3(), wr = new THREE.Vector3(), el = new THREE.Vector3(), sh = new THREE.Vector3();
-function partHands(root, bn, need = 0.075) {
+function partHands(root, bn, need = 0.13) {
   root.updateMatrixWorld(true);
   root.worldToLocal(bn.handL.getWorldPosition(wl)); root.worldToLocal(bn.handR.getWorldPosition(wr));
   if (wl.x - wr.x >= need || Math.abs(wl.y - wr.y) > 0.25 || Math.abs(wl.z - wr.z) > 0.25) return;
@@ -115,6 +115,26 @@ function partHands(root, bn, need = 0.075) {
   for (const [n, w] of [['L', wl], ['R', wr]]) {
     root.worldToLocal(bn['foreArm' + n].getWorldPosition(el)); root.worldToLocal(bn['upperArm' + n].getWorldPosition(sh));
     reachArm(bn, n, w, pole.copy(el).sub(sh.add(w).multiplyScalar(0.5)));
+  }
+}
+
+// A boot on the floor stays where it came down: while its toes are within a few centimetres of the floor their
+// spot is kept and the leg bent to it (a take's legs on our skeleton drift otherwise); let go as it lifts, or if
+// the take has gone 14 cm from it (a step), the difference eased away.
+const an = new THREE.Vector3(), toe = new THREE.Vector3(), fq = new THREE.Quaternion();
+function pinFeet(c, bn, dt) {
+  const pins = c.pins || (c.pins = { L: { on: false, x: 0, z: 0, ox: 0, oz: 0 }, R: { on: false, x: 0, z: 0, ox: 0, oz: 0 } });
+  for (const n of ['L', 'R']) {
+    const p = pins[n];
+    ankleOf(bn, n, an); footOf(bn, n, fq);
+    toe.copy(bn['toe' + n].userData.rest).applyQuaternion(fq).add(an);
+    const low = Math.min(toe.y, an.y - 0.06) < (p.on ? 0.065 : 0.045);
+    if (low && p.on && Math.hypot(p.x - toe.x, p.z - toe.z) < 0.14) { p.ox = p.x - toe.x; p.oz = p.z - toe.z; }
+    else if (low && !p.on) { p.on = true; p.x = toe.x + p.ox; p.z = toe.z + p.oz; }
+    else { p.on = false; const e = Math.exp(-dt * 12); p.ox *= e; p.oz *= e; }
+    an.x += p.ox; an.z += p.oz;
+    if (an.y < 0.085) an.y += (0.085 - an.y) * 0.8;                       // (and no ankle under the floor)
+    reachLeg(bn, n, an); aimFoot(bn, n, fq);
   }
 }
 
@@ -131,7 +151,7 @@ export function createCast(group, team, seed = 1) {
     group.add(m.root, m.shadow);
     return { ...c, m, y, face, t: i * 1.37 + (seed % 7) * 0.31, act: 0, from: 0, k: 1, off: 0, mode: 'stand', p: { x: c.x, z: c.z, vx: 0, vz: 0, fx: Math.sin(face), fz: Math.cos(face), role: 'mate' }, snap: null, snapK: 0, head: [0, 0] };
   });
-  cast[6].t = cast[5].t;                                                    // the two with an arm round each other move as one
+  cast[6].t = cast[5].t; cast[6].mirror = true;                                                    // the two with an arm round each other move as one
   const medals = new THREE.InstancedMesh(medalGeometry(team.kit.alt && team.kit.alt !== team.kit.shirt ? team.kit.alt : '#f2f1ea'), new THREE.MeshPhongMaterial({ vertexColors: true, shininess: 40, specular: 0x554422 }), cast.length);
   medals.frustumCulled = false; group.add(medals);
   let upT = -1, level = 0;
@@ -144,10 +164,10 @@ export function createCast(group, team, seed = 1) {
     actPose(a, c.t, c.mirror, PA);
     if (k < 1) mixPose(actPose(b, c.t, c.mirror, PB), PA, k, PA);
     restPose(bn); applyPose(bn, PA, 1, PART.body);
-    partHands(c.m.root, bn);
+    pinFeet(c, bn, dt); partHands(c.m.root, bn);
     for (const [act, w] of [[a, k], [b, 1 - k]]) {
       if (!act.fist || w <= 0.01) continue;
-      const which = act.fist === 'out' ? (c.x < 0 ? 'R' : 'L') : act.fist;       // (the arm that isn't round his mate)
+      const which = act.fist === 'out' ? (c.x < 0 ? 'L' : 'R') : act.fist;       // (the arm that isn't round his mate)
       for (const n of which) pumpFist(bn, n, c.t + (n === 'L' ? 0.25 : 0), w, bn.hips.position.y);
     }
     return bn;
@@ -162,12 +182,13 @@ export function createCast(group, team, seed = 1) {
   // an arm round the man beside him: the man on the left over the other's shoulders, the man on the right
   // round the other's back lower down, so the two arms never cross
   function link(c, o) {
-    const bn = c.m.bone, left = c.x < o.x, n = left ? 'L' : 'R', ob = o.m.bone;
+    // (they face the front, -z: the man at the greater x is on his right)
+    const bn = c.m.bone, over = c.x < o.x, n = over ? 'R' : 'L', ob = o.m.bone;
     o.m.root.updateMatrixWorld(true); c.m.root.updateMatrixWorld(true);
-    if (left) { ob.upperArmL.getWorldPosition(v1); ob.neck.getWorldPosition(v2); v1.lerp(v2, 0.35); v1.y += 0.05; }
-    else { ob.spine.getWorldPosition(v1); ob.chest.getWorldPosition(v2); v1.lerp(v2, 0.55); }
-    c.m.root.worldToLocal(v1); v1.z -= left ? 0.15 : 0.17;                        // behind him
-    reachArm(bn, n, v1, pole.set(0, left ? 0.25 : -0.8, -1));
+    if (over) { ob.upperArmR.getWorldPosition(v1); ob.neck.getWorldPosition(v2); v1.lerp(v2, 0.3); v1.y += 0.06; }
+    else { ob.spine.getWorldPosition(v1); ob.chest.getWorldPosition(v2); v1.lerp(v2, 0.5); ob.upperLegL.getWorldPosition(v2); v1.x += (v2.x - v1.x) * 0.9; }
+    c.m.root.worldToLocal(v1); v1.z -= over ? 0.13 : 0.16;                        // behind him
+    reachArm(bn, n, v1, pole.set(0, over ? 0.3 : -0.8, -1));
   }
 
   const api = {

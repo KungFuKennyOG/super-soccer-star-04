@@ -24,7 +24,7 @@ const EYES = { eyes: [0, 0], eyesup: [0, 0.75], back: [Math.PI, 0.1], left: [2.1
 await mkdir(out, { recursive: true });
 const server = await startServer(+(process.env.PORT || 8171));
 const browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--autoplay-policy=no-user-gesture-required'] });
-const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
+const page = await browser.newPage({ viewport: { width: 1280, height: 720 }, deviceScaleFactor: +(process.env.DPR || 1) });
 page.setDefaultTimeout(240000);
 page.on('pageerror', e => console.log('[page error]', e.message));
 page.on('console', m => { if (m.type() === 'error') console.log('[page]', m.text()); });
@@ -53,6 +53,16 @@ await page.evaluate(async ({ kind, team, time, VIEWS }) => {
       }
       return s.renderer.domElement.toDataURL('image/png');
     },
+    // how far each planted boot (its toe within 3 cm of the floor, this frame and last) moved over the floor, m/s
+    feet(dt) {
+      const out = [], v = new THREE.Vector3();
+      for (const c of s.ceremony.cast.cast) for (const n of ['toeL', 'toeR']) {
+        c.m.bone[n].getWorldPosition(v); const k = c.num + n, was = (this.was || (this.was = {}))[k], low = v.y - c.y < 0.07;
+        if (was && was.low && low) out.push([c.num, Math.hypot(v.x - was.x, v.z - was.z) / dt]);
+        this.was[k] = { x: v.x, z: v.z, low };
+      }
+      return out;
+    },
     info() { const i = s.renderer.info.render; return { calls: i.calls, tris: i.triangles, lifted: s.ceremony.lifted, cost: s.ceremony.cost }; },
   };
 }, { kind, team, time, VIEWS });
@@ -68,14 +78,17 @@ try {
   if (!film) console.log('before', JSON.stringify(await page.evaluate(() => window.__cer.info())));
   if (film) {
     // the film: a second and a half waiting, the cup taken and raised, the rest with it up
-    const [view, secs = 6] = film, fps = 30, dir = `${out}/film-${tag}-${view}`;
+    const slide = {}, [view, secs = 6] = film, fps = 30, dir = `${out}/film-${tag}-${view}`;
     await mkdir(dir, { recursive: true });
     for (let i = 0; i < secs * fps; i++) {
       const tt = i / fps, keys = { Space: tt > 0.8 && tt < 1, KeyW: tt > 1 && tt < (+process.env.DOWN_AT || 99), KeyS: tt >= (+process.env.DOWN_AT || 99) };
       await step(1 / fps, keys);
+      if (process.env.MEASURE) for (const [num, sp] of await page.evaluate(d => window.__cer.feet(d), 1 / fps)) (slide[num] || (slide[num] = [])).push(sp);
+      if (process.env.MEASURE === 'only') continue;
       await writeFile(`${dir}/f${String(i).padStart(4, '0')}.png`, Buffer.from((await page.evaluate(([v, e]) => window.__cer.shot(v, e), [view, EYES[view] || null])).split(',')[1], 'base64'));
     }
-    try { execFileSync('ffmpeg', ['-y', '-loglevel', 'error', '-framerate', String(fps), '-i', `${dir}/f%04d.png`, '-pix_fmt', 'yuv420p', '-crf', '20', `${out}/${tag}-${view}.mp4`]); console.log(`${out}/${tag}-${view}.mp4`); } catch (e) { console.log('no ffmpeg: frames are in', dir); }
+    for (const [num, a] of Object.entries(slide)) { a.sort((x, y) => x - y); console.log(`no ${num}: planted-boot speed median ${a[a.length >> 1].toFixed(3)} m/s, 90% under ${a[Math.floor(a.length * 0.9)].toFixed(3)}, max ${a[a.length - 1].toFixed(2)} (${a.length} frames)`); }
+    if (process.env.MEASURE === 'only') process.exitCode = 0; else try { execFileSync('ffmpeg', ['-y', '-loglevel', 'error', '-framerate', String(fps), '-i', `${dir}/f%04d.png`, '-vf', 'scale=trunc(iw/2)*2:trunc(ih/2)*2', '-pix_fmt', 'yuv420p', '-crf', '20', `${out}/${tag}-${view}.mp4`]); console.log(`${out}/${tag}-${view}.mp4`); } catch (e) { console.log('no ffmpeg: frames are in', dir); }
   } else {
     await step(0.2, { Space: true }); await step(0.4, { Space: false });
     for (const v of ['eyes', 'squad']) if (want.includes(v)) await snap(v, 'held');
