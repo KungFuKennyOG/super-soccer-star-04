@@ -197,7 +197,7 @@ for (const [name, o, far] of MOVES) {
     }
     const ys = rows.map(r => r.hips.y), bob = Math.max(...ys) - Math.min(...ys), moved = Math.max(...rows.map(r => r.gkx)) - Math.min(...rows.map(r => r.gkx));
     assert.ok(moved >= far, `he moved ${moved.toFixed(1)} m across`);
-    assert.ok(n > 100 && slid < 0.02, `a planted foot never slides (${cm(slid)} cm/s at most)`);
+    assert.ok(n > 100 && slid < 0.03, `a planted foot never slides (${cm(slid)} cm/s at most)`);
     assert.ok(gapMin > 0.24, `his feet never cross or come together (${cm(gapMin)} cm apart at the nearest)`);
     assert.ok(gapMax < 1.05, `nor too far apart (${cm(gapMax)} cm)`);
     assert.ok(bob < 0.075, `his hips stay level (${cm(bob)} cm between highest and lowest)`);

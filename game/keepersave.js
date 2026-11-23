@@ -219,6 +219,8 @@ function dive(m, sv, dt, ball) {
     }
   }
   // his chest turns to the ball as he goes for it (the far arm can't lie across his chest: it turns him)
+  // (and his shoulders come up by his ears as his arms go out past his head, as shoulders do)
+  if (!free) { const up = 0.32 * wk * (1 - ease((tt - T - 0.1) / 0.3)) * clamp((ax - 0.5) / 0.4, 0, 1); bn.clavicleL.rotation.z = up; bn.clavicleR.rotation.z = -up; bn['clavicle' + near].rotation.y = -s * 0.4 * wk * (1 - clamp((ax - 0.5) / 0.4, 0, 1)) * (1 - ease((tt - T - 0.1) / 0.3)); }   // (close to him, arms bent: the near shoulder comes forward instead)
   if (!free) turnToReach(bn, g);
   // (elbows: out to each side of him and a little down while he is upright; as he lies down the bottom one would then
   // point into the grass, so it comes round to the front. A hand flat on the grass under him: the wrist is bent well back)
@@ -226,7 +228,7 @@ function dive(m, sv, dt, ball) {
   // (...and with the ball hugged as he lies there it points along the grass toward his feet)
   const arms = (g, lie, free, down, out = 0) => {
     for (const lo of [near, far]) {
-      const sd = lo === 'L' ? 1 : -1, pole = hp.set(sd * ((free ? 0.9 : 1) + (lo === far ? out : 0)), -down, -0.35).applyQuaternion(bn.hips.quaternion);
+      const sd = lo === 'L' ? 1 : -1, pole = hp.set(sd * ((free ? 0.9 : 1) + (lo === far ? out : 0.5)), -down, lo === far ? -0.35 : -0.1).applyQuaternion(bn.hips.quaternion);
       if (lo === near) pole.lerp(tmp.set(0, 0.35, 1).lerp(w2.set(-s * 0.5, 0.1, 1), hug), lie);
       placeHand(bn, lo, g[lo], pole.clone(), 1, lim, free);
     }

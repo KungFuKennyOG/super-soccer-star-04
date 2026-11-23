@@ -17,6 +17,7 @@
 import * as THREE from 'three';
 import { createWorld, stepSim } from '../rules/sim.js';
 import { GOAL } from '../rules/tuning.js';
+import { HABIT } from '../game/keeperfeet.js';
 
 const DT = 1 / 72, MZ = 7, hipW = new THREE.Vector3();
 const P = (x, z) => [-z, x + MZ];                           // a sim point on the page
@@ -35,13 +36,15 @@ const SETUPS = {
   lrl: { secs: 7, from: 15, fx: 0, sprint: true, move: t => ({ x: t < 1.5 ? 1 : t < 4 ? -1 : t < 6 ? 1 : 0, z: 0 }) },     // a long shuffle left, right, left
   creep: { secs: 6, from: 17, fx: -3, move: t => ({ x: t < 3 ? 0.3 : -0.3, z: 0 }) },                                 // small adjusting steps
   inout: { secs: 6, from: 24, fx: -2, move: t => ({ x: 0.1, z: t < 3 ? -0.7 : 0.7 }) },                               // off his line and back
-  split: { tx: 3.4, ty: 2.2, hold: 1.0, from: 22, secs: 2.5 },                                                         // the split step, then a dive
+  split: { tx: 3.4, ty: 2.2, hold: 1.0, from: 22, secs: 2.5 },
+  idle: { secs: 10, from: 15, fx: 0 },                                                                                // you stand on the ball 15 m out (&from=): how alive he is as he waits                                                         // the split step, then a dive
 };
 const LET_GO = 1.0;
 
 // One row per sim step: the keeper, the shooter, the ball, who has it, the events.
 export function keeperLog(name, q) {
   const S = { ...SETUPS[name] };
+  if (q.get('gk') !== null) HABIT.seed = +q.get('gk');       // &gk=0..1: which keeper (his habits)
   for (const k of ['tx', 'ty', 'hold', 'from', 'fx']) if (q.get(k) !== null) S[k] = +q.get(k);
   if (q.get('y') !== null) S.ty = +q.get('y');
   if (q.get('side') === '-1' && S.tx) S.tx = -S.tx;

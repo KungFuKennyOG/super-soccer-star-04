@@ -15,6 +15,7 @@
 import * as THREE from 'three';
 import { reachLeg, aimFoot } from './legik.js';
 import { sway } from './sway.js';
+import { gaitOf } from './gait.js';
 import { placeHands, lookAt, grip, ankleFor, chestPoint } from './keeperhands.js';
 
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v)), mix = (a, b, k) => a + (b - a) * k;
@@ -50,15 +51,33 @@ export const SPLIT = {
 export const LIVE = {
   // how alive he is standing (m, rad, Hz, s). From how keepers stand and move while they wait (coaching: stay on
   // the balls of the feet, keep the feet moving with small adjusting steps, relaxed hands, never flat-footed
-  // and frozen); the sizes are by eye, kept small.
-  near: [9, 17],                               // m to the ball: on his toes and bouncing inside the first, not past the second
-  bounce: [0.011, 2.1], heel: 0.03,            // the bounce (m up and down, a second) and how much more the heels lift with it (rad)
-  shift: [0.02, 0.9], tilt: 1.6,               // his weight from foot to foot (m, rad/s) and the hips' tilt per m of it
-  breath: 0.012,                               // rad the chest rises and falls
-  reset: [1.1, 2.6], resetBy: 0.04,            // every so many s he re-sets a foot, by up to this far
-  float: 0.014, follow: 13, trail: 0.004,      // hands: m they drift, how quickly they follow (1/s), m left behind per m/s2
-  rock: 0.03,                                  // shuffling: rad the shoulders rock a step
+  // and frozen). Sizes: the first version (23 Nov) was a centimetre or two of everything, which from where the
+  // striker stands, 12 to 18 m out, is one or two pixels in the headset: filmed from there it read as a statue.
+  // These are about three times that, still inside what a keeper on his toes does (a bounce of a few centimetres,
+  // his weight a hand's width from side to side, a foot re-set by a boot's width, hands that open and close).
+  near: [11, 22],                              // m to the ball: on his toes and bouncing inside the first, not past the second
+  bounce: [0.02, 2.0], heel: 0.05,            // the bounce (m up and down, a second) and how much more the heels lift with it (rad)
+  shift: [0.05, 0.9], tilt: 1.3,               // his weight from foot to foot (m, rad/s) and the hips' tilt per m of it
+  breath: 0.02,                                // rad the chest rises and falls
+  reset: [0.8, 1.9], resetBy: 0.1,             // every so many s he re-sets a foot, by up to this far
+  float: 0.035, follow: 11, trail: 0.006,      // hands: m they drift, how quickly they follow (1/s), m left behind per m/s2
+  pump: 0.03,                                  // hands: m they ride the bounce, a beat late
+  rock: 0.045,                                 // shuffling: rad the shoulders rock a step
 };
+// Each keeper his own man (from his seed: the same one all match): how wide he stands, how tall, where he carries his
+// hands, how bouncy and how restless he is. All inside what is coached (feet about shoulder width, hands between the
+// waist and the chest).
+const frac = x => x - Math.floor(x);
+export const HABIT = { seed: null };            // (the look page sets a seed here: &gk=)
+export function habitOf(m) {
+  const seed = HABIT.seed ?? m.kSeed ?? gaitOf(m).seed;
+  if (!m.kHabit || m.kHabit.seed !== seed) {
+    const r = k => frac(Math.sin(seed * 91.7 + k * 37.3) * 43758.5453);
+    m.kHabit = { seed, width: mix(-0.04, 0.07, r(1)), hips: mix(-0.025, 0.02, r(2)), handY: mix(-0.06, 0.09, r(3)), handOut: mix(-0.02, 0.05, r(4)), handZ: mix(-0.04, 0.04, r(5)),
+      bounce: mix(0.6, 1.3, r(6)), hz: mix(0.88, 1.2, r(7)), shift: mix(0.6, 1.35, r(8)), fid: mix(0.7, 1.5, r(9)), float: mix(0.6, 1.4, r(10)), ph: r(11) * 40 };
+  }
+  return m.kHabit;
+}
 const rnd = g => ((g.rs = ((g.rs ?? 12345) * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff);
 const tmp = new THREE.Vector3(), tq = new THREE.Quaternion(), te = new THREE.Euler();
 
@@ -100,7 +119,8 @@ export function setLeg(bn, n, at, pitch, yaw, out = 0) {
 }
 
 export function stance(m, p, dt, t, ball) {
-  const bn = m.bone, root = m.root, yaw = root.rotation.y, kf = m.kf || plantFeet(m), G = GAIT, S = SPLIT;
+  const bn = m.bone, root = m.root, yaw = root.rotation.y, Hb = habitOf(m), kf = m.kf || plantFeet(m, SET.width + Hb.width), G = GAIT, S = SPLIT;
+  t += Hb.ph;                                                          // (no two keepers in step)
   // how he is really moving: his root (the sim's spot, and the way back to it after a save)
   const g = m.kg ??= { on: false, ph: 0, lead: 'L', last: 'R', px: root.position.x, pz: root.position.z, vx: p.vx || 0, vz: p.vz || 0, H: null, Hv: 0, hold: p.holding ? 1 : 0 };
   if (dt > 1e-5) {
@@ -116,11 +136,13 @@ export function stance(m, p, dt, t, ball) {
   // foot, he breathes, his hands float, he re-sets a foot every second or two, and with the ball close he is
   // light on his toes, bouncing a centimetre at about two a second. All of it fades as he moves or holds the ball.
   const L = LIVE, still = (1 - ease(sp / 1.2)) * (1 - hold), close = 1 - clamp((bd - L.near[0]) / (L.near[1] - L.near[0]), 0, 1);
-  const beat = t * TAU * L.bounce[1] + 0.6 * Math.sin(t * 0.9), swell = 0.65 + 0.35 * Math.sin(t * 0.53 + 1.3);
-  const bnc = L.bounce[0] * Math.sin(beat) * still * close * swell;
+  // (the bounce comes and goes: a few beats on his toes, then a moment settled; never while a split step is on)
+  const beat = t * TAU * L.bounce[1] * Hb.hz + 0.6 * Math.sin(t * 0.9), swell = ease(0.55 + 0.75 * Math.sin(t * 0.61 + 1.3) + 0.3 * Math.sin(t * 0.23)) * (m.split !== undefined && m.split < S.hold ? 0 : 1);
+  if (dt > 0) g.sw = (g.sw ?? 0) + (swell * still * close - (g.sw ?? 0)) * (1 - Math.exp(-dt * 6));
+  const bk = (g.sw ?? 0) * Hb.bounce, bnc = L.bounce[0] * Math.sin(beat) * bk;
   // (eased in and out over about half a second: it must not jerk his hips as he sets off)
   if (dt > 0) g.calm = (g.calm ?? 1) + ((sp < 0.3 ? 1 : 0) - (g.calm ?? 1)) * (1 - Math.exp(-dt * (sp < 0.3 ? 2.5 : 7)));
-  const wsh = (L.shift[0] * Math.sin(t * L.shift[1]) + L.shift[0] * 0.5 * Math.sin(t * L.shift[1] * 0.41 + 2)) * ease(g.calm ?? 1) * (1 - 0.5 * hold);
+  const wsh = (L.shift[0] * Math.sin(t * L.shift[1]) + L.shift[0] * 0.5 * Math.sin(t * L.shift[1] * 0.41 + 2)) * ease(g.calm ?? 1) * (1 - 0.5 * hold) * Hb.shift;
   const breath = Math.sin(t * mix(2.1, 2.9, close));
   // the split step
   let hop = 0, wide = 0, sink = 0, busy = false;
@@ -135,7 +157,7 @@ export function stance(m, p, dt, t, ball) {
   // the shuffle's clock: across goal the near foot leads and the far one closes; out and back the feet take turns
   const side = Math.abs(lx) >= Math.abs(lz) * 0.8, near = lx > 0 ? 'L' : 'R';
   const C = side ? mix(G.cycle[0], G.cycle[1], k) : mix(0.42, 0.5, k), duty = side ? mix(G.duty[0], G.duty[1], k) : mix(0.6, 0.42, k), lag = side ? mix(G.lag[0], G.lag[1], k) : 0.5;
-  const width = mix(SET.width, 0.36, hold) + wide + (side ? G.wide * Math.min(sp, 2.2) * (1 - hold) : 0);
+  const width = mix(SET.width + Hb.width, 0.36, hold) + wide + (side ? G.wide * Math.min(sp, 2.2) * (1 - hold) : 0);
   const lift = n => { const f = kf[n]; if (!f.air) f.air = { from: f.p.clone(), yaw0: f.yaw, t: 0, T: g.on ? (1 - duty) * C : G.step.time }; };
   if (!g.on && sp > G.on && !busy) { g.on = true; g.lead = side ? near : g.last; g.ph = lag + duty - 1e-3; }
   else if (g.on && (sp < G.off || busy)) g.on = false;
@@ -157,7 +179,7 @@ export function stance(m, p, dt, t, ball) {
     else if (dt > 0 && (g.fid = (g.fid ?? 0.9) - dt) <= 0) {
       // nothing to correct: he re-sets a foot anyway, a few centimetres, the feet in turn
       const n = g.last === 'L' ? 'R' : 'L';
-      g.fid = mix(L.reset[0], L.reset[1], rnd(g)) * (1 + 1.5 * far) * (1 + hold);
+      g.fid = mix(L.reset[0], L.reset[1], rnd(g)) * (1 + 1.5 * far) * (1 + hold) * Hb.fid;
       if (hold < 0.5) { lift(n); kf[n].air.jit = [(rnd(g) - 0.5) * 2 * L.resetBy, (rnd(g) - 0.5) * 2 * L.resetBy * 0.8]; }
     }
   }
@@ -191,12 +213,12 @@ export function stance(m, p, dt, t, ball) {
       up = Math.sin(Math.PI * u) * (a.hop ? S.up : G.lift[0] + G.lift[1] * Math.min(sp, 3.5));
       if (u >= 1) { f.air = null; g.last = n; m.phase = (m.phase || 0) + Math.PI; }
     }
-    toes[n] = SET.heel * (1 - hold) + (f.air && !f.air.hop ? 0.22 * Math.sin(Math.PI * u) : 0) + L.heel * still * close * swell * (0.5 + 0.5 * Math.sin(beat + sd * 0.7));
+    toes[n] = SET.heel * (1 - hold) + (f.air && !f.air.hop ? 0.22 * Math.sin(Math.PI * u) : 0) + L.heel * bk * (0.5 + 0.5 * Math.sin(beat + sd * 0.7));
     at[n] = toLocal(m, f.p, V(0, 0, 0)); at[n].y = ankleFor(toes[n]) + up;
   }
   // hips: low in the set and level as he moves (no bobbing), sinking into the split step's landing, up and loose
   // when the ball is far; never higher than both legs reach
-  const Hset = mix(mix(SET.hips, SET.hipsFar, far), 0.93, hold) - sink - G.low * ease(sp / 2.6) * (1 - hold);
+  const Hset = mix(mix(SET.hips, SET.hipsFar, far) + Hb.hips, 0.93, hold) - sink - G.low * ease(sp / 2.6) * (1 - hold);
   if (g.H === null) { g.H = m.kLast && m.kState !== 'run' ? m.kLast[m.kLast.length - 2] : Hset; g.Hv = 0; }
   if (dt > 0) { const w = 16; g.Hv += (w * w * (Hset - g.H) - 2 * w * g.Hv) * dt; g.H += g.Hv * dt; }
   // (hz: sat back a little: bent forward, his weight stays over the balls of his feet)
@@ -211,7 +233,7 @@ export function stance(m, p, dt, t, ball) {
   const tilt = wsh * L.tilt;
   if (dt > 0) g.rock = (g.rock || 0) + ((g.on ? L.rock * Math.min(1, sp / 1.5) * Math.sin(TAU * g.ph) * (side ? 1 : 0.4) : 0) - (g.rock || 0)) * (1 - Math.exp(-dt * 10));   // (smoothed: the clock jumps when he turns back)
   const rock = g.rock || 0;
-  bn.hips.rotation.set(mix(SET.pitch, 0.08, hold) * mix(1, 0.55, far) + sink * 1.2 - bnc * 1.5, 0, -lean - tilt);
+  bn.hips.rotation.set(mix(SET.pitch, 0.08, hold) * mix(1, 0.55, far) + sink * 1.2 - bnc * 0.5, 0, -lean - tilt);
   bn.spine.rotation.set(mix(0.16, 0.02, hold) * mix(1, 0.5, far) + L.breath * 0.4 * breath, wsh * 0.6, lean * 0.8 + tilt * 0.7 + rock);
   bn.chest.rotation.set(mix(0.1, 0.03, Math.max(hold, far)) + L.breath * breath, 0, lean * 0.2 + tilt * 0.4 + rock * 0.5);
   for (const [n, sd] of [['L', 1], ['R', -1]]) setLeg(bn, n, at[n], toes[n], kf[n].yaw - yaw, sd * SET.kneeOut * (1 - hold));
@@ -232,9 +254,10 @@ export function stance(m, p, dt, t, ball) {
   if (dt > 1e-5) { const q = 1 - Math.exp(-dt * 10); ac.x += (clamp((lx - ac.lx) / dt, -14, 14) * L.trail - ac.x) * q; ac.z += (clamp((lz - ac.lz) / dt, -14, 14) * L.trail - ac.z) * q; }
   ac.lx = lx; ac.lz = lz;
   for (const [n, sd] of [['L', 1], ['R', -1]]) {
-    const palm = V(sd * mix(SET.hands[0], 0.24, far), SET.hands[1] - 0.12 * far, mix(SET.hands[2], 0.26, far)).applyQuaternion(bn.hips.quaternion).add(bn.hips.position);
+    const palm = V(sd * (mix(SET.hands[0], 0.24, far) + Hb.handOut), SET.hands[1] - 0.12 * far + Hb.handY, mix(SET.hands[2], 0.26, far) + Hb.handZ).applyQuaternion(bn.hips.quaternion).add(bn.hips.position);
     // the hands float (each on its own slow path), trail his body when it starts and stops, and ride his bounce late
-    palm.x += L.float * Math.sin(t * 1.3 + sd * 1.1) * sd - ac.x; palm.y += L.float * 1.3 * Math.sin(t * 1.7 + sd * 2) + L.breath * 0.3 * breath; palm.z += L.float * Math.sin(t * 1.1 + sd * 0.7) - ac.z;
+    const fl = L.float * Hb.float * (1 - 0.5 * ease(sp / 1.5));
+    palm.x += fl * Math.sin(t * 1.3 + sd * 1.1) * sd - ac.x; palm.y += fl * 1.3 * Math.sin(t * 1.7 + sd * 2) + L.breath * 0.3 * breath - L.pump * Math.sin(beat - 0.9) * bk; palm.z += fl * Math.sin(t * 1.1 + sd * 0.7) - ac.z;
     const hp = (g.hp ??= {})[n] ??= palm.clone();
     palm.copy(hp.lerp(palm, dt > 0 ? 1 - Math.exp(-dt * L.follow) : 1));
     // the hands hang ready off bent elbows: fingers forward and a little down, palms turned in toward each other and
