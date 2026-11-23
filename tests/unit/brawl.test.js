@@ -13,6 +13,7 @@ import { passTo } from '../../rules/brawl/kicks.js';
 import { decided } from '../../rules/brawl/shootout.js';
 import { createCup, playUser } from '../../rules/cup.js';
 import { CLUBS } from '../../rules/teams.js';
+import { refEvents, stepRef, refSignals } from '../../rules/brawl/referee.js';
 import { pickLine } from '../../rules/brawl/caster.js';
 import { rng } from '../../rules/looks.js';
 
@@ -274,4 +275,26 @@ test('the commentator: clips for the football, dry lines for the hits', () => {
   const big = pickLine({ type: 'launch', kind: 'big', power: 14 }, w, r);
   assert.ok(big && !big.id && big.text.length > 5);
   assert.equal(pickLine({ type: 'received' }, w, r), null);
+});
+
+test('the referee: keeps his distance from the ball, on his diagonal; blows, books and signals', () => {
+  const w = createBrawl({ n: 11, real: 60 }), r = rng(9);
+  let steps = 0, sum = 0, n = 0, close = 0;
+  const sig = {};
+  while (w.phase !== 'full' && steps++ < 60 * 120) {
+    for (const e of stepBrawl(w, { auto: true }, 1 / 60, r)) if (e.type === 'signal') sig[e.kind] = (sig[e.kind] || 0) + 1;
+    if (w.phase === 'play' && steps > 600) { const d = Math.hypot(w.ref.x - w.ball.x, w.ref.z - w.ball.z); sum += d; n++; if (d < 3) close++; }
+    assert.ok(Math.abs(w.ref.x) < w.W + 1 && Math.abs(w.ref.z) < w.L + 1, 'on the pitch');
+  }
+  for (let i = 0; i < 180; i++) for (const e of stepBrawl(w, { auto: true }, 1 / 60, r)) if (e.type === 'signal') sig[e.kind] = (sig[e.kind] || 0) + 1;
+  assert.ok(sum / n > 8 && close / n < 0.03, `keeps his distance (${(sum / n).toFixed(1)} m on average, ${(100 * close / n).toFixed(1)}% of the time inside 3 m: a ball going past him)`);
+  assert.ok(sig.whistle > 2 && sig.halftime === 1 && sig.fulltime === 1, JSON.stringify(sig));
+  // a booking: he turns to the man and holds the card up
+  const w2 = createBrawl({ n: 6 }); toPlay(w2);
+  const ev = [{ type: 'whistle', kind: 'free', by: 'a1', on: 'h1' }, { type: 'card', id: 'a1', color: 'yellow' }, { type: 'setpiece', kind: 'free', team: 'home', x: 0, z: 0 }];
+  refEvents(w2, ev);
+  const got = [];
+  for (let i = 0; i < 60 * 5; i++) { stepRef(w2, 1 / 60); got.push(...refSignals(w2)); }
+  assert.deepEqual(got.map(e => e.kind), ['whistle', 'card', 'free']);
+  assert.equal(got[1].color, 'yellow');
 });

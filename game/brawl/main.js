@@ -19,7 +19,7 @@ else boot();
 async function boot() {
   // the stadium is built round a whole pitch of this size: set it before any of the ground's modules load
   setFullPitch(SIZES[S.n].halfW, SIZES[S.n].halfL);
-  const [{ buildStadium }, { venueFor }, { createWeather }, { dressSides, createView, createTvCamera }, { startAudio, sfx, audioOut }, { createAim }] = await Promise.all([
+  const [{ buildStadium }, { venueFor }, { createWeather }, { dressSides, dressRef, createView, createTvCamera }, { startAudio, sfx, audioOut }, { createAim }] = await Promise.all([
     import('../ps2/stadium.js'), import('../grounds.js'), import('../ps2/weather.js'), import('./view.js'), import('../audio.js'), import('./aim.js'),
   ]);
   const home = byId(S.home), away = byId(S.away);
@@ -41,7 +41,8 @@ async function boot() {
   const w = createBrawl({ n: S.n, chaos: S.chaos, real: S.len, knockout: !!(cm && cm.knockout) });
   w.demo = S.demo;
   const models = dressSides(scene, w, home, away);
-  const view = createView(scene, w, models), tv = createTvCamera(camera, w, ground.plan), aim = createAim(scene, w);
+  const refModel = dressRef(scene, [home.kit, matchKit(away, home)]);
+  const view = createView(scene, w, models, refModel), tv = createTvCamera(camera, w, ground.plan), aim = createAim(scene, w);
   if (cm) { $('stage').hidden = false; $('stage').textContent = cm.label; }
   tv.snap();
 

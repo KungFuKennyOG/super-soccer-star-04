@@ -6,7 +6,7 @@
 // Phases: kickoff → play ⇄ setpiece, goal, half (half time), shootout, full.
 // Events: kickoff, halftime, pass, shot, throw, clear, received, tackled, foul, card, offside, setpiece,
 // ready, taking, taken, launch, landed, thud, boards, miss, getup, saved, claim, post, goal { team, by },
-// out, shootout, pen, fulltime, switch.
+// out, shootout, pen, fulltime, switch, signal (the referee's: rules/brawl/referee.js).
 import { RUN, KICK, CLOCK, BRAIN } from './tuning.js';
 import { dirOf, kickoff, other } from './world.js';
 import { stepHits, startLunge, isUp } from './hits.js';
@@ -17,6 +17,7 @@ import { stepSetPiece, setPieceSpot, startSetPiece } from './setpiece.js';
 import { referee, sendOff } from './fouls.js';
 import { startShootout, stepShootout } from './shootout.js';
 import { ballStep } from './play.js';
+import { createRef, refEvents, stepRef, refSignals } from './referee.js';
 import { strideRate } from '../dribble.js';
 
 const NONE = { move: { x: 0, z: 0 } };
@@ -24,6 +25,7 @@ const dist = (a, b) => Math.hypot(a.x - b.x, a.z - b.z);
 
 export function stepBrawl(w, input = NONE, dt = 1 / 60, rnd = Math.random) {
   const ev = [];
+  if (!w.ref) createRef(w);
   w.t += dt;
   clock(w, dt, ev, rnd);
   if (w.noTouch.t > 0) w.noTouch.t -= dt;
@@ -48,6 +50,9 @@ export function stepBrawl(w, input = NONE, dt = 1 / 60, rnd = Math.random) {
   const outcome = ballStep(w, dt, ev, rnd);
   if (w.phase === 'shootout') stepShootout(w, dt, ev, outcome);
   separate(w);
+  refEvents(w, ev);
+  stepRef(w, dt);
+  ev.push(...refSignals(w));
   return ev;
 }
 

@@ -31,7 +31,17 @@ export function dressSides(scene, w, home, away) {
   return models;
 }
 
-export function createView(scene, w, models) {
+// The referee: all in black with a white collar, no number; in yellow if either side's shirt is dark.
+const REF_KIT = { pattern: 'solid', shirt: '#17171a', alt: '#17171a', shorts: '#17171a', socks: '#17171a', band: '#f0f0ec', trim: '#f0f0ec', trim2: '#17171a', number: '#f0f0ec' };
+const REF_YELLOW = { ...REF_KIT, shirt: '#e6d21c', alt: '#e6d21c', band: '#17171a', trim: '#17171a' };
+const dark = hex => { const n = parseInt(hex.slice(1), 16); return 0.3 * (n >> 16) + 0.59 * ((n >> 8) & 255) + 0.11 * (n & 255) < 70; };
+export function dressRef(scene, kits = []) {
+  const m = buildPlayer2(kits.some(k => dark(k.shirt)) ? REF_YELLOW : REF_KIT, '', 23);
+  scene.add(m.root, m.shadow);
+  return m;
+}
+
+export function createView(scene, w, models, refModel = null) {
   const ball = buildBall04(); scene.add(ball.mesh, ball.shadow);
   const arrow = buildArrow04(); arrow.scale.setScalar(2.2); scene.add(arrow);
   const held = new THREE.Vector3();
@@ -68,6 +78,10 @@ export function createView(scene, w, models) {
         const celebrate = w.phase === 'goal' && p.team === w.scorers && p.state === 'up';
         animate(m, p, dt, t, celebrate, false, w.ball, w.owner === p.id && !p.holding);
         if (m.getUp) { m.upT += dt; getUpBlend(m, Math.min(1, m.upT / BODY.getup)); }
+      }
+      if (refModel && w.ref) {
+        placeModel(refModel, w.ref);
+        animate(refModel, w.ref, dt, t, false, false, w.ball, false);
       }
       ball.update(w.ball, dt);
       // the keeper's ball is drawn between his gloves

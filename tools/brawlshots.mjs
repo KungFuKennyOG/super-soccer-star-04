@@ -35,6 +35,8 @@ try {
     await page.waitForFunction(() => window.brawl, null, { timeout: 180000 });
     console.log(`built in ${((Date.now() - t0) / 1000).toFixed(1)} s`);
     let t = 0;
+    // PRE="w.knockout = true; w.real = 8": change the match before it starts (a short knockout to see a shoot-out)
+    if (process.env.PRE) await page.evaluate(code => new Function('w', code)(window.brawl.w), process.env.PRE);
     if (process.env.UNTIL) {
       // run until a condition on the match holds (UNTIL="w.sp && w.sp.kind === 'corner' && w.sp.stage === 'ready'"),
       // then the times are counted from there

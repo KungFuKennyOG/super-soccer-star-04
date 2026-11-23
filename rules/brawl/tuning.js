@@ -65,6 +65,14 @@ export const BRAIN = {
 
 export const KEEPER = { line: 1.2, track: 0.1, reach: 2.4, reachUp: 2.6, react: 0.12, dive: 7.5, claim: 9, catchBelow: 21 };
 
+// The referee (rules/brawl/referee.js): behind the ball by `behind` m on a diagonal that reaches diag of the
+// half-width at the goal lines, between near and far m from the ball; how long each signal lasts (s); calm:
+// how long he leaves it before waving the brawl on again.
+export const REF = {
+  behind: 8, diag: 0.55, near: 10, far: 20, run: 6.5, jog: 3.8, accel: 6, calm: 4,
+  sig: { whistle: 0.5, free: 2, indirect: 2, penalty: 2, card: 2.2, advantage: 1.2, halftime: 2, fulltime: 2 },
+};
+
 // The clock: a match lasts `real` seconds and the scoreboard shows 90 minutes over it.
 export const CLOCK = { real: 240, kickoff: 1.2, goal: 3.2, restart: 1.4, half: 3 };
 
