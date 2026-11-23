@@ -108,3 +108,18 @@ test('team colours: the shirt colour dominates, white only where the kit is whit
     assert.equal(cr.fans.filter(f => f.band > 0 && f.col[0] >= 8).length, 0, `${id}: no neutral jackets in the curva or the away block`);
   }
 });
+
+// who is in the crowd (fans.js `who`): builds, women, kids, faces, beards and glasses in sensible shares,
+// and every fan's torso and head point at cells that exist in the atlas (fantex.js)
+test('the crowd is a mix of people, and every sprite index is in the atlas', () => {
+  const all = grounds.flatMap(([, { cr }]) => cr.fans), n = all.length, share = f => all.filter(f).length / n;
+  assert.ok(share(f => f.who.woman) > 0.07 && share(f => f.who.woman) < 0.16, 'women ~1 in 8');
+  assert.ok(share(f => f.who.beard === 3) > 0.06 && share(f => f.who.beard === 0) < 0.65, 'beards');
+  assert.ok(share(f => f.who.glasses) > 0.05 && share(f => f.who.glasses) < 0.2, 'glasses on a few');
+  for (const b of [0, 1, 2, 3, 4]) assert.ok(share(f => f.who.build === b) > 0.05, `build ${b} is there`);
+  for (const f of all) {
+    const torso = f.torso % 64, head = f.col[3], style = head % 16, face = Math.floor(head / 16) % 2, beard = Math.floor(head / 32) % 4;
+    assert.ok(torso < 40 && style < 9 && face < 2 && beard < 4 && head < 256);
+    if (f.who.woman || f.who.kid) assert.equal(beard, 0);
+  }
+});
