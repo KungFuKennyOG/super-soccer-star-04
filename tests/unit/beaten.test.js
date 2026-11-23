@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import { buildSkeleton } from '../../game/body.js';
 import { animate, placeModel } from '../../game/actors.js';
-import { beaten, beatKind, startBeat, BEATS } from '../../game/beaten.js';
+import { beaten, beatKind, startBeat, BEATS, handToHead } from '../../game/beaten.js';
 import { beatLog } from '../../tools/anim2look.js';
 
 const DT = 1 / 72, cm = x => (x * 100).toFixed(1), JOINTS = ['hips', 'head', 'handL', 'handR', 'footL', 'footR'];
@@ -27,7 +27,7 @@ function run(move, n = 1, foot = 'R') {
     for (const b of JOINTS) { J[b] = m.root.worldToLocal(m.bone[b].getWorldPosition(new THREE.Vector3())); assert.ok(Number.isFinite(J[b].x + J[b].y + J[b].z), `${b} is finite`); }
     for (const b of ['footL', 'footR']) W[b] = { ball: m.bone[b].localToWorld(new THREE.Vector3(0, -0.085, 0.1)), ankle: m.bone[b].getWorldPosition(new THREE.Vector3()) };
     f.set(0, 0, 1).applyQuaternion(m.bone.head.getWorldQuaternion(new THREE.Quaternion()));
-    rows.push({ began, kind: m.beat ? m.beat.kind : null, on: !!m.beat || (m.lunge || 0) > 0, lunge: m.lunge || 0, J, W, knees: m.bone.lowerLegL.getWorldPosition(new THREE.Vector3()).distanceTo(m.bone.lowerLegR.getWorldPosition(new THREE.Vector3())), headUp: f.y,
+    rows.push({ hand: Math.min(handToHead(m.bone, 'L'), handToHead(m.bone, 'R')), began, kind: m.beat ? m.beat.kind : null, on: !!m.beat || (m.lunge || 0) > 0, lunge: m.lunge || 0, J, W, knees: m.bone.lowerLegL.getWorldPosition(new THREE.Vector3()).distanceTo(m.bone.lowerLegR.getWorldPosition(new THREE.Vector3())), headUp: f.y,
       at: m.root.position.clone(), sim: { x: row.def.x, z: row.def.z }, stun: row.def.stun });
   });
   return rows;
@@ -106,4 +106,10 @@ test('what does not beat him: a move he read, a training drill\'s pinned defende
   p.stun = 0.6; assert.equal(beaten({ d1: m }, [p], { type: 'drag', read: false }), 1);
   assert.equal(beaten({ d1: m }, [p], { type: 'drag', read: false }), 0, 'not begun twice');
   for (const kind of BEATS) { startBeat(m, p, kind, 0); assert.ok(m.beat.T > 0.3 && m.beat.T < 1.6, `${kind}: a replay's has its length`); }
+});
+
+test('no reaction puts a hand near his own head', () => {
+  let near = 9;
+  for (const move of [...Object.keys(WANT), 'miss']) for (const n of [1, 2, 3]) for (const foot of ['R', 'L']) for (const r of run(move, n, foot)) if (r.on) near = Math.min(near, r.hand);
+  assert.ok(near > 0.25, `the nearest a wrist or hand comes to the middle of his head: ${cm(near)} cm (the head is about 10 cm from its middle to its side)`);
 });

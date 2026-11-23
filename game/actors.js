@@ -22,6 +22,8 @@ import { trickHips, trickLegs, trickBody, trickHead } from './tricks.js';
 import { settle, remember } from './inertia.js';
 import { chargeLevel, chargeLegs, layerCharge } from './windup.js';
 import { beatWatch, beatLegs, beatBody, beatHead } from './beaten.js';
+import { shuffleLegs } from './shuffle.js';
+import { footwork, footBody } from './footwork.js';
 
 const matCache = new Map();
 const mat = (key, make) => { if (!matCache.has(key)) matCache.set(key, make()); return matCache.get(key); };
@@ -117,9 +119,13 @@ function posed(m, p, dt, t, celebrate, guide, ball, onBall) {
   // turn that the captured pelvis took the place of is put back, over the same footprints
   const cap = strideLegs(m, bn, g, dt, onBall ? ball : null);
   if (cap > 0 && !m.firstPerson) leanHips(bn, g, cap);
+  // sideways and backwards are recorded too: a defender's slide, a backward walk (game/shuffle.js)
+  if (!m.firstPerson) shuffleLegs(m, bn, g, dt);
   // holding the trigger (a shot charging) or the pass ring: he shapes up to strike it as he runs (game/windup.js)
   if (chargeLevel(m, dt) > 0) chargeLegs(m, bn);
   if (def) beatLegs(m, bn, ball);
+  // a cut's plant on the outside foot, a stop's braking and settling steps: feet held to the pitch (game/footwork.js)
+  footwork(m, bn, p, g, dt);
   if (m.special) { m.special.t += dt; if (m.special.t > 0.9) m.special = null; }
   const sp = m.special;
   // a skill move or a trick (game/tricks.js) is the whole body's: the hips first (the roulette's spin, how
@@ -149,6 +155,7 @@ function posed(m, p, dt, t, celebrate, guide, ball, onBall) {
   layerDribble(bn, g, ob, m.drive || 0);
   layerCharge(m, bn);
   if (def) beatBody(m, bn);
+  footBody(m, bn);
   if (trk) trickBody(m, bn, trk);
   layerLook(m, bn, g, celebrate || guide || up ? null : ball, dt, 0.22 * (m.drive || 0));
   if (trk) trickHead(bn, trk);

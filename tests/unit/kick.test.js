@@ -20,7 +20,7 @@ const KICKS = Object.entries(CLIPS).filter(([, c]) => c.kind === 'kick');
 const model = (firstPerson = false, foot = 'R') => { const { bones, by } = buildSkeleton(), root = new THREE.Group(); root.add(bones[0]); return { root, bone: by, shadow: new THREE.Object3D(), phase: 0, strike: null, firstPerson, foot }; };
 
 test('the baked kicks: a shot and a pass, each placed from the kicking ankle at its contact', () => {
-  assert.deepEqual(KICKS.map(([n]) => n).sort(), ['kickPass', 'kickShot']);
+  assert.deepEqual(KICKS.map(([n]) => n).sort(), ['kickPass', 'kickPassB', 'kickShot', 'kickShotB']);
   for (const kind of ['shot', 'pass', 'volley']) assert.ok(isKick(kind), `${kind} is a recorded kick`);
   for (const kind of ['poke', 'scoop', 'rainbow']) assert.ok(!isKick(kind), `${kind} is not`);
   const P = { q: new Float32Array(BONES.length * 4), h: new Float32Array(3), a: new Float32Array(6) };
@@ -118,4 +118,21 @@ test('a volley: the boot is on a ball in the air the frame it is struck, with no
     }
     assert.ok(Math.abs(at) < 0.03, `${firstPerson ? 'your boots' : 'a whole body'}, ball ${y} m up: boot ${cm(at)} cm from it`);
   }
+});
+
+test('shots and passes are not all one take: which recorded kick a strike is goes by its power and its own dice', async () => {
+  const { kickOf, strikeDice } = await import('../../game/kickcap.js');
+  const take = s => kickOf(s).clips[0], n = { shot: new Map(), pass: new Map(), hard: new Map(), soft: new Map() };
+  for (let i = 0; i < 400; i++) {
+    const a = i * 0.37, dir = { x: Math.sin(a), z: -Math.cos(a) }, pw = 0.3 + 0.7 * ((i * 0.618) % 1);
+    for (const [k, s] of [['shot', { kind: 'shot', power: pw, dir }], ['pass', { kind: 'pass', power: 0.5, dir }], ['hard', { kind: 'shot', power: 0.95, dir }], ['soft', { kind: 'shot', power: 0.32, dir }]]) n[k].set(take(s), (n[k].get(take(s)) || 0) + 1);
+    const s = { kind: 'shot', power: pw, dir };
+    assert.equal(take(s), take({ ...s }), 'the same strike is the same take (a replay shows the kick that was played)');
+    assert.ok(strikeDice(s) >= 0 && strikeDice(s) < 1);
+  }
+  assert.equal(n.shot.size, 2); assert.equal(n.pass.size, 2);
+  assert.ok(Math.min(...n.shot.values()) > 80 && Math.min(...n.pass.values()) > 120, `both takes turn up: shots ${[...n.shot.values()]}, passes ${[...n.pass.values()]}`);
+  assert.equal(n.hard.size, 1, 'a shot at full power is always the driven one (11_01)');
+  assert.equal(n.soft.size, 1, 'a soft placed shot is always the side-foot one (10_06)');
+  assert.equal(take({ kind: 'shot', power: 0.1, dir: { x: 0, z: -1 } }), take({ kind: 'shot', power: 0.95, dir: { x: 0, z: -1 } }), 'a chip is built on the driven take');
 });

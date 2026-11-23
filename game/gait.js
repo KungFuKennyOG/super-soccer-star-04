@@ -127,7 +127,7 @@ export function poseLegs(m, bn, p, dt) {
   g.fwd = g.uz;
 
   // the cycle: the sim's, but a walk or a shuffle steps at its own rate, and he brakes in quick short steps
-  const free = Math.max(mv * (1 - run), brake * brake) * (1 - k), rate = mix(strideRate(s), mix(7.5 + 1.9 * g.s, 3.5 + 1.88 * g.s, fk) + 7 * brake, free);
+  const free = Math.max(mv * (1 - run), brake * brake) * (1 - k), sdk = m.plain ? 0 : lat * (1 - fk), rate = mix(strideRate(s), mix(7.5 + 1.9 * g.s, 3.5 + 1.88 * g.s, fk) * (1 + 0.15 * sdk) + 7 * brake, free);      // (sdk: side-stepping, he steps a little quicker and reaches further, so a foot is nearly always down)
   // on the ball the legs keep time with the sim's touches instead: short quick steps when slow (game/dribblecap.js)
   const drib = k > 0.5 ? dribbleCadence(m, g.ph ?? m.phase, m.phase, s, dt) : 0;
   if (g.ph === null) g.ph = m.phase; else g.ph += dt * (drib || rate);
@@ -145,12 +145,12 @@ export function poseLegs(m, bn, p, dt) {
 
   // a foot stays down for `duty` of the cycle and covers `travel` metres of ground in that time: as much
   // as the body does, so it doesn't slide, and no more than a leg can (then he is in the air between steps)
-  const cover = g.cover = g.s * TAU / turn, reach = mix(mix(0.38 + 0.12 * bwd, 0.92, fk), 0.88, run);
+  const cover = g.cover = g.s * TAU / turn, reach = mix(mix(0.38 + (m.plain ? 0.12 : 0.24) * bwd + 0.13 * sdk, 0.92, fk), 0.88, run);
   const duty = clamp(reach / Math.max(0.01, cover), 0.2, mix(mix(0.5, 0.6, fk), mix(0.34, 0.27, sprint), run)), travel = Math.min(reach * 1.1, cover * duty);
   // where it lands ahead of him (a braking step lands further out, a driving one under him), and how it flies
   const front = travel * clamp(mix(mix(0.5, 0.38, fk), mix(0.31, 0.27, sprint), run) + 0.14 * brake - 0.1 * drive - 0.07 * k, 0.1, 0.6), back = travel - front;
   const lift = mix(mix(0.075, 0.05, fk), mix(0.2, 0.4, sprint), run), kickUp = 0.75 * run, over = mix(0.1, 0.2, sprint) * run;
-  const side = mix(0.075, mix(0.04, P.hipX, k), run) + lat * (travel * 0.5 + 0.025) + 0.03 * bwd;
+  const side = mix(0.075, mix(0.04, P.hipX, k), run) + lat * (travel * 0.5 + (m.plain ? 0.025 : 0.075)) + 0.03 * bwd;      // (side-stepping, the closing foot stops 30 cm short of the other: they never come together; m.plain: as it was, for the look page's before)
   // the foot's tilt as it lands (heel first walking forward, flatter running, toes first backing off) and as it leaves
   const thLand = -(mix(0.3, mix(0.1, -0.06, sprint), run) + 0.12 * brake) * fwd + 0.3 * bwd + 0.1 * lat, thOff = mix(1.05, 1.2, run) * fwd + 0.3 * (1 - fwd);
   // standing: the feet where he put them (each player his own width and stagger), wider and on his toes when ready;

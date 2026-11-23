@@ -11,7 +11,7 @@ import { createWorld, stepSim, resetPlay, startCelebration, pickCelebration } fr
 import { CELEBRATIONS, FLIP } from '../../rules/celebrate.js';
 
 const DT = 1 / 72, IDS = ['you', 'm1', 'm2', 'd1', 'd2', 'd3'];
-const POINTS = ['head', 'handL', 'handR', 'lowerLegL', 'lowerLegR', 'footL', 'footR', 'toeL', 'toeR', 'upperArmL', 'upperArmR', 'hips'];
+const POINTS = ['head', 'neck', 'foreArmL', 'foreArmR', 'handL', 'handR', 'lowerLegL', 'lowerLegR', 'footL', 'footR', 'toeL', 'toeR', 'upperArmL', 'upperArmR', 'hips'];
 // Plays a celebration. Returns one row a frame: { t, drop, [id]: { [bone]: Vector3 (world) } }.
 function play(kind, x = 4, z = -18) {
   const w = createWorld(() => 0.5); resetPlay(w, () => 0.5);
@@ -115,4 +115,34 @@ test('your own view: down on your knees and up through the flip without a jump, 
     if (id === 'slide' || id === 'pile') assert.ok(lo < -0.45 && hi === 0);
     if (id === 'flip') assert.ok(hi > 0.45 && lo < -0.2);
   }
+});
+
+// the pile-on as a hug: how bent their elbows are, and how near their arms come to the middle of anyone else's trunk or head
+const segDist = (p, a, b) => { const ab = b.clone().sub(a), t = Math.max(0, Math.min(1, p.clone().sub(a).dot(ab) / ab.lengthSq())); return p.distanceTo(a.clone().addScaledVector(ab, t)); };
+const elbow = (r, n) => { const u = r['upperArm' + n].clone().sub(r['foreArm' + n]), f = r['hand' + n].clone().sub(r['foreArm' + n]); return u.angleTo(f) * 180 / Math.PI; };
+export function hugNumbers(rows) {
+  const out = { elbow: { m1: [], m2: [] }, trunk: 9, head: 9, heads: 9, hipsUp: 0 };
+  for (const r of rows) for (const m of ['m1', 'm2', 'you']) {
+    for (const n of 'LR') {
+      if (m !== 'you') out.elbow[m].push(elbow(r[m], n));
+      const arm = [r[m]['hand' + n], r[m]['hand' + n].clone().lerp(r[m]['foreArm' + n], 0.5), r[m]['foreArm' + n]];
+      for (const o of ['you', 'm1', 'm2']) if (o !== m) for (const p of arm) { const dd = segDist(p, r[o].hips, r[o].neck); if (dd < out.trunk) out.who = `${m}'s ${n} arm (${arm.indexOf(p)}) and ${o} at ${r.t.toFixed(2)}`; out.trunk = Math.min(out.trunk, dd); out.head = Math.min(out.head, p.distanceTo(r[o].head.clone().add(new THREE.Vector3(0, 0.1, 0)))); }
+    }
+    if (m === 'you') continue;
+    out.hipsUp = Math.max(out.hipsUp, r[m].hips.y);
+    for (const o of ['you', 'm1', 'm2']) if (o < m || o === 'you') out.heads = Math.min(out.heads, r[m].head.distanceTo(r[o].head));
+  }
+  return out;
+}
+const mean = a => a.reduce((s, x) => s + x, 0) / a.length;
+test('the pile-on is a hug: elbows bent, arms round you and not through anyone', () => {
+  const rows = play('pile'), c = rows[0].c, hold = rows.filter(r => r.t > 2.2 && r.t < c.T - 1.4), N = hugNumbers(hold);
+  console.log(`pile-on: elbows m1 ${mean(N.elbow.m1).toFixed(0)} deg (straightest ${Math.max(...N.elbow.m1).toFixed(0)}), m2 ${mean(N.elbow.m2).toFixed(0)} (${Math.max(...N.elbow.m2).toFixed(0)}); an arm's nearest to the middle of another's trunk ${cm(N.trunk)} cm, to the middle of a head ${cm(N.head)} cm; heads ${cm(N.heads)} cm apart at the nearest; highest hips ${cm(N.hipsUp)} cm; ${N.who}`);
+  for (const m of ['m1', 'm2']) assert.ok(mean(N.elbow[m]) < 140 && Math.max(...N.elbow[m]) < 155, `${m}'s elbows are bent (${mean(N.elbow[m]).toFixed(0)} degrees; they were 168, all but straight)`);
+  assert.ok(N.trunk > 0.11, `no forearm or hand inside anyone's trunk (${cm(N.trunk)} cm from its middle: ${N.who})`);
+  assert.ok(N.head > 0.17, `no arm in anyone's head (${cm(N.head)} cm from its middle)`);
+  assert.ok(N.heads > 0.24 && N.heads < 0.45, `heads close, not inside each other (${cm(N.heads)} cm)`);
+  // the one behind jumps on: both feet off the grass as he lands on you
+  const jump = rows.filter(r => r.t > 0.5 && r.t < 2.2), air = Math.max(...jump.map(r => Math.max(...['m1', 'm2'].map(m => Math.min(r[m].toeL.y, r[m].toeR.y)))));
+  assert.ok(air > 0.08, `he leaves the ground jumping on (${cm(air)} cm)`);
 });

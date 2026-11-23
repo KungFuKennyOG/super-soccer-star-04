@@ -175,12 +175,26 @@ export function beatLegs(m, bn, ball) {
 
 const lean = (bn, a) => { bn.spine.quaternion.premultiply(q.setFromAxisAngle(X, a * 0.55)); bn.chest.quaternion.premultiply(q.setFromAxisAngle(X, a * 0.45)); };
 const arm = (bn, n, fwd, out, bend, w) => { const sd = n === 'L' ? 1 : -1; bn['upperArm' + n].quaternion.slerp(q.setFromEuler(eul.set(-fwd, -sd * 0.2, sd * out, 'XYZ')), w); bn['foreArm' + n].quaternion.slerp(q.setFromEuler(eul.set(-bend, 0, 0, 'XYZ')), w); };
+const KEEP = { L: { u: new THREE.Quaternion(), f: new THREE.Quaternion() }, R: { u: new THREE.Quaternion(), f: new THREE.Quaternion() } }, CLEAR = 0.26, hc = new THREE.Vector3();
+// how near a hand (its wrist, or its knuckles) is to the middle of his head (m)
+export function handToHead(bn, n) {
+  const hand = bn['hand' + n];
+  bn.head.updateWorldMatrix(true, false); hand.updateWorldMatrix(true, false);
+  hc.set(0, 0.1, 0.02).applyMatrix4(bn.head.matrixWorld);
+  return Math.min(v.setFromMatrixPosition(hand.matrixWorld).distanceTo(hc), v.set(0, -0.08, 0).applyMatrix4(hand.matrixWorld).distanceTo(hc));
+}
 // The trunk and arms. Call after the upper body and its layers are posed, before the head is aimed.
 export function beatBody(m, bn) {
   const st = m.beat, L = m.lunge || 0;
   if (st) {
     const t = st.t, w = st.w;
-    if (st.P) applyPose(bn, st.P, w * st.k * KINDS[st.kind].clip, TRUNK);
+    if (st.P) {
+      // (the recorded stop's thrown arm is kept clear of his own head: if a wrist or a hand comes within CLEAR of it, that arm
+      // is brought back toward where his run had it. Measured over every reaction the nearest is 41 cm, so this is a guard.)
+      for (const n of 'LR') { KEEP[n].u.copy(bn['upperArm' + n].quaternion); KEEP[n].f.copy(bn['foreArm' + n].quaternion); }
+      applyPose(bn, st.P, w * st.k * KINDS[st.kind].clip, TRUNK);
+      for (const n of 'LR') for (let i = 0; i < 3 && handToHead(bn, n) < CLEAR; i++) { bn['upperArm' + n].quaternion.slerp(KEEP[n].u, 0.35); bn['foreArm' + n].quaternion.slerp(KEEP[n].f, 0.35); }
+    }
     if (st.kind === 'nutmeg') { lean(bn, 0.42 * bump(t, 0.04, 0.2, 0.42, 0.75) * w); const a = 0.7 * bump(t, 0.02, 0.14, 0.5, 0.85) * w; arm(bn, 'L', 0.15, 0.55, 0.5, a); arm(bn, 'R', 0.15, 0.55, 0.5, a); }
     if (st.kind === 'rainbow') { lean(bn, -0.2 * bump(t, 0.05, 0.3, 0.75, 1.15) * w); const a = 0.75 * bump(t, 0.05, 0.3, 0.8, 1.2) * w; arm(bn, 'L', -0.2, 0.85, 0.45, a); arm(bn, 'R', -0.1, 0.7, 0.6, a); }
     if (st.kind === 'miss') lean(bn, 0.3 * bump(t, 0, 0.08, 0.16, 0.38));                // going on over the leg he sent
