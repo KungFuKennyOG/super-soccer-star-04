@@ -25,6 +25,10 @@ const VIEWS = {
   // (the quick page has no you: these stand where your eyes are)
   lookEyes: [[0, 2.17, 0], [0, 1.55, -2.4], 62], lookCup: [[0, 2.17, 0], [0, 1.75, -0.6], 50], lookUp: [[0, 2.17, 0], [0, 2.75, -0.5], 62], cupStands: [[3, 5, -14], [0, 1.9, -0.5], 9], cupSide: [[1.2, 2.3, -1.3], [0, 1.85, -0.6], 40],
 };
+// each photographer close up (where he starts): manN from the stage side, manSN from his right, manHN his hands
+[[-2.3, -2.5, 0.75], [0.15, -2.6, 0.75], [2.35, -2.5, 0.95], [-3.4, -3.05, 1.2], [-1.1, -3.15, 1.4], [1.2, -3.1, 1.2], [3.5, -3.05, 1.4]].forEach(([x, z, y], i) => {
+  VIEWS['man' + i] = [[x * 0.8, y + 0.35, z + 2.3], [x, y, z], 40]; VIEWS['manS' + i] = [[x - 2.1, y + 0.2, z + 0.9], [x, y, z], 40]; VIEWS['manH' + i] = [[x * 0.93 + 0.25, y + 0.5, z + 1.0], [x, y + 0.42, z + 0.15], 34];
+});
 const EYES = { eyes: [0, 0], eyesup: [0, 0.75], back: [Math.PI, 0.1], left: [2.1, 0.05], right: [-2.1, 0.05] };
 await mkdir(out, { recursive: true });
 const server = await startServer(+(process.env.PORT || 8171));
@@ -40,10 +44,23 @@ const save = async (name, data) => { await writeFile(`${out}/${name}.png`, Buffe
 if (process.env.LOOK) {
   await page.goto(`${server.url}/tools/ceremonylook.html?team=${team}&kind=${kind}&time=${time}`, { waitUntil: 'load' });
   await page.waitForFunction(() => window.__look && window.__look.ready);
-  const st = t => ({ held: t >= 1.5, up: t >= 2 }), views = (process.env.VIEWS || 'squad,pressF').split(',');
+  const UP = (process.env.UP || '2:99').split(':').map(Number), st = t => ({ held: t >= UP[0] - 0.5, up: t >= UP[0] && t < UP[1] }), views = (process.env.VIEWS || 'squad,pressF').split(',');
   let now = 0;
-  const to = async t => { while (now < t - 1e-6) { const d = Math.min(0.25, t - now, now < 1.5 ? 1.5 - now : now < 2 ? 2 - now : 9); await page.evaluate(([a, b]) => window.__look.step(a, b), [d, st(now)]); now += d; } };
-  if (process.env.FILM) {
+  const to = async t => { while (now < t - 1e-6) { const d = Math.min(process.env.MEASURE || process.env.FILM ? 1 / 30 : 0.25, t - now); await page.evaluate(([a, b]) => window.__look.step(a, b), [d, st(now)]); now += d; } };
+  // MEASURE=secs (LOOK): how far any photographer's arm is inside his trunk, head or camera, and how near two of them come
+  if (process.env.MEASURE) {
+    const worst = [], seen = {}; let near = 9;
+    for (let i = 0; i < +process.env.MEASURE * 30; i++) {
+      await to((i + 1) / 30);
+      const [m, acts] = await page.evaluate(() => [window.__look.measure(), window.__look.acts()]);
+      near = Math.min(near, m.near);
+      m.arms.forEach((a, k) => { const w = worst[k] || (worst[k] = { trunk: 0, head: 0, cam: 0 }); for (const n in a) if (a[n] > w[n]) { w[n] = a[n]; w[n + 'At'] = `${now.toFixed(2)} ${acts[k].act}`; } });
+      acts.forEach(a => { (seen[a.i] || (seen[a.i] = new Set())).add(a.act + (a.kneel < 0.05 ? '' : a.kneel > 0.95 ? '-kneel' : '-rising')); });
+    }
+    worst.forEach((w, k) => console.log(`man ${k}: in trunk ${(w.trunk * 100).toFixed(1)} cm (${w.trunkAt || '-'}), in head ${(w.head * 100).toFixed(1)} cm (${w.headAt || '-'}), in camera ${(w.cam * 100).toFixed(1)} cm (${w.camAt || '-'}); did: ${[...seen[k]].join(' ')}`));
+    console.log(`nearest two men came: ${near.toFixed(2)} m`);
+  } else
+if (process.env.FILM) {
     const [view, secs = 5] = process.env.FILM.split(':'), dir = `${out}/film-${view}`; await mkdir(dir, { recursive: true });
     for (let i = 0; i < secs * 30; i++) { await to((i + 1) / 30); await writeFile(`${dir}/f${String(i).padStart(4, '0')}.png`, Buffer.from((await page.evaluate(v => window.__look.snap(v), VIEWS[view])).split(',')[1], 'base64')); }
   } else for (const t of (process.env.T || '1,3.2').split(',').map(Number)) { await to(t); for (const v of views) { await save(`look-${time}-${v}-${t}`, await page.evaluate(d => window.__look.snap(d), VIEWS[v])); } }

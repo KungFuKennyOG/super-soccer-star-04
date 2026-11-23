@@ -9,7 +9,7 @@ import { canvas, hash } from './paint.js';
 import { YEAR, NAME } from './brand.js';
 import { mark, star, text } from './ui.js';
 
-export const STAGE = { h: 0.5, halfW: 4.5, front: -1.7, back: 2.0, riser: 0.4, riserBack: 3.3, riserHalfW: 3.3, wallTop: 4.3, boards: -3.3 };
+export const STAGE = { h: 0.5, halfW: 4.5, front: -1.7, back: 2.0, riser: 0.4, riserBack: 3.3, riserHalfW: 3.3, wallTop: 4.3, boards: -3.9 };
 export const CUP_NAME = { world: `WORLD CUP ${YEAR}`, club: `CHAMPIONS CUP ${YEAR}` };
 // where things fire from (stage frame): confetti cannons either side, spark jets at the four corners
 export const CANNONS = [[-5.2, 0.75, 0.2], [5.2, 0.75, 0.2]];
@@ -99,7 +99,7 @@ export function buildStage(kind = 'world') {
     const a = [s * W, 0, RB], b = [s * (W + 0.95), 0, RB - 1.15], at = [a[0], WT, a[2]], bt = [b[0], WT, b[2]];
     if (s > 0) { quad(b, a, at, bt, R.wing, 0.8, 1); quad(a, b, bt, at, R.dark, 0.5, 0.8); } else { quad(a, b, bt, at, R.wing, 0.8, 1); quad(b, a, at, bt, R.dark, 0.5, 0.8); }
   }
-  quad([W, 0.012, F - 1.5], [-W, 0.012, F - 1.5], [-W, 0.012, F], [W, 0.012, F], R.apron, 0.9);          // the carpet apron on the grass
+  quad([W, 0.012, STAGE.boards + 0.12], [-W, 0.012, STAGE.boards + 0.12], [-W, 0.012, F], [W, 0.012, F], R.apron, 0.9);          // the carpet apron on the grass
   // the boards: five 2.4 m panels in a shallow arc in front, their printed side to the stands
   const BZ = STAGE.boards, bh = 0.86;
   for (let i = -2; i <= 2; i++) {

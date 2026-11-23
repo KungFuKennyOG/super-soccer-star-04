@@ -50,6 +50,7 @@ window.__look = {
     }
   },
   snap([e, at, fov]) { cam.fov = fov; cam.updateProjectionMatrix(); cam.position.set(...e); cam.lookAt(...at); renderer.render(scene, cam); return renderer.domElement.toDataURL('image/png'); },
+  measure: () => press.measure(), acts: () => press.men.map(p => ({ i: p.i, act: p.a.act, chest: p.a.chest, kneel: p.a.kneel, x: p.a.px, z: p.a.pz, over: p.a.over, lean: p.a.lean })),
   info: () => ({ calls: renderer.info.render.calls, tris: renderer.info.render.triangles, press: { tris: press.tris, calls: press.calls } }),
 };
 </script>

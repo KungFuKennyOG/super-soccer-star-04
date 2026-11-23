@@ -1,32 +1,77 @@
-// Press photographers as people (the trophy presentation, game/presscast.js): the '04 body dressed for the job.
-// The kit sheet is painted as dark working clothes: jacket, trousers and shoes all one dark cloth (the body's
-// "skin" on that sheet too, so arms are sleeves, knees are trouser legs and hands are gloves), and over it a
-// hi-vis tabard in one of our own colours with PHOTO across the back and a number on the chest. Our words only:
-// no agency's name or mark. Plus what they carry: a camera with a long lens and a flash, and a cap for some.
+// Press photographers as people (the trophy presentation, game/presscast.js): the '04 body dressed for the job
+// (pressfigure.js: long trousers, plain shoes, a jacket with sleeves to the wrist, bare hands closed round the
+// camera). The kit sheet is painted as working clothes: a dark jacket, trousers in a cloth of their own, plain
+// dark shoes with a pale welt, and over the jacket a hi-vis tabard in one of our own colours with PHOTO across
+// the back and a number on the chest. Our words only: no agency's name or mark. Plus what they carry: a camera
+// with a long lens and a flash, and a cap for some.
 import * as THREE from 'three';
-import { canvas, hex, smoothTex } from './paint.js';
+import { canvas, hex, smoothTex, hash } from './paint.js';
 import { paintKit, ATLAS, R, SPAN } from './kit.js';
 import { headSheet } from './player.js';
+import { SKINS } from '../tex.js';
 import { figureGeometry } from './figure.js';
+import { PRESS_DRESS } from './pressfigure.js';
 import { buildSkeleton } from '../body.js';
 import { font } from './ui.js';
 
 export const BIBS = ['#c9e23a', '#f28a1e', '#3fc4c0', '#e9e6dc'];
-const CLOTH = ['#23272f', '#2b2a28', '#1f2a3a', '#33302c'];
+const CLOTH = ['#23272f', '#2b2a28', '#1f2a3a', '#33302c'];                 // the jacket
+const LEGS = ['#3a3f4a', '#4a4336', '#2a2c33', '#56524a', '#2f3a52'];       // trousers: charcoal, khaki, black, stone, denim
+const SHOES = ['#1a1a1c', '#3a2a20', '#26282e'];
+const css = c => `rgb(${c.map(v => Math.round(v)).join(',')})`, tone = (c, k) => css(hex(c).map(v => Math.min(255, v * k)));
+
+// plain cloth on a region: the colour, a little weave, soft folds down it (n of them), creases across it at `at`
+function cloth(ctx, r, color, seed, { folds = 4, at = [], hem = 0 } = {}) {
+  ctx.save(); ctx.beginPath(); ctx.rect(r.x, r.y, r.w, r.h); ctx.clip(); ctx.translate(r.x, r.y);
+  ctx.fillStyle = color; ctx.fillRect(0, 0, r.w, r.h);
+  for (let i = 0; i < folds; i++) {
+    const x = (hash(i, seed, 1) + i) / folds * r.w, w = r.w / folds * (0.5 + 0.5 * hash(i, seed, 2)), g = ctx.createLinearGradient(x - w / 2, 0, x + w / 2, 0);
+    g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(0.4, 'rgba(0,0,0,0.2)'); g.addColorStop(0.62, 'rgba(255,255,255,0.07)'); g.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = g; ctx.fillRect(x - w / 2, 0, w, r.h);
+  }
+  for (const [v, n] of at) for (let i = 0; i < n; i++) {                                   // creases where a joint bends it
+    const y = (v + (hash(i, seed, 3) - 0.5) * 0.09) * r.h, x0 = hash(i, seed, 4) * r.w, l = r.w * (0.25 + 0.3 * hash(i, seed, 5));
+    for (const [dy, c] of [[0, 'rgba(0,0,0,0.28)'], [1.6, 'rgba(255,255,255,0.09)']]) { ctx.strokeStyle = c; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(x0, y + dy); ctx.quadraticCurveTo(x0 + l / 2, y + dy + (hash(i, seed, 6) - 0.5) * 7, x0 + l, y + dy + (hash(i, seed, 7) - 0.5) * 4); ctx.stroke(); }
+  }
+  if (hem) { ctx.fillStyle = 'rgba(0,0,0,0.25)'; ctx.fillRect(0, r.h - hem, r.w, 1.5); }
+  ctx.restore();
+}
+// a plain shoe on the boot's region (its sole down both edges, the opening and the tongue where the boot has them)
+function shoe(ctx, color) {
+  const r = R.boot;
+  ctx.save(); ctx.beginPath(); ctx.rect(r.x, r.y, r.w, r.h); ctx.clip(); ctx.translate(r.x, r.y);
+  ctx.fillStyle = color; ctx.fillRect(0, 0, r.w, r.h);
+  ctx.fillStyle = '#101012'; ctx.fillRect(0, 0, 15, r.h); ctx.fillRect(r.w - 15, 0, 15, r.h);                 // the sole: flat, dark, no studs
+  ctx.fillStyle = '#8f8a80'; ctx.fillRect(15, 0, 5, r.h); ctx.fillRect(r.w - 20, 0, 5, r.h);                  // its welt
+  ctx.fillStyle = '#0b0b0d'; ctx.beginPath(); ctx.ellipse(64, 56, 25, 24, 0, 0, 7); ctx.fill();               // the opening (the hem covers it)
+  ctx.fillStyle = tone(color, 1.25); ctx.fillRect(56, 76, 16, 40);                                            // the tongue, dark laces
+  ctx.strokeStyle = tone(color, 0.5); ctx.lineWidth = 1.6; for (let i = 0; i < 6; i++) { ctx.beginPath(); ctx.moveTo(54, 82 + i * 6); ctx.lineTo(74, 82 + i * 6); ctx.stroke(); }
+  ctx.strokeStyle = tone(color, 1.5); ctx.lineWidth = 1.2; ctx.beginPath(); ctx.moveTo(24, 126); ctx.quadraticCurveTo(64, 108, 104, 126); ctx.stroke();   // the toe cap's seam
+  ctx.restore();
+}
 
 const sheets = new Map();
-function clothes(bib, cloth, num) {
-  const key = bib + cloth + num;
+function clothes(bib, jacket, legs, shoes, skin, num) {
+  const key = [bib, jacket, legs, shoes, skin, num].join();
   if (sheets.has(key)) return sheets.get(key);
   const c = canvas(ATLAS.w, ATLAS.h), ctx = c.getContext('2d', { willReadFrequently: true });
   ctx.fillStyle = '#000'; ctx.fillRect(0, 0, ATLAS.w, ATLAS.h);
-  const kit = { pattern: 'solid', shirt: cloth, alt: cloth, shorts: cloth, socks: cloth, band: cloth, trim: cloth, trim2: cloth, number: cloth, cut: 0, hoops: 0 };
-  paintKit(ctx, { kit, num: '', skin: hex(cloth).map(v => v * 0.92), boots: 0 });
+  const kit = { pattern: 'solid', shirt: jacket, alt: jacket, shorts: legs, socks: legs, band: legs, trim: jacket, trim2: jacket, number: jacket, cut: 0, hoops: 0 };
+  paintKit(ctx, { kit, num: '', skin, boots: 0 });                              // (the jacket's folds, and the hands' skin)
+  // trousers: waist to knee on each shorts region, knee to hem on the sock's; a belt's line; the jacket's sleeve
+  const kneeAt = 1, seed = num * 13;
+  cloth(ctx, R.shortsL, legs, seed + 1, { folds: 5, at: [[kneeAt - 0.06, 4], [0.36, 3]] }); cloth(ctx, R.shortsR, legs, seed + 2, { folds: 5, at: [[kneeAt - 0.06, 4], [0.36, 3]] });
+  cloth(ctx, R.sock, legs, seed + 3, { folds: 4, at: [[0.07, 4], [0.86, 5]], hem: 5 });
+  cloth(ctx, R.pelvis, legs, seed + 4, { folds: 3 });
+  for (const r of [R.shortsL, R.shortsR]) { ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillRect(r.x, r.y, r.w, 5); ctx.fillStyle = 'rgba(255,255,255,0.08)'; ctx.fillRect(r.x, r.y + 5, r.w, 1.5); }
+  cloth(ctx, R.sleeve, jacket, seed + 5, { folds: 3, at: [[0.5, 5], [0.9, 3]] });
+  ctx.fillStyle = tone(jacket, 0.6); ctx.fillRect(R.sleeve.x, R.sleeve.y + R.sleeve.h - 7, R.sleeve.w, 7);    // the cuff
+  shoe(ctx, shoes);
   // the tabard: a panel front and back from the shoulders to the hips, straps over the shoulders, open sides
   const row = y => (SPAN.shirt[0] - y) / (SPAN.shirt[0] - SPAN.shirt[1]) * R.shirt.h, top = row(1.46), hem = row(1.03);
   ctx.save(); ctx.beginPath(); ctx.rect(R.shirt.x, R.shirt.y, R.shirt.w, R.shirt.h); ctx.clip();
   // the chest badge under it is painted out first
-  ctx.fillStyle = cloth; ctx.fillRect(128 - 80, row(1.5), 160, hem - row(1.5));
+  ctx.fillStyle = jacket; ctx.fillRect(128 - 80, row(1.5), 160, hem - row(1.5));
   for (const cx of [128, 384]) {
     ctx.globalAlpha = 0.93; ctx.fillStyle = bib;
     ctx.beginPath(); ctx.moveTo(cx - 66, top + 26); ctx.lineTo(cx - 60, top - 12); ctx.lineTo(cx - 34, top - 22); ctx.quadraticCurveTo(cx, top + 16, cx + 34, top - 22); ctx.lineTo(cx + 60, top - 12); ctx.lineTo(cx + 66, top + 26); ctx.lineTo(cx + 68, hem); ctx.lineTo(cx - 68, hem); ctx.closePath(); ctx.fill();
@@ -39,8 +84,6 @@ function clothes(bib, cloth, num) {
     else { ctx.font = font(26, 900); ctx.fillText(String(num), cx + 34, top + 52); ctx.font = font(13, 900); ctx.fillText('PHOTO', cx - 30, top + 50); }
   }
   ctx.restore();
-  // (and the badge on the shorts)
-  for (const r of [R.shortsL, R.shortsR]) { const y = r.y + (SPAN.shorts[0] - 0.675) / (SPAN.shorts[0] - SPAN.shorts[1]) * r.h; ctx.fillStyle = cloth; ctx.fillRect(r.x + r.w * 0.5 - 4, y - 20, 40, 40); }
   const m = new THREE.MeshPhongMaterial({ map: smoothTex(c), vertexColors: true, specular: 0x1c1c1c, shininess: 8, side: THREE.DoubleSide });
   sheets.set(key, m);
   return m;
@@ -49,8 +92,9 @@ function clothes(bib, cloth, num) {
 // One photographer: { root, mesh, bone }. i picks his tabard, clothes, face and hair; cap: he wears one (so: cropped hair).
 export function buildPressman(i, cap = false) {
   const style = cap ? 1 : [0, 2, 0, 4, 2, 0, 3][i % 7];
-  const mats = [clothes(BIBS[i % BIBS.length], CLOTH[i % CLOTH.length], 11 + i * 7), headSheet({ look: i * 3 + 2, style, skinI: [0, 3, 1, 2, 4, 0, 1][i % 7], hairI: i * 2 + 1 })];
-  const { bones, by } = buildSkeleton(), geo = figureGeometry(style, false);
+  const skinI = [0, 3, 1, 2, 4, 0, 1][i % 7];
+  const mats = [clothes(BIBS[i % BIBS.length], CLOTH[i % CLOTH.length], LEGS[(i * 3 + 1) % LEGS.length], SHOES[i % SHOES.length], hex(SKINS[skinI % SKINS.length]).map((v, k) => v * [0.95, 0.9, 0.87][k]), 11 + i * 7), headSheet({ look: i * 3 + 2, style, skinI, hairI: i * 2 + 1 })];
+  const { bones, by } = buildSkeleton(), geo = figureGeometry(style, false, PRESS_DRESS);
   if (!geo.attributes.aLoose) geo.setAttribute('aLoose', new THREE.Float32BufferAttribute(new Float32Array(geo.attributes.position.count), 1));
   const mesh = new THREE.SkinnedMesh(geo, mats);
   mesh.add(bones[0]); mesh.updateMatrixWorld(true); mesh.bind(new THREE.Skeleton(bones)); mesh.frustumCulled = false;
