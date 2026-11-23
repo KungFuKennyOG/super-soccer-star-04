@@ -8,12 +8,12 @@
   monitor: a graphite bezel 4 cm round the picture (7 cm chin with a green power light), bevelled, a shallow
   rounded housing behind, all Phong with a fine grain painted in code (128 px). The picture is the same
   1.44 x 0.81 m at the same place, so the REPLAY / LIVE tag sits where it did. 3 lit meshes plus the light, the
-  picture and a dark recess: 6 draws (was 2), about 1,400 triangles (was 12). The big screen's picture lost its
+  picture and a dark recess: 6 draws (was 2), 1,672 triangles (was 14). The big screen's picture lost its
   PS1 dither (plain unlit material).
 - `buildPlinth()`: the team-select turntable (16-sided PS1 cylinders, navy and flat gold) is a 72-segment
   lathe: a rounded lip, a slightly flared satin side, a brushed dark top with a soft pool of light in the
   middle (256 px painted texture) and a thin gold light ring at its foot. Top at 0.18 m as before. 3 draws
-  (was 2), about 1,000 triangles.
+  (was 2), 1,944 triangles (was 128).
 
 ## PS1 WOBBLE
 Removed from the settings screen (`ROWS` in `game/menus.js`) and from the saved settings (`loadSettings`
