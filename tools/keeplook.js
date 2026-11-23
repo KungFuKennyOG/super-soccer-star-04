@@ -18,6 +18,7 @@ import * as THREE from 'three';
 import { createWorld, stepSim } from '../rules/sim.js';
 import { GOAL } from '../rules/tuning.js';
 import { HABIT } from '../game/keeperfeet.js';
+import { FORCE } from '../game/keepersave.js';
 
 const DT = 1 / 72, MZ = 7, hipW = new THREE.Vector3();
 const P = (x, z) => [-z, x + MZ];                           // a sim point on the page
@@ -47,6 +48,7 @@ const LET_GO = 1.0;
 export function keeperLog(name, q) {
   const S = { ...SETUPS[name] };
   if (q.get('gk') !== null) HABIT.seed = +q.get('gk');       // &gk=0..1: which keeper (his habits)
+  if (q.get('var') !== null) FORCE.var = +q.get('var');      // &var=0..59: which version of the save
   for (const k of ['tx', 'ty', 'hold', 'from', 'fx']) if (q.get(k) !== null) S[k] = +q.get(k);
   if (q.get('y') !== null) S.ty = +q.get('y');
   if (q.get('side') === '-1' && S.tx) S.tx = -S.tx;

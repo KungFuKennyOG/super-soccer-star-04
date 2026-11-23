@@ -50,13 +50,14 @@ function contact(sv, ball, eta, zc) {
 }
 
 const frac = x => x - Math.floor(x);
+export const FORCE = { var: null };          // (the look page and the tests pick a version: &var=)
 export const variantOf = (id, seed = 0) => { const x = Math.sin((typeof id === 'number' ? id : 1.37) * 127.1 + seed * 311.7 + 1.3) * 43758.5453; return Math.floor(frac(x) * 60); };
 
 // A save begins. m.kf: where his feet are (world), set by the stance. now: s.
 export function startSave(m, p, ball, root) {
   const sv = { id: p.save.id, kind: p.save.kind, y: p.save.y, stand: !p.dive, s: p.dive || 1, t: 0, O: root.position.clone(), Y: root.rotation.y, dt0: 0 };
   // which version of the save this one is: from the save's own id and the keeper's seed, so a replay shows the same one
-  sv.var = m.kVar ?? variantOf(p.save.id, m.kHabit ? m.kHabit.seed : 0);
+  sv.var = FORCE.var ?? m.kVar ?? variantOf(p.save.id, m.kHabit ? m.kHabit.seed : 0);
   sv.r1 = frac(sv.var * 0.6180339887); sv.r2 = frac(sv.var * 0.7548776662);
   sv.feet = { L: m.kf.L.p.clone(), R: m.kf.R.p.clone() };
   sv.yaws = { L: m.kf.L.yaw ?? root.rotation.y, R: m.kf.R.yaw ?? root.rotation.y };
@@ -169,7 +170,8 @@ function dive(m, sv, dt, ball) {
     if (off <= 0) continue;
     // (folded as it leaves the grass so it clears it, then trailing long behind him by the time he is at the ball)
     const fl = ease((tt - tN) / Math.max(0.05, T - tN));
-    const air = [[mix(mix(-0.35, -1.05, h), mix(-0.25, -1.05, h), fl), 0, -s * 0.05], [mix(mix(1.35, 1.45, h), mix(0.6, 1.45, h), fl)], [0.5]];
+    const kd = mix(0.55, 1, sv.r2);                           // (how hard the trailing knee is driven up: no two dives alike)
+    const air = [[mix(mix(-0.35, -1.05 * kd, h), mix(-0.25, -1.05 * kd, h), fl), 0, -s * 0.05], [mix(mix(1.35, 1.45 * kd, h), mix(0.6, 1.45 * kd, h), fl)], [0.5]];
     const land = isN ? [[-0.3, 0, s * 0.05], [0.65], [0.3]] : [[sv.kind === 'catch' ? -0.6 : -1.0, 0, -s * 0.15], [sv.kind === 'catch' ? 1.1 : 1.35], [0.2]];   // (with the ball hugged the top knee stays lower: his forearm is there)
     LEGS.forEach((b, i) => {
       const a = isN ? land[i] : air[i], l = land[i];
@@ -179,7 +181,7 @@ function dive(m, sv, dt, ball) {
   }
 
   // hands: from the ready position (carried with the body) out to the ball, leading; then the grip's follow-up
-  const ready = readyGrip(bn), top = ease((tt - 0.7 * T) / (0.3 * T + Tl * 0.6)), G = diveGrip(sv.grip, r, s, u, top);
+  const ready = readyGrip(bn), top = ease((tt - 0.7 * T) / (0.3 * T + Tl * 0.6)), both = sv.grip === 'dlow' ? top : sv.var % 2 ? 1 : 0.15 + 0.3 * sv.r2, G = diveGrip(sv.grip, r, s, u, both);   // (one parry in two is with one arm, the other left short)
   // (they stay in front of him through the step and the load and go to the ball as he drives off: thrown out at
   // once, his arms stood out sideways from an upright body while he was still squatting. Kenny: "what the hell is this")
   const u0 = mix(0.3, 0.22, sv.r1), uu = clamp((tt - u0 * T) / ((1 - u0) * T), 0, 1), wk = uu * uu * (3 - 2 * uu);
@@ -210,7 +212,7 @@ function dive(m, sv, dt, ball) {
       // pushed on and wide (a parry) or past the hands (beaten). Then his arms come down with him: the bottom one
       // long on the grass beyond his head, the top hand flat on the grass in front of his chest (it will push him up)
       const push = hp.copy(u).multiplyScalar(0.26).add(tmp.set(0, 0.03, 0.1)).multiplyScalar(sv.kind === 'parry' ? ease(a / 0.12) : 0), drop = ease((a - 0.08) / Math.max(0.1, Tl - 0.02));
-      g = diveGrip(sv.grip, push.add(r), s, ug, top);
+      g = diveGrip(sv.grip, push.add(r), s, ug, both);
       const rest = {};
       rest[near] = { palm: V(land.x + s * 0.93, 0.03, land.z + 0.2), N: V(0, -0.35, 1).normalize(), F: V(s, 0, 0.12).normalize() };   // (lying on its edge, as a hand does)
       rest[far] = { palm: V(land.x + s * 0.52, 0.006, land.z + 0.44), N: V(0, -1, 0), F: V(s * 0.75, 0, 0.66).normalize() };

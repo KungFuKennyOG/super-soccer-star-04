@@ -33,14 +33,22 @@ export const standGrip = sv => (sv.kind === 'catch' ? { scoop: 'scoop', cup: 'ba
 
 // keys [[t, v], ...] with times that may run together: kept strictly rising for mono()
 const run = (keys, t) => { const k = [keys[0]]; for (let i = 1; i < keys.length; i++) if (keys[i][0] > k[k.length - 1][0] + 1e-3) k.push(keys[i]); else k[k.length - 1] = [k[k.length - 1][0], keys[i][1]]; return mono(k, t); };
-const belly = new THREE.Quaternion(), hp = new THREE.Vector3();
+const belly = new THREE.Quaternion(), hp = new THREE.Vector3(), tiltQ = new THREE.Quaternion(), zAxis = new THREE.Vector3(0, 0, 1);
 // where a ball taken in the basket ends up: against his stomach
 function bellyPoint(bn, out) { belly.copy(bn.hips.quaternion).multiply(bn.spine.quaternion); return out.set(0, 0.2, 0.26).applyQuaternion(belly).add(bn.hips.position); }
 
 // Plays a standing save on. sv: the latched save (game/keepersave.js startSave: mode, kind, reach, T, feet, h0, p0).
 // Returns false once he's done with it.
 export function standing(m, sv, dt, ball) {
-  const bn = m.bone, s = sv.s, T = sv.T, r = sv.reach, mode = sv.mode, held = sv.kind === 'catch', A = held ? STAND.after[mode] : STAND.after.parry;
+  const bn = m.bone, T = sv.T, r = sv.reach, mode = sv.mode, held = sv.kind === 'catch', A = held ? STAND.after[mode] : STAND.after.parry;
+  // Which version of it (sv.var, from the save's id and the keeper: game/keepersave.js): all of them coached ones.
+  //   scoop  a ball straight at him: he kneels on either leg; one time in three he stays on his feet and stoops for
+  //          it, legs together behind the ball (the standing scoop, for one that isn't going anywhere)
+  //   W, overhead  no two catches square: one hand a little higher round the ball than the other; how far his arms give
+  //   cup    how far he gives with it
+  const v = sv.var ?? 0, r1 = sv.r1 ?? 0.5, r2 = sv.r2 ?? 0.5;
+  const s = mode === 'scoop' && held && Math.abs(r.x) < 0.2 && v % 2 ? -sv.s : sv.s, stoop = mode === 'scoop' && held && v % 3 === 0;
+  const giveK = mix(0.7, 1.3, r2), tilt = mode === 'w' || mode === 'over' ? tiltQ.setFromAxisAngle(zAxis, (r1 - 0.5) * 0.34) : null;
   // (posed on the last frame too: what comes next starts from where his hips and feet are, and unposed they were back
   // where the save began, up to half a metre away)
   const end = T + A, t = Math.min(sv.t, end), a = t - T;
@@ -49,7 +57,7 @@ export function standing(m, sv, dt, ball) {
   const hx = clamp(r.x, -0.5, 0.5) * 0.92, mid = (F.L.x + F.R.x) / 2, shift = hx - mid, stepK = ease((Math.abs(shift) - 0.04) / 0.06);
   const lead = s > 0 ? 'L' : 'R';
   const J = mode === 'over' ? Math.max(0, r.y - STAND.reach) : 0, tU = Math.sqrt(2 * J / 9.8), tTO = T - tU;   // a jump: how high, how long going up, when he leaves the grass
-  const deep = mode === 'scoop' ? ease((T - 0.26) / 0.2) * (held ? 1 : 0.3) * clamp((0.66 - r.y) / 0.25, 0.3, 1) : 0;   // how far down into the K he gets
+  const deep = mode === 'scoop' ? ease((T - 0.26) / 0.2) * (held ? 1 : 0.3) * clamp((0.66 - r.y) / 0.25, 0.3, 1) * (stoop ? 0.3 : 1) : 0;   // how far down into the K he gets
   // hips: where and how high at the ball, the give after it, and stood up at the end (with the ball: taller)
   const yEnd = held ? 0.93 : 0.85, pEnd = held ? 0.08 : 0.36;
   let hy, hz, pitch, spine, yawH = 0;
@@ -121,7 +129,7 @@ export function standing(m, sv, dt, ball) {
 
   // hands: from where he carries them to the ball, early (they are in its line before it gets there), then the
   // technique's own finish
-  const ready = readyGrip(bn), G = grip(sv.grip, r, s), early = mode === 'over' ? 1 : 0.85;
+  const ready = readyGrip(bn), G = grip(sv.grip, r, sv.s, held ? tilt : null), early = mode === 'over' ? 1 : 0.85;
   let g = lerpGrip(ready, G, ease(t / (early * T)));
   m.held = null;
   if (a >= 0) {
@@ -131,11 +139,11 @@ export function standing(m, sv, dt, ball) {
       const home = mode === 'cup' ? bellyPoint(bn, hp) : chestPoint(bn, hp);
       const give = mode === 'w' ? V(0, -0.04, -0.15) : mode === 'over' ? V(0, -0.08, -0.03) : mode === 'scoop' ? V(0, 0.06, -0.08) : V(0, -0.02, -0.1);
       const k1 = ease(a / 0.12), k2 = ease((a - (mode === 'cup' ? 0 : 0.1)) / (mode === 'over' ? 0.6 : mode === 'cup' ? 0.16 : 0.32));
-      b.copy(r).addScaledVector(give, k1 * (1 - k2)).lerp(home, k2);
+      b.copy(r).addScaledVector(give, k1 * (1 - k2) * giveK).lerp(home, k2);
       if (mode === 'over') b.z += 0.1 * Math.sin(Math.PI * k2);                  // down in front of his face, not through it
       if (mode === 'cup') { const up = ease((a - 0.4) / (A - 0.45)); chestPoint(bn, hp); hp.y -= 0.05; b.lerp(hp, up); }
       else if (k2 >= 1) b.y -= 0.05 * ease((a - 0.45) / 0.25);
-      g = lerpGrip(grip(sv.grip, b, s), grip('hug', b, s), mode === 'cup' ? ease((a - 0.05) / 0.3) : mode === 'over' ? ease((a - 0.2) / 0.55) : ease((a - 0.12) / 0.3));
+      g = lerpGrip(grip(sv.grip, b, sv.s, tilt), grip('hug', b, sv.s), mode === 'cup' ? ease((a - 0.05) / 0.3) : mode === 'over' ? ease((a - 0.2) / 0.55) : ease((a - 0.12) / 0.3));
       m.held = b.clone();
     } else {
       // pushed away, wrists stiff: down and wide (over his head: up and back over the bar); then the hands come back
@@ -143,7 +151,7 @@ export function standing(m, sv, dt, ball) {
       const c2 = r.clone().addScaledVector(push, ease(a / 0.09));
       // (round in front of him on the way back: straight down from over his head, the hands went past his ears)
       const back = ease((a - 0.14) / 0.32);
-      g = lerpGrip(grip(sv.grip, c2, s), ready, back);
+      g = lerpGrip(grip(sv.grip, c2, sv.s), ready, back);
       for (const lo of ['L', 'R']) g[lo].palm.z += 0.22 * Math.sin(Math.PI * back) * (mode === 'over' ? 1 : 0.3);
       if (a < 0.05 && ball) m.held = r.clone();
     }

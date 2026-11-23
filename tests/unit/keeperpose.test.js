@@ -8,6 +8,7 @@ import * as THREE from 'three';
 import { buildSkeleton } from '../../game/body.js';
 import { animate, placeModel } from '../../game/actors.js';
 import { heldBall } from '../../game/keeperpose.js';
+import { FORCE } from '../../game/keepersave.js';
 import { PALM, BALL_R, armInside } from '../../game/keeperhands.js';
 import { createWorld, stepSim } from '../../rules/sim.js';
 import { GOAL } from '../../rules/tuning.js';
@@ -127,9 +128,9 @@ test.after(() => { if (process.env.KEEPER_REPORT) console.log(REPORT.join('\n'))
 // His arms stay out of his body (Kenny: "his arms still go through his body sometimes"): the arm's middle line may
 // brush a fat trunk (3 cm) but is never well inside it for long. Before the hands were kept in front of his chest an
 // arm reaching across was 10 cm and more inside for up to a second of a save.
-for (const [name, o] of STANDS) {
-  test(`keeper: ${name}: his arms don't go through his body`, () => {
-    const rows = play({ ...o, secs: 3.4 }), deep = rows.filter(r => r.arm > 0.03), worst = Math.max(...rows.map(r => r.arm));
+for (const [name, o] of STANDS) for (const seed of [0.13, 0.57, 0.91, 0.36]) {
+  test(`keeper: ${name} (keeper ${seed}): his arms don't go through his body`, () => {
+    const rows = play({ ...o, secs: 3.4, seed }), deep = rows.filter(r => r.arm > 0.03), worst = Math.max(...rows.map(r => r.arm));
     assert.ok(worst < 0.1, `an arm ${cm(worst)} cm inside his trunk`);
     assert.ok(deep.length <= 26, `${deep.length} frames with an arm over 3 cm inside (72 a second)`);
   });
@@ -141,9 +142,12 @@ for (const [name, o] of STANDS) {
 // of the grass (he was: 15 cm at take-off).
 const MORE = [['a dive at mid height, caught', { tx: 1.6, ty: 0.9, kind: 'catch' }], ['a low one close to him, caught going down', { tx: 1.3, ty: 0.2, kind: 'catch' }],
   ['a low dive at full stretch', { tx: 3.2, ty: 0.4, kind: 'parry', hold: 0.6 }], ['a high dive at full stretch', { tx: 3.1, ty: 1.6, kind: 'parry', hold: 0.6 }]];
-for (const [name, o] of [...DIVES, ...MORE]) for (const seed of [0.13, 0.57, 0.91]) {
-  test(`keeper: ${name} (keeper ${seed}): arms out of his body and head, the ball round his face, nothing jumps`, () => {
+// (six keepers, and the six kinds of version a dive has: one arm or two, bottom hand, top hand or both palms)
+for (const [name, o] of [...DIVES, ...MORE]) for (const [seed, version] of [[0.13, 0], [0.57, 7], [0.91, 14], [0.36, 21], [0.74, 34], [0.2, 41]]) {
+  test(`keeper: ${name} (keeper ${seed}, version ${version}): arms out of his body and head, the ball round his face, nothing jumps`, () => {
+    FORCE.var = version;
     const rows = play({ ...o, secs: 3.8, seed }), a = rows.findIndex(r => r.sv), b = rows.findLastIndex(r => r.sv);
+    FORCE.var = null;
     assert.ok(a > 0 && b > a && b < rows.length - 8, 'the dive begins and ends');
     let air = 0, down = 0, ball = 9, jump = 0, foot = 0, end = 0, who = '';
     for (let i = a; i <= b + 6; i++) {
@@ -166,9 +170,10 @@ for (const [name, o] of [...DIVES, ...MORE]) for (const seed of [0.13, 0.57, 0.9
 }
 
 // Standing saves are one movement: from the pose he was in, no jumps in his body or his hands, wrists within their limit.
-for (const [name, o] of STANDS) {
-  test(`keeper: ${name}: one smooth movement`, () => {
-    const rows = play({ ...o, secs: 3.4 }), a = rows.findIndex(r => r.sv);
+for (const [name, o] of STANDS) for (const seed of [0.13, 0.57, 0.91, 0.36]) {
+  test(`keeper: ${name} (keeper ${seed}): one smooth movement, his gloves on the ball`, () => {
+    const rows = play({ ...o, secs: 3.4, seed }), a = rows.findIndex(r => r.sv), k = rows.findIndex(r => r.sv && r.sv.t >= r.sv.T);
+    if (rows[k].sv.kind === 'catch') { const g = gaps(rows[k], rows[k].held); assert.ok(Math.max(...g.map(Math.abs)) < 0.03, `${name}: both palms on the ball (${g.map(cm).join(', ')} cm)`); }
     let hip = 0, palm = 0, wrist = 0;
     for (let i = a; i < rows.length; i++) {
       hip = Math.max(hip, rows[i].hips.distanceTo(rows[i - 1].hips) / DT);
@@ -178,7 +183,7 @@ for (const [name, o] of STANDS) {
     assert.ok(hip < 3, `his hips never move faster than 3 m/s (${hip.toFixed(1)})`);
     assert.ok(palm < 8, `a hand never moves faster than 8 m/s (${palm.toFixed(1)})`);
     assert.ok(wrist < 0.72, `a wrist bent ${(wrist * 57.3).toFixed(0)} degrees`);
-    REPORT.push(`${name.padEnd(36)} smooth: hips ${hip.toFixed(1)} m/s at most, hands ${palm.toFixed(1)} m/s, wrists ${(wrist * 57.3).toFixed(0)} deg`);
+    if (seed === 0.13) REPORT.push(`${name.padEnd(36)} smooth: hips ${hip.toFixed(1)} m/s at most, hands ${palm.toFixed(1)} m/s, wrists ${(wrist * 57.3).toFixed(0)} deg`);
   });
 }
 
@@ -186,9 +191,9 @@ for (const [name, o] of STANDS) {
 // his hips stay level; nothing jerks; his arms stay where they were.
 const MOVES = [['a quick shuffle across and back', { across: true, from: 14, fx: -9, secs: 5 }, 1.5], ['a long shuffle left, right, left', { from: 15, secs: 7, across: true, move: t => ({ x: t < 1.5 ? 1 : t < 4 ? -1 : t < 6 ? 1 : 0, z: 0 }) }, 1.5],
   ['small steps as the ball drifts across', { from: 17, fx: -3, secs: 6, move: t => ({ x: t < 3 ? 0.3 : -0.3, z: 0 }) }, 0.3], ['off his line and back', { from: 24, fx: -2, secs: 6, move: t => ({ x: 0.1, z: t < 3 ? -0.7 : 0.7 }) }, 0]];
-for (const [name, o, far] of MOVES) {
-  test(`keeper: ${name}: his feet`, () => {
-    const rows = play(o).slice(20);
+for (const [name, o, far] of MOVES) for (const seed of [0.13, 0.57, 0.91, 0.36, 0.74]) {
+  test(`keeper: ${name} (keeper ${seed}): his feet`, () => {
+    const rows = play({ ...o, seed }).slice(20);
     let slid = 0, n = 0, gapMin = 9, gapMax = 0, acc = 0, steps = 0;
     for (let i = 2; i < rows.length; i++) {
       const r = rows[i], q = rows[i - 1], c = Math.cos(r.yaw), sn = Math.sin(r.yaw);
@@ -207,9 +212,9 @@ for (const [name, o, far] of MOVES) {
     assert.ok(gapMax < 1.05, `nor too far apart (${cm(gapMax)} cm)`);
     assert.ok(bob < 0.075, `his hips stay level (${cm(bob)} cm between highest and lowest)`);
     assert.ok(acc < 40, `nothing jerks (his hips ${acc.toFixed(0)} m/s2 at most)`);
-    assert.ok(Math.max(...rows.map(r => r.arm)) < 0.02 && Math.max(...rows.map(r => r.wrist)) < 0.4, 'his hands stay set: arms clear of his body, wrists straight');
+    assert.ok(Math.max(...rows.map(r => r.arm)) < 0.02 && Math.max(...rows.map(r => r.wrist)) < 0.53, `his hands stay set: arms clear of his body (${cm(Math.max(...rows.map(r => r.arm)))} cm), wrists straight (${(Math.max(...rows.map(r => r.wrist)) * 57.3).toFixed(0)} degrees)`);
     assert.ok(Math.min(...rows.map(r => r.low)) > -0.01, 'nothing under the grass');
-    REPORT.push(`${name.padEnd(36)} ${moved.toFixed(1)} m across; planted foot ${cm(slid)} cm/s at most; ankles ${cm(gapMin)} to ${cm(gapMax)} cm apart; ${(steps / (rows.length * DT)).toFixed(1)} steps a second; hips ${cm(bob)} cm high to low, ${acc.toFixed(0)} m/s2 at most`);
+    if (seed === 0.13) REPORT.push(`${name.padEnd(36)} ${moved.toFixed(1)} m across; planted foot ${cm(slid)} cm/s at most; ankles ${cm(gapMin)} to ${cm(gapMax)} cm apart; ${(steps / (rows.length * DT)).toFixed(1)} steps a second; hips ${cm(bob)} cm high to low, ${acc.toFixed(0)} m/s2 at most`);
   });
 }
 

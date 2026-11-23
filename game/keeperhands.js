@@ -77,7 +77,8 @@ export function grip(kind, c, s, q = null) {
 //   dnear    a parry with the bottom hand, the heel of the palm behind the inside of the ball, the top hand short of it
 //   dtop     a parry with the top hand come over (the higher ones: it reaches further), the bottom hand under and short
 //   dboth    a parry with both palms behind it
-// k: for dlow, how far on top the top hand has come (0: beside the other one, as dw)
+// k: for dlow, how far on top the top hand has come (0: beside the other one, as dw); for dnear and dtop, how nearly
+// the other hand gets there too (1: both arms long together; 0: one arm at full stretch, the other left well short)
 const du = new THREE.Vector3(), dz = new THREE.Vector3(), dw = new THREE.Vector3();
 export function diveGrip(kind, c, s, u, k = 1) {
   const g = {};
@@ -88,8 +89,8 @@ export function diveGrip(kind, c, s, u, k = 1) {
     if (kind === 'dlow') { if (bottom) { a = -0.3; b = -0.9; e = -0.28; } else { a = -0.12 - 0.15 * (1 - k); b = -0.3 - 0.55 * (1 - k); e = 0.42 + 0.55 * k; fz = 0.35 * k; } }
     else if (kind === 'dw') { a = -0.28; b = -0.86; e = t * 0.42; fw = t * 0.2; }
     else if (kind === 'dboth') { a = -0.42; b = -0.82; e = t * 0.38; fw = t * 0.2; }
-    else if (kind === 'dnear') { if (bottom) { a = -0.5; b = -0.84; e = -0.05; } else { a = -0.45; b = -0.78; e = 0.32; back = 0.13; } }
-    else if (kind === 'dtop') { if (!bottom) { a = -0.5; b = -0.84; e = 0.1; } else { a = -0.45; b = -0.6; e = -0.6; back = 0.26; } }
+    else if (kind === 'dnear') { if (bottom) { a = -0.5; b = -0.84; e = -0.05; } else { a = -0.45; b = -0.78; e = 0.32 + 0.5 * (1 - k); back = 0.12 + 0.3 * (1 - k); } }
+    else if (kind === 'dtop') { if (!bottom) { a = -0.5; b = -0.84; e = 0.1; } else { a = -0.45; b = -0.6; e = -0.6; back = 0.2 + 0.25 * (1 - k); } }
     else throw new Error('grip ' + kind);
     const d = new THREE.Vector3().addScaledVector(du, a).addScaledVector(dz, b).addScaledVector(dw, e).normalize();
     const f = new THREE.Vector3().addScaledVector(du, fu).addScaledVector(dz, fz).addScaledVector(dw, fw);

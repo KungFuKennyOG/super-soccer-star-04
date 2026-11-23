@@ -65,7 +65,7 @@ export const LIVE = {
   // These are about three times that, still inside what a keeper on his toes does (a bounce of a few centimetres,
   // his weight a hand's width from side to side, a foot re-set by a boot's width, hands that open and close).
   near: [11, 22],                              // m to the ball: on his toes and bouncing inside the first, not past the second
-  bounce: [0.02, 2.0], heel: 0.05,            // the bounce (m up and down, a second) and how much more the heels lift with it (rad)
+  bounce: [0.02, 2.0], heel: 0.035,            // the bounce (m up and down, a second) and how much more the heels lift with it (rad)
   shift: [0.05, 0.9], tilt: 1.3,               // his weight from foot to foot (m, rad/s) and the hips' tilt per m of it
   breath: 0.02,                                // rad the chest rises and falls
   reset: [0.8, 1.9], resetBy: 0.1,             // every so many s he re-sets a foot, by up to this far
