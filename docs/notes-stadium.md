@@ -58,129 +58,118 @@ The blue panel with a dark frame on the look page stands in for the HUD scoreboa
 
 **Sources.** "Confirmed" means a source I read said it ([stadiumdb](https://stadiumdb.com), [archeyes](https://archeyes.com/san-siro-stadium-cugini-stacchini-ragazzi-hoffer/), [stadiumguide](https://www.stadiumguide.com), Wikipedia pages for Celtic Park, Delle Alpi and the Munich Olympic stadium, [tfcstadiums](https://tfcstadiums.com/design-parc-des-princes-explained/) on the Parc). "Memory" means general knowledge I didn't check. "Guess" means a design call.
 
-### MADRID: the 2003 Bernabéu
+### Third pass (branch `look3`, 23 Nov): each ground checked against a source
 
-Steep three-tier bowl close to the pitch, a half roof, four corner access towers, city skyline, roof lights.
+Kenny: "get inspired by real stadiums and make it close to accurate". Every ground was looked up as it stood
+around 2003-04 (Wikipedia history sections, stadiumdb.com, the Delle Alpi roof engineer's own project page,
+the Dragão architects' write-up). "Confirmed" below means a source read in this pass says it; "memory" is
+general knowledge not checked; "guess" is a design call. Architecture and colours only, as before.
 
-- **Confirmed:** nothing.
-- **From memory:** the tiers, steepness and corner towers.
-- **Guesses:** roof coverage in 2003 and the seat colours.
+New recipe field: `cornerTiers` (a corner's own tiers, for corners lower than the sides they join;
+`groundplan.js`). Changed recipes: MAD, BAR, MAN, TUR, DOR, PRT, IST. Each changed ground was rendered from
+the gantry (before/after) and from the pitch at eye height (goal end and the right-hand stand).
 
-### BARCELONA: Camp Nou
+#### MADRID: Bernabéu, 2003
+- **Confirmed:** the 1982 roof covered the first and second tiers "except the east side"; 1992-94 added the
+  upper tier (height 22 m to 45 m) and "four entrance towers... with a central spiral ramp" outside the
+  corners; the east side was only expanded in 2001-06 (Wikipedia).
+- **Changed:** the east (right) stand is two tiers with no roof; the roof is on the other three.
+- **Guess:** that the east works hadn't yet raised it by 2003-04 (they were under way); seat colours; the
+  lamp poles on the open east stand.
 
-Huge open three-tier bowl, 5 m from the pitch. Only the main stand (left) has a canopy. The other stands are lit by lamp poles along their tops. Seats are blue and garnet blocks.
+#### BARCELONA: Camp Nou
+- **Confirmed:** three tiers, continuous oval with no open corners, "the main stand covered by a roof";
+  seats garnet in tiers I and III, blue in tier II; the upper tier "rose as it moved away from the main stand,
+  peaking on the east side" (stadiumdb, Wikipedia).
+- **Changed:** seat colours were the wrong way round (tier I blue); the right (east) upper tier is taller.
+- **Not drawn:** the seat lettering (club name and motto) on purpose. **Guess:** the end stands' upper tier
+  is level, not rising along its length; the lamp poles.
 
-- **From memory:** all of it. No lettering in the seats.
+#### MUNICH: Olympiastadion
+- **Confirmed:** acrylic canopies on steel cables over about 45,000 seats; a roof over the east stands was
+  planned and never built (Wikipedia).
+- **Memory:** the running track (it was the 1972 Olympic athletics stadium). **Guess:** masts' count and
+  place; the roof on the west side and its two corners only.
 
-### MUNICH: the Olympic stadium (Bayern played there until 2005)
+#### MILAN: San Siro after 1990 (both Milan clubs)
+- **Confirmed (second pass):** third ring on 11 cylindrical ramp towers, red lattice girders over the roof on
+  four taller towers, polycarbonate roof, no track. **Guess:** where the towers stand, seat colours.
 
-Low single-tier oval with a running track. A pale tent roof covers the left (west) side only, hung on masts with cables. Park skyline.
+#### MANCHESTER: Old Trafford, 2003-04
+- **Confirmed:** North stand three tiers (1996), East and West (Stretford End) two tiers (second tiers 2000),
+  South single tier and covered; the north corners got their *second* tiers only in 2005-06 (Wikipedia).
+- **Changed:** the two corners by the three-tier (left) stand are filled with a single lower tier; the south
+  corners stay open.
+- **Memory:** lights along the roofs. **Guess:** seat colours, which end is the Stretford End.
 
-- **Confirmed:** acrylic canopies on steel cables covering about 45,000 seats on one side; stands on a mound.
-- **Memory:** the track (the source doesn't say).
-- **Guess:** the mast positions.
+#### LIVERPOOL: Anfield, 2003
+- **Confirmed:** Kop single tier (12,390, no boxes); Centenary (Kemlyn Road) two tiers since 1992; Anfield
+  Road two tiers since 1998; Main Stand roof on two thin uprights; lights along the Kemlyn Road and Main
+  stand roofs since 1973 (Wikipedia). Matches the recipe; unchanged.
+- **Guess:** the corners (the source doesn't say) and the Main Stand as one tier.
 
-### MILAN: San Siro after 1990
+#### LONDON RED: Highbury
+- **Confirmed:** art-deco East and West stands; North Bank two tiers (1993); Clock End roofed with 48 boxes
+  (1989); pitch 100 x 67 m; 38,419 seats; big screens in two corners (Wikipedia). Unchanged.
+- **Guess:** East/West as two tiers (memory), the floodlights on the roofs.
 
-Three continuous tiers close to the pitch, under a full roof carried on red lattice girders, with 11 ramp towers outside.
+#### LONDON BLUE: Stamford Bridge, 2003
+- **Confirmed:** East three tiers (1973), West three tiers (finished 2001), North (Matthew Harding) two tiers
+  (1996-97), the Shed End rebuilt 1997; hotels and flats built into the complex by 2001 (Wikipedia).
+  Unchanged.
+- **Guess:** that the buildings fill the two Shed-end corners and their size.
 
-- **Confirmed:** third ring on 11 cylindrical towers with helical ramps; 4 taller corner towers carrying red reticular girders; polycarbonate roof; no track.
-- **Guess:** the tower positions round the outside and the seat colours.
+#### TURIN: Delle Alpi
+- **Confirmed:** running track; stands far from the pitch; 69,041 seats (Wikipedia). The roof: "The main
+  pylons hang the roof panels, connected by a 6 cable ring covering the main sides of the stadium... The
+  grandstand cover is made by teflon, while its main structure is made by steel" (Majowiecki, the roof's
+  engineer). That settles the old conflict: a cable-hung PTFE roof over the sides, which is why Wikipedia says
+  fans were exposed (the ends).
+- **Changed:** roof on the two sides only, pale PTFE colour; the ends are open.
+- **Guess:** the number and place of the pylons, two tiers (the source says "three-ring").
 
-### MANCHESTER: Old Trafford 2003-04
+#### DORTMUND: Westfalenstadion, 2003-04
+- **Confirmed:** "Four new stands were built to fill the corners" in 2002-03; the roof is held by "exterior
+  pylons, which were painted yellow"; second tiers on the sides 1995-99; north and south enlarged after 1997;
+  the south terrace the largest free-standing one in Europe, about 25,000; 83,000 capacity in 2003-05
+  (Wikipedia).
+- **Changed:** corners filled (were open).
+- **Guess:** 8 pylons (2 a stand), the corners as tall as the sides.
 
-- Home end two tiers. One side three tiers (the north), the other a low single tier (the south) with the city showing over it.
-- Behind you two tiers. Open corners (the quadrants came in 2006). Roof lights.
-- **From memory:** all of it.
-- **Guess:** which side is which in the game.
+#### PARIS: Parc des Princes
+- **Confirmed (second pass):** continuous bowl, no open corners, 50 exterior ribs carrying the cantilevered
+  roof. Unchanged. **Guess:** seat colours, rib spacing.
 
-### LIVERPOOL: Anfield 2003
+#### AMSTERDAM: ArenA (1996)
+- **Confirmed:** a retractable roof (planned fixed, changed in the design); 54,990 seats; the grass wouldn't
+  grow in the roof's shade (Wikipedia). Unchanged. **Guess:** the two long arches' shape, tiers, seat colours.
+  The game draws the roof closed.
 
-- The end is a single huge kop: home fans end to end, the away block moved behind you.
-- Low single-tier main stand with terraced houses over it, two-tier stands on the other side and behind you.
-- Open corners, roof lights.
-- **From memory**, except **guessed:** the floodlight placement.
+#### PORTO: Dragão (opened 16 Nov 2003)
+- **Confirmed:** the lower tiers and pitch are dug below ground ("approximately halve the visible mass");
+  the upper tiers "border the pitch to both east and west... designed like isolated buildings"; the north and
+  south ends are low (Risco, the architects); 50,000 seats.
+- **Changed:** ends are a single tier, corners carry the lower ring only (`cornerTiers`), the long sides have
+  an upper tier, so the upper tiers end in walls as separate blocks.
+- **Guess:** the roof's colour and how it is carried; that the ground level isn't modelled (the pitch is at 0).
 
-### LONDON RED: Highbury
+#### LISBON: Luz (2003)
+- **Confirmed:** three tiers with a wavy outline, a polycarbonate roof that lets light through, carried by
+  four 43 m steel arches (stadiumdb). Unchanged. **Guess:** the arch colour (red), seat colours.
 
-Tight (1.5 m gap), small. Two-tier sides with art-deco cream fascias, two-tier North Bank, single-tier Clock End, houses all round, day.
+#### GLASGOW: Celtic Park after 1998
+- **Confirmed (second pass):** two-tier horseshoe on three sides, the 1929 main stand as the fourth.
+  Unchanged. **Guess:** seat colours, lights.
 
-- **Confirmed:** art-deco East and West stands; North Bank rebuilt as an all-seater; Clock End; 38,500 capacity; enclosed by houses.
-- **Guesses:** roofs and lights.
+#### ISTANBUL: Ali Sami Yen
+- **Confirmed:** "two identical lateral stands which were covered by a roof"; behind the goals the open
+  Yeni Açık "with two tiers" and the Eski Açık with the scoreboard; 22,800 in 1996-2005; floodlights since
+  1965, renewed 1993; in one of central Istanbul's most crowded quarters (Wikipedia).
+- **Changed:** both sides roofed (was one), the home end two tiers, the end behind you one tier.
+- **Guess:** which end the home fans are in, the pylons' place.
 
-### LONDON BLUE: Stamford Bridge 2003
-
-- Single-tier Shed End.
-- Three-tier sides. That fits the East; the West was rebuilt in 2001, its tiers from memory.
-- Two-tier stand behind you.
-- The two corners at the Shed end are filled with buildings (hotel and flats) instead of seats.
-- **From memory; guessed:** the corner buildings' size.
-
-### TURIN: Delle Alpi
-
-Two tiers set far back behind a running track, under a full roof hung from masts with cables.
-
-- **Confirmed:** the track and the stands being far from the pitch.
-- **Conflict:** Wikipedia says spectators were exposed to the weather, but I remember a cable-hung roof. I kept the roof; the masts are a guess.
-
-### DORTMUND: Westfalenstadion
-
-- A single 26 m deep standing end behind the goal, as a kop.
-- Two-tier sides and north end, all close to the pitch.
-- Yellow masts behind the stands holding the roof. Open corners.
-- **Confirmed:** separate stands, second tiers added 1995/97, the Südtribüne standing terrace, eight pylons outside the roof.
-- **Not confirmed for 2003:** the source dates the corner fill and pylons only to the 2002-06 redevelopment, so open corners and the yellow colour are guesses.
-
-### PARIS: Parc des Princes
-
-Continuous two-tier concrete bowl close to the pitch with a full roof. Concrete ribs run down the outside and along the roof top to its front edge.
-
-- **Confirmed:** continuous bowl, no open corners, 50 exterior ribs carrying a cantilevered roof, steep rake.
-- **Guesses:** rib count and spacing, and the seat colours.
-
-### AMSTERDAM: the 1996 ArenA
-
-Two-tier enclosed bowl with a full roof and two big lattice arches along the sides, day.
-
-- **From memory**, except **guessed:** the arch shape.
-
-### PORTO: Dragão (opened November 2003)
-
-Continuous lower ring, bigger two-tier long sides, a pale roof.
-
-- **From memory; guess:** the proportions.
-
-### LISBON: the 2003 Luz
-
-Three-tier wavy bowl with red seats, a pale polycarbonate roof, and four red arches, one over each side, springing from the corners.
-
-- **Confirmed:** three tiers, a polycarbonate roof carried by four 43 m steel arches.
-- **Guess:** the arch colour (the source didn't give it).
-
-### GLASGOW: Celtic Park after 1998
-
-- A continuous two-tier horseshoe on three sides, with the big side stand on the left.
-- The old single-tier main stand stands separate on the right.
-- **Confirmed:** North, Jock Stein and Lisbon Lions stands continuous and two-tier; the 1929 main stand as the fourth side.
-- **Guesses:** seat colours and lights.
-
-### ISTANBUL: Ali Sami Yen
-
-- Small, steep and close.
-- Open concrete terraces with only the main stand (left) roofed.
-- Four floodlight pylons and city blocks over the stands.
-- **Confirmed:** about 22,000 to 23,000 seats.
-- **Guesses:** everything else.
-
-### NATIONAL STADIUM (the World Cup and every nation)
-
-A plausible late-'90s national ground in the manner of the big new national stadiums of that time:
-
-- three-tier continuous bowl;
-- a 6 m gap where the athletics track hides under the lower tier;
-- a pale full roof ring with roof lights.
-
-**Guess**, by design.
+#### NATIONAL STADIUM
+- **Guess** by design (a late-'90s national bowl with a hidden track and a full roof ring).
 
 ### Draw calls and rendering
 

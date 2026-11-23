@@ -246,3 +246,48 @@ A fan is now three layers on his card, put together in the fragment shader: arms
 - **The torso doesn't turn** with the head. The body is always square to you; only the head turns.
 - **Heads are the same few shapes.** One face per view (no beards, glasses or ages beyond grey hair); skin and hair colours give the variety.
 - **The kit colours handed over** are the home kit's `[shirt, alt, shorts, trim]`. A nation's second colour that is only in `trim2` (Germany's red) never reaches the crowd.
+
+# Third pass (branch `look3`)
+
+Kenny wanted the crowd "a bit more realistic" (flat cards are fine). What was wrong close up: one torso
+outline for everyone, short sleeves reading as a dark armband, one face.
+
+## What changed
+- **Builds** (`BUILDS` in `fanpaint.js`): slim, average, broad, heavy (belly out past the shoulders) and a
+  woman's (narrower shoulders, bust, waist, wider hips), each torso outline smoothed through its own neck,
+  shoulder, chest, waist and hip widths (adult shoulder breadth 36-44 cm in men, 33-37 in women). The arms
+  layer is widened or narrowed per build in the shader so the shoulders meet (`arms`: 0.85 to 1.1).
+  Men: slim 24%, average 38%, broad 20%, heavy 18%. Women: 13% of the ordinary stands, 6% of the standing ends
+  (UK league surveys of the 2000s put women at 10-15% of football crowds). Kids stay 3% at 0.8 scale on the
+  slim build. Height now runs 0.92-1.08 (men), 0.9-0.98 (women).
+- **Short sleeves**: the sleeve ends halfway down the upper arm in an open hem square to the arm, flared a
+  little, with its turned edge catching the light and a soft shadow on the bare skin under it. Before, a dark
+  stroke straight across (horizontal whatever the arm did) read as an armband. Long-sleeve cuffs are lighter.
+- **Faces** (`fanhead.js`): two skulls (`FACES`: lean; rugged with a wider jaw, a bigger nose, a heavier brow
+  and wider cheekbones) and a ninth hairstyle, `receding`. Two masks rendered with every head, used per fan in
+  the shader: a graded beard mask (chin and upper lip 1, jaw 0.6, cheeks 0.35) gives none 50%, stubble 26%,
+  goatee and moustache 12%, full beard 12% (men only); a glasses mask (rims, bridge, arms back to the ears;
+  lenses tinted) on 8% of fans and 30% of older ones. 16% are older: 75% of them grey, and men with short,
+  buzz or curly hair often thinning (receding or bald).
+- **A bug fixed**: the atlas's brightest pixels (a 255 with grain) wrapped round to black in the Uint8Array.
+  It showed as black specks at sleeve hems and highlights.
+- The team-colour rules (`sideWear`) are untouched.
+
+## Numbers
+- Still one instanced draw for every fan, 2 triangles each, same 18 floats of instance data.
+- Atlas: 1024 x 1512 (was 1024 x 1176). A RGBA as before; B is now RGBA (skin, hair, beard, glasses; was RG).
+  12.4 MB, about 16.5 MB with mips (was 7.2 / 9.6 MB): +6.9 MB of texture memory.
+- Painted once, at the first ground: 456 to 478 ms in headless Chrome (was about 410-435). The 2 faces x 9
+  styles of heads are 162 head cells (were 72); hair is marched once per style and view and shared by both
+  faces, which kept it near the old time.
+- Fragment cost unchanged in texture reads (still 1 to 3 reads of A plus 1 of B); a few more ALU ops for the
+  beard and glasses.
+- `tests/unit/fans.test.js`: the mix (women 7-16%, beards, glasses, every build present, no beards on women or
+  kids) and that every torso and head index is in the atlas.
+
+## Short / not checked
+- The torso is still square to you: only the head turns. A three-quarter torso would double the torso cells.
+- Older faces have no wrinkles (no channel left); age is grey hair, thinning, glasses.
+- Women are a build and a hairstyle on the lean face; their faces aren't painted differently.
+- At the wrist of a flat hand a sliver of the torso can show through (reads as a wristband now and then).
+- Nothing seen in a headset. The atlas costs 6.9 MB more; watch the first ground's load time on the Quest.
