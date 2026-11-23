@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>SSS04 brawl animation look</title>
+<!-- Dev page for the flat-screen game's own animations (game/brawl/getup.js, throwin.js, ragdoll.js): one '04 player on a pitch.
+     npm run serve, then /tools/animlook.html?shot=fall&vx=0&vy=2&vz=5      a man running along (vx, vz) is knocked over at that
+     velocity, lies `down` s (2.2), gets up; &face=rad: the way the sim wants him facing afterwards (default: the way the
+     get-up leaves him); &seed=n; &lie=side|back|front rolls him onto that before he gets up. (He runs in at the knock's own speed, at most 6 m/s.)
+     ?shot=throw        a throw-in (he reaches for the ball, holds it, throws).
+     ?shot=ref&kind=free|indirect|penalty|card|advantage|whistle|halftime|fulltime   a referee's signal (game/brawl/refpose.js);
+     &dir=deg the way it points, to his left of where he faces (default 40); &walk=m/s he walks or runs on while he does it; &red=1; &blow=1 a whistle with it.
+     &view=side|front|high   the camera: square on to him, end on, or from above. &slow=0.25 slow motion. Space pauses.
+     tools/animshots.mjs films contact sheets. -->
+<style>html,body{margin:0;background:#101830;overflow:hidden}canvas{display:block}#i{position:fixed;left:8px;top:8px;font:12px monospace;color:#fff;text-shadow:0 0 3px #000}</style>
+<script type="importmap">
+{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.149.0/build/three.module.js" } }
+</script>
+</head>
+<body>
+<div id="i"></div>
+<script type="module">
+import * as THREE from 'three';
+import { animate, placeModel } from '../game/actors.js';
+import { byId } from '../rules/teams.js';
+import { strideRate } from '../rules/dribble.js';
+import { createBrawl } from '../rules/brawl/world.js';
+import { buildPlayer2, LIGHT_DIR } from '../game/ps2/player.js';
+import { buildPitch, buildLines } from '../game/ps2/pitch.js';
+import { buildSky } from '../game/ps2/stand.js';
+import { buildBall04 } from '../game/ps2/ball.js';
+import { startRagdoll, stepRagdoll, poseRagdoll } from '../game/brawl/ragdoll.js';
+import { GETUP_TIME, startGetUp, poseGetUp } from '../game/brawl/getup.js';
+import { THROW, poseThrowIn, throwInBall } from '../game/brawl/throwin.js';
+import { REF_SIGNALS, poseRefSignal, cardTransform } from '../game/brawl/refpose.js';
+
+const q = new URLSearchParams(location.search), num = (k, d) => (q.has(k) ? +q.get(k) : d);
+// the same fall every time
+let seed = num('seed', 1);
+Math.random = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };      // (the same numbers as tests/unit/getup.test.js, so a fall found there is the same fall here)
+const shot = q.get('shot') || 'fall', W = num('w', innerWidth), H = num('h', innerHeight);
+const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+renderer.setPixelRatio(1); renderer.setSize(W, H); document.body.appendChild(renderer.domElement);
+const scene = new THREE.Scene();
+scene.background = new THREE.Color('#b9c8d4'); scene.fog = new THREE.Fog('#b9c8d4', 70, 320);
+scene.add(new THREE.HemisphereLight('#dfe6f0', '#38372c', 0.62));
+const sun = new THREE.DirectionalLight('#fff0d6', 0.68); sun.position.copy(LIGHT_DIR).multiplyScalar(50); scene.add(sun);
+const camera = new THREE.PerspectiveCamera(30, W / H, 0.05, 400);
+scene.add(buildSky(), buildPitch(), buildLines([[-30, 0, 30, 0]]));
+
+const m = buildPlayer2(byId(q.get('team') || 'BRA').kit, 9, num('look', 3));
+scene.add(m.root, m.shadow);
+const ball = buildBall04(); scene.add(ball.mesh, ball.shadow); ball.mesh.visible = ball.shadow.visible = false;
+const w = createBrawl({ n: 6 }), p = w.players[3];
+w.ball.x = 0; w.ball.z = 400;          // (the match ball is far off up the pitch: a man standing by it crouches ready, and a standing man turns to face it)
+const vel = { x: num('vx', 0), y: num('vy', 2), z: num('vz', 5) }, sp = Math.hypot(vel.x, vel.z) || 1, run = num('run', Math.min(6, sp)), DOWN = num('down', 2.2), LEAD = 0.6;
+let t = 0, phase = 'run', since = 0, axis = Math.atan2(vel.x, vel.z), view = q.get('view') || 'side', natural = null;
+const held = new THREE.Vector3(), at = new THREE.Vector3(), bv = new THREE.Vector3();
+const card = new THREE.Mesh(new THREE.PlaneGeometry(0.075, 0.105), new THREE.MeshBasicMaterial({ color: q.has('red') ? '#d81e1e' : '#f5d915', side: THREE.DoubleSide })); card.visible = false; scene.add(card);
+const sig = { kind: q.get('kind') || 'free', dir: { x: Math.sin(num('dir', 40) * Math.PI / 180), z: Math.cos(num('dir', 40) * Math.PI / 180) }, red: q.has('red') };
+if (shot === 'ref') { p.x = 0; p.z = 0; p.vx = 0; p.vz = num('walk', 0); p.fx = 0; p.fz = 1; phase = 'ref'; axis = 0; since = -0.4; }
+else if (shot === 'throw') { p.x = 0; p.z = 0.25; p.vx = p.vz = 0; p.fx = 0; p.fz = 1; phase = 'throw'; axis = 0; since = -THROW.hold - 0.5; }
+else { p.x = 3; p.z = 5; p.vx = vel.x / sp * run; p.vz = vel.z / sp * run; p.fx = vel.x / sp; p.fz = vel.z / sp; }
+
+// &lie=side|back|front: the ragdoll is rolled about its own length onto that before he gets up (a ragdoll seldom comes to
+// rest on its side by itself; in a match that get-up is for a man who is still rolling when the sim calls him up)
+function layOn(how) {
+  const P = m.rag.p, O = m.rag.prev, q0 = new THREE.Quaternion(), up = new THREE.Vector3(0, 1, 0);
+  const roll = () => {
+    const hips = P[0].clone(), ax = P[3].clone().sub(hips).setY(0).normalize(), side = new THREE.Vector3().crossVectors(ax, up);       // (points 0 and 3: hips, head)
+    poseRagdoll(m); m.root.updateMatrixWorld(true);
+    const f = new THREE.Vector3(0, 0, 1).applyQuaternion(m.bone.chest.getWorldQuaternion(q0)), now = Math.atan2(f.dot(side), f.y);
+    const want = how === 'back' ? 0 : how === 'front' ? Math.PI : Math.PI / 2 * (now < 0 ? -1 : 1), rot = new THREE.Quaternion().setFromAxisAngle(ax, want - now);
+    for (const pt of [...P, ...O]) pt.sub(hips).applyQuaternion(rot).add(hips);
+  };
+  roll();
+  const low = Math.min(...P.map(pt => pt.y));
+  for (const pt of P) pt.y += 0.08 - low;
+  O.forEach((o, i) => o.copy(P[i]));                                                                     // (at rest)
+  for (let i = 0; i < 45; i++) { stepRagdoll(m, 1 / 60, p); roll(); }                                    // his limbs come down onto the grass while he is kept on that side
+  poseRagdoll(m);
+}
+let kind = null;
+function step(dt, quiet = false) {
+  t += dt; since += dt;
+  if (phase === 'run') {
+    p.x += p.vx * dt; p.z += p.vz * dt; p.stride += dt * 6;
+    placeModel(m, p); animate(m, p, dt, t, false, false, w.ball, false);
+    if (since >= LEAD - 1e-9) { startRagdoll(m, vel); phase = 'rag'; since = 0; p.vx *= 0.5; p.vz *= 0.5; }
+  } else if (phase === 'rag') {
+    // (the sim's body: sliding to a stop)
+    p.x += p.vx * dt; p.z += p.vz * dt; p.vx *= 1 - 2.5 * dt; p.vz *= 1 - 2.5 * dt;
+    stepRagdoll(m, dt, p); poseRagdoll(m);
+    const h = m.bone.hips.position; m.shadow.position.set(h.x + 0.2, 0.02, h.z - 0.1);
+    if (since >= DOWN - 1e-9) {
+      p.vx = p.vz = 0;
+      if (q.has('lie')) layOn(q.get('lie'));
+      natural = startGetUp(m); axis = m.getUp.yaw; kind = m.getUp.kind;
+      if (q.has('face')) { p.fx = Math.sin(num('face', 0)); p.fz = Math.cos(num('face', 0)); } else { p.fx = natural.fx; p.fz = natural.fz; }
+      phase = 'getup'; since = 0;
+    }
+  } else if (phase === 'getup') {
+    placeModel(m, p); animate(m, p, dt, t, false, false, w.ball, false);
+    if (m.getUp) poseGetUp(m, p, since); else phase = 'up';
+  } else if (phase === 'throw') {
+    placeModel(m, p); animate(m, p, dt, t, false, false, w.ball, false);
+    poseThrowIn(m, since);
+    const go = THROW.windup + THROW.release;
+    if (throwInBall(m, held)) { bv.subVectors(held, ball.mesh.position).multiplyScalar(1 / dt); ball.mesh.position.copy(held); ball.mesh.visible = ball.shadow.visible = true; }
+    else if (since > go) { bv.y -= 9.81 * dt; ball.mesh.position.addScaledVector(bv, dt); }       // (thrown: it carries on as it left his hands)
+    ball.shadow.position.set(ball.mesh.position.x, 0.02, ball.mesh.position.z);
+  } else if (phase === 'ref') {
+    p.z += p.vz * dt; p.stride += dt * strideRate(p.vz);
+    placeModel(m, p); animate(m, p, dt, t, false, false, w.ball, false);
+    poseRefSignal(m, sig, since);
+    if (q.has('blow')) poseRefSignal(m, { kind: 'whistle' }, since);
+    card.visible = !!cardTransform(m, card.position, card.quaternion);
+  } else { placeModel(m, p); animate(m, p, dt, t, false, false, w.ball, false); }
+  if (!quiet) draw();
+}
+function draw() {
+  m.root.updateMatrixWorld(true);
+  m.bone.hips.getWorldPosition(at);
+  const c = Math.cos(axis), s = Math.sin(axis), d = num('dist', 5), y = num('y', 0.8);
+  if (view === 'front') camera.position.set(at.x + s * d, 1.5, at.z + c * d);
+  else if (view === 'high') camera.position.set(at.x + c * 2.5, 6.5, at.z - s * 2.5);
+  else camera.position.set(at.x + c * d, 1.3, at.z - s * d);
+  camera.lookAt(at.x, y, at.z);
+  renderer.render(scene, camera);
+  document.getElementById('i').textContent = `${shot} ${phase} ${since.toFixed(2)} s${m.getUp ? ' ' + m.getUp.kind + (m.getUp.mirror ? ' (mirrored)' : '') : ''}`;
+}
+window.__look = { ready: true, step, dbg: () => ['hips', 'chest', 'handL', 'footR'].map(n => n + ' ' + m.bone[n].getWorldPosition(new THREE.Vector3()).toArray().map(x => x.toFixed(2)).join(',') + ' q ' + m.bone[n].quaternion.toArray().map(x => x.toFixed(2)).join(',')).join(' | '), view(v) { view = v; draw(); }, info: () => ({ t, phase, since, kind, natural, GETUP_TIME, THROW, REF_SIGNALS }) };
+if (!q.has('still')) { let last = performance.now(), paused = false; addEventListener('keydown', e => { if (e.code === 'Space') paused = !paused; }); const loop = now => { const dt = Math.min(0.05, (now - last) / 1000) * num('slow', 1); last = now; if (!paused) step(dt); requestAnimationFrame(loop); }; requestAnimationFrame(loop); } else draw();
+</script>
+</body>
+</html>
