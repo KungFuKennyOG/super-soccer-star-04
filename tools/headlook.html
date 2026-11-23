@@ -1,0 +1,57 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>'04 heads</title>
+<!-- Twelve '04 players' heads side by side, each in its own cell (game/ps2/skull.js gives each his own skull).
+     ?view=front|34|side|back (default front), &skull=0 (everyone on the shared skull, for before/after),
+     &big=1 (the big-heads cheat, head bone x1.65), &team=ID (twelve of one team; default a mix of teams),
+     &style=N (everyone that hairstyle), &styles=1 (each in turn), &n=12, &cols=6, &body=1 (whole men from 6 m, standing), &dist=m
+     (one man in the middle of the frame from that far: for the LOD), &lod=0|1|both.
+     Renders: node tools/headshots.mjs out/dir name?query ... -->
+<style>html,body{margin:0;background:#8a96a2;overflow:hidden}canvas{display:block}</style>
+<script type="importmap">{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.149.0/build/three.module.js" } }</script>
+</head><body><canvas id="c"></canvas>
+<script type="module">
+import * as THREE from 'three';
+import { buildPlayer2, LIGHT_DIR } from '../game/ps2/player.js';
+import { pickSquad } from '../rules/looks.js';
+import { byId, ALL } from '../rules/teams.js';
+import { animate, placeModel } from '../game/actors.js';
+
+const q = new URLSearchParams(location.search), W = innerWidth, H = innerHeight;
+const renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('c'), antialias: true, preserveDrawingBuffer: true });
+renderer.setSize(W, H, false); renderer.setScissorTest(true);
+renderer.outputEncoding = THREE.sRGBEncoding;
+const scene = new THREE.Scene();
+scene.add(new THREE.HemisphereLight('#ffffff', '#4a5a3a', 0.62));
+const sun = new THREE.DirectionalLight('#ffffff', 0.68); sun.position.copy(LIGHT_DIR).multiplyScalar(10); scene.add(sun);
+const N = +(q.get('n') || 12), COLS = +(q.get('cols') || 6), ROWS = Math.ceil(N / COLS);
+const teams = q.get('team') ? [byId(q.get('team'))] : ['BRA', 'GER', 'NGA', 'ENG', 'ITA', 'JPN', 'ARG', 'CMR', 'NED', 'KOR', 'ESP', 'USA'].map(byId).filter(Boolean);
+const view = q.get('view') || 'front', yaw = { front: 0, 34: 0.65, side: 1.45, back: Math.PI }[view];
+const men = [];
+for (let i = 0; i < N; i++) {
+  const team = teams[i % teams.length] || ALL[i], num = 2 + Math.floor(i / teams.length) * 3 + (i % 3), ap = pickSquad(team.id, [num], 7)[num];
+  if (q.get('styles')) ap.style = ['crop', 'shaved', 'slick', 'long', 'curls', 'spiky', 'mop'][i % 7];   // &styles=1: every hairstyle in turn
+  if (q.get('style')) ap.style = ['crop', 'shaved', 'slick', 'long', 'curls', 'spiky', 'mop'][+q.get('style')] || ap.style;
+  const o = { ap }; if (q.get('skull') === '0') o.skull = null;
+  const m = buildPlayer2(team.kit, num, i, o);
+  m.bigHead = q.get('big') === '1';
+  const p = { x: (i % COLS) * 3, z: Math.floor(i / COLS) * 3, fx: 0, fz: 1, vx: 0, vz: 0, role: 'mate', stride: 0 };
+  scene.add(m.root);
+  men.push({ m, p });
+}
+// stand them all, settled
+for (let f = 0; f < 40; f++) for (const { m, p } of men) { animate(m, p, 1 / 30, f / 30, false); placeModel(m, p); }
+const cam = new THREE.PerspectiveCamera(q.get('body') ? 30 : 20, (W / COLS) / (H / ROWS), 0.05, 100), hp = new THREE.Vector3();
+let tris = 0;
+men.forEach(({ m }, i) => {
+  scene.updateMatrixWorld(true);
+  m.bone.head.getWorldPosition(hp);
+  const d = q.get('body') ? 6 : q.get('big') === '1' ? 1.5 : 0.95, at = q.get('body') ? new THREE.Vector3(hp.x, 1, hp.z) : hp.clone().add(new THREE.Vector3(0, 0.1 * (m.bigHead ? 1.65 : 1), 0));
+  cam.position.set(at.x + Math.sin(yaw) * d, at.y + 0.02, at.z + Math.cos(yaw) * d); cam.lookAt(at);
+  const cx = (i % COLS) * W / COLS, cy = H - (Math.floor(i / COLS) + 1) * H / ROWS;
+  renderer.setViewport(cx, cy, W / COLS, H / ROWS); renderer.setScissor(cx, cy, W / COLS, H / ROWS);
+  for (const o of men) o.m.root.visible = o.m === m;
+  renderer.render(scene, cam);
+  tris += renderer.info.render.triangles;
+});
+window.__heads = { ready: true, tris: Math.round(tris / N) };
+</script></body></html>

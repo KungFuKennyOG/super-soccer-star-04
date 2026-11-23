@@ -27,6 +27,26 @@ export const out = (a, d, r) => {
 // neck never comes through the shirt; the base of the neck stays with the shoulders.
 export const neckW = y => sstep(1.515, 1.62, y);
 
+// Vertex normals, smoothed across texture seams: vertices at the same spot share one normal.
+// (Also used by skull.js after it reshapes a head.)
+export function smoothNormals(g) {
+  g.computeVertexNormals();
+  const p = g.attributes.position.array, n = g.attributes.normal.array, groups = new Map();
+  for (let i = 0; i < p.length / 3; i++) {
+    const key = `${Math.round(p[i * 3] * 2e3)},${Math.round(p[i * 3 + 1] * 2e3)},${Math.round(p[i * 3 + 2] * 2e3)}`;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(i);
+  }
+  for (const ids of groups.values()) {
+    if (ids.length < 2) continue;
+    let x = 0, y = 0, z = 0;
+    for (const i of ids) { x += n[i * 3]; y += n[i * 3 + 1]; z += n[i * 3 + 2]; }
+    const l = Math.hypot(x, y, z) || 1;
+    for (const i of ids) { n[i * 3] = x / l; n[i * 3 + 1] = y / l; n[i * 3 + 2] = z / l; }
+  }
+}
+export const BONE = IDX;
+
 export class Builder {
   constructor() { this.pos = []; this.uv = []; this.si = []; this.sw = []; this.idx = []; this.soft = []; this.sheet = ATLAS; this.parts = [0]; }   // soft: [from, to, keep] vertex ranges that keep only part of the baked shade (the face, whose shade is painted; the knees, which the shorts would black out)
   // p: [x, y, z]. px, py: sheet pixels. w: { bone: weight }
@@ -81,21 +101,8 @@ export class Builder {
     g.setAttribute('skinWeight', new THREE.Float32BufferAttribute(this.sw, 4));
     g.setIndex(this.idx);
     this.parts.forEach((from, i) => g.addGroup(from, (this.parts[i + 1] ?? this.idx.length) - from, i));
-    g.computeVertexNormals();
-    // smooth across texture seams: vertices at the same spot share one normal
-    const p = g.attributes.position.array, n = g.attributes.normal.array, groups = new Map();
-    for (let i = 0; i < p.length / 3; i++) {
-      const key = `${Math.round(p[i * 3] * 2e3)},${Math.round(p[i * 3 + 1] * 2e3)},${Math.round(p[i * 3 + 2] * 2e3)}`;
-      if (!groups.has(key)) groups.set(key, []);
-      groups.get(key).push(i);
-    }
-    for (const ids of groups.values()) {
-      if (ids.length < 2) continue;
-      let x = 0, y = 0, z = 0;
-      for (const i of ids) { x += n[i * 3]; y += n[i * 3 + 1]; z += n[i * 3 + 2]; }
-      const l = Math.hypot(x, y, z) || 1;
-      for (const i of ids) { n[i * 3] = x / l; n[i * 3 + 1] = y / l; n[i * 3 + 2] = z / l; }
-    }
+    smoothNormals(g);
+    g.userData.ears = this.ears || [];                 // the ears' vertex ranges (headgeo.js), for skull.js
     bakeAO(g);                                         // soft ambient occlusion in the vertex colors
     const col = g.attributes.color.array;
     for (let i = 0; i < col.length; i++) col[i] = 0.42 + 0.58 * (col[i] - 0.55) / 0.45;

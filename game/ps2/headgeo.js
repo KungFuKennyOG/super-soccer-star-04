@@ -34,7 +34,7 @@ const FRONT = curve([[0, 0], [0.03, 0.04], [0.08, 0.064], [0.15, 0.084], [0.24, 
 const SIDE = curve([[0, 0], [0.03, 0.037], [0.08, 0.058], [0.15, 0.07], [0.24, 0.0765], [0.33, 0.079], [0.43, 0.078], [0.5, 0.075], [0.58, 0.0728], [0.67, 0.0685], [0.76, 0.063], [0.84, 0.0565], [0.9, 0.0475], [0.95, 0.039], [0.98, 0.031], [1, 0.024]]);
 const BACK = curve([[0, 0], [0.03, 0.042], [0.08, 0.068], [0.15, 0.088], [0.24, 0.101], [0.35, 0.107], [0.45, 0.105], [0.55, 0.097], [0.65, 0.083], [0.75, 0.069], [0.85, 0.06], [1, 0.054]]);
 // how far the nose stands off the face, from between the eyes to where it meets the lip
-const NOSE = curve([[0.455, 0], [0.5, 0.002], [0.55, 0.007], [0.6, 0.014], [0.636, 0.0215], [0.652, 0.019], [0.672, 0.007], [0.7, 0.0012], [0.72, 0]]);
+export const NOSE = curve([[0.455, 0], [0.5, 0.002], [0.55, 0.007], [0.6, 0.014], [0.636, 0.0215], [0.652, 0.019], [0.672, 0.007], [0.7, 0.0012], [0.72, 0]]);
 const spow = (v, e) => Math.sign(v) * Math.abs(v) ** e;
 
 // A point on the head, `off` metres off the skin.
@@ -159,6 +159,7 @@ function addEar(b, s) {
   };
   const from = grid(false); grid(true);
   b.soft.push([from, b.pos.length / 3]);
+  (b.ears = b.ears || []).push([from, b.pos.length / 3, s]);          // skull.js moves and sizes each ear as one piece
 }
 
 // ---- hair ----
