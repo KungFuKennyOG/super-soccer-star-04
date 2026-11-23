@@ -82,8 +82,8 @@ export function stepActs(men, dt, t, s) {
     // walking to a new place: along the row, the one who goes behind swinging out toward the boards
     if (a.moving) {
       const d = Math.hypot(a.home[0] - a.from[0], a.home[1] - a.from[1]) || 1, was = a.go;
-      a.go = Math.min(1, a.go + dt * ACT.speed / d * (0.35 + 1.3 * Math.sin(Math.PI * Math.min(1, a.go + 0.04))));
-      const k = smooth(a.go), x = a.from[0] + (a.home[0] - a.from[0]) * k, z = a.from[1] + (a.home[1] - a.from[1]) * k - (a.behind ? ACT.behind * Math.sin(Math.PI * k) : 0);
+      a.go = Math.min(1, a.go + dt * ACT.speed / d * (0.25 + 0.75 * Math.sin(Math.PI * a.go)));          // off slowly, 0.75 m/s in the middle, slowing in
+      const k = a.go, x = a.from[0] + (a.home[0] - a.from[0]) * k, z = a.from[1] + (a.home[1] - a.from[1]) * k - (a.behind ? ACT.behind * Math.sin(Math.PI * k) : 0);
       a.vx = (x - a.px) / dt; a.vz = (z - a.pz) / dt; a.px = x; a.pz = z;
       if (a.go >= 1 && was >= 1) { a.moving = false; a.vx = a.vz = 0; a.act = 'shoot'; a.left = 2 + a.r() * 3; }
     } else { a.vx = a.vz = 0; }

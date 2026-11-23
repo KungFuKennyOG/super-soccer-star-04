@@ -60,7 +60,7 @@ lowRes(); addEventListener('resize', lowRes);
 const stadium = buildStadium(scene);
 const hud = buildHud(scene, camera);
 const radar = buildRadar();
-const celebration = createCelebration(scene, camera);
+const celebration = createCelebration(scene, camera, { avoid: () => [hud.overlays[0]] });   // (the event banner: the prompt keeps off it)
 const menus = createMenus(scene, camera, renderer);
 const squads = createSquads(scene);
 const hands = createHands(renderer, rig);
@@ -406,6 +406,6 @@ function placeOnHands() {
 
 
 // hooks for the smoke test and for poking at it from the console
-const hooks = { paused: false, get world() { return world; }, get models() { return models; }, get match() { return match; }, get mode() { return mode; }, celebration, celebrate: (hat = false, delay = 0.1) => { world.dead = true; world.owner = null; celebration.start(world, hat, delay); }, replay, desk, menus, game, intents, startMatch, startCeremony, training, stadium, settings, ceremony, rig, placeBoard: (y, z) => hud.placeScoreboard(y, z), loop, renderer, GOAL, camera };
+const hooks = { paused: false, get world() { return world; }, get models() { return models; }, get match() { return match; }, get mode() { return mode; }, celebration, celebrate: (hat = false, delay = 0.1) => { world.dead = true; world.owner = null; celebration.start(world, hat, delay); }, replay, desk, menus, game, intents, startMatch, startCeremony, training, stadium, settings, ceremony, rig, hud, commentary, placeBoard: (y, z) => hud.placeScoreboard(y, z), loop, renderer, GOAL, camera };
 window.__sss = hooks;
 window.__sssOK = true;
