@@ -160,7 +160,7 @@ test('a left-footed player does it all with his left boot: strikes, passes and d
     assert.ok(k > 0, `${name}: struck`);
     assert.ok(Math.abs(rows[k].left) < 0.02, `${name}: left boot ${(rows[k].left * 100).toFixed(1)} cm from the ball when it's struck`);
     assert.ok(rows[k].right > 0.005, `${name}: the standing boot isn't on the ball (${(rows[k].right * 100).toFixed(1)} cm)`);
-    assert.ok(rows[k + 3].left > 0.15, `${name}: and the ball has left it three frames later`);
+    assert.ok(rows[k + 3].left > 0.12, `${name}: and the ball has left it three frames later (${(rows[k + 3].left * 100).toFixed(0)} cm)`);
   }
   for (const sprint of [true, false]) {
     const rows = play({ firstPerson: false, foot: 'L', sprint, secs: 3 }).filter(r => r.t > 0.7), touches = rows.filter(r => r.touch);

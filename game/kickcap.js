@@ -33,11 +33,32 @@ import { inertialize } from './inertia.js';
 //            high over it and the trunk tipped a little forward (how a volley is coached: `lean`)
 // A chip (a shot let go at once: little power) is the shot with a short backswing, stopped short with the boot
 // kept low, the trunk a little back: a stab under the ball (how a chip is coached; no capture of one).
+// More than one take (Nov 2026: every shot was the same shot). A strike is one take from its first frame to its last,
+// picked by kickOf: `alt` is the other one.
+//   shot     alt = 10_06, the hardest of subject 10's kicks (11.4 m/s at the ankle, going through the ball at 1.5 m/s):
+//            a placed finish, the body more upright and the follow-through shorter. Softer shots are mostly this one,
+//            hard ones mostly 11_01, and which it is near the middle is the strike's own (its power and aim, so a
+//            replay picks the same).
+//   pass     alt = 10_05, a second side-foot kick (10.8 m/s): one pass in two.
+// How long he follows through also varies a little with the strike (built: plus or minus an eighth).
 const KICKS = {
   shot: { clips: [CLIPS.kickShot, CLIPS.kickShot], warp: 1.6, follow: 0.27, pace: 22, point: 0.25 },
   pass: { clips: [CLIPS.kickPass, CLIPS.kickPass], warp: 2, follow: 0.2, pace: 16, point: 0 },
   volley: { clips: [CLIPS.kickShot, CLIPS.kickShot], warp: 1.6, follow: 0.24, pace: 24, point: 0.25, lean: true },
 };
+const ALT = {
+  shot: CLIPS.kickShotB && { ...KICKS.shot, clips: [CLIPS.kickShotB, CLIPS.kickShotB], follow: 0.22, point: 0.12 },
+  pass: CLIPS.kickPassB && { ...KICKS.pass, clips: [CLIPS.kickPassB, CLIPS.kickPassB] },
+};
+const frac = x => x - Math.floor(x);
+// a number from 0 to 1 that is this strike's own (the same for the same power and aim: a replay's strike gets the live one's)
+export const strikeDice = (s, k = 1) => frac(Math.sin(((s.power ?? 0.5) * 91.7 + (s.dir ? s.dir.x * 37.3 + s.dir.z * 17.1 : 0)) * k) * 43758.5453);
+// Which take a strike is: { K (the table row), alt (true: the second take) }.
+export function kickOf(s) {
+  const pw = s.power ?? 0.5, d = strikeDice(s);
+  const alt = s.kind === 'shot' ? pw > 0.27 && pw + (d - 0.5) * 0.5 < 0.62 : s.kind === 'pass' ? d < 0.5 : false;      // (a chip, under about a quarter power, is built on 11_01)
+  return alt && ALT[s.kind] ? ALT[s.kind] : KICKS[s.kind];
+}
 const RECOVER = 0.2, NEAR = 0.09, LOCK = [0.08, 0.3], LEAN = { volley: 0.1, chip: -0.09 };     // s back to the run; s either side of contact the boot is steered to the ball; s the ankle stays locked after it, then lets go over; the trunk tipped forward over a volley, back under a chip (rad)
 const HIPS = { x: 0.26, z: 0.25, drop: 0.06 }, BODY = { share: 0.7, max: 0.75 }, EASE = 22;   // how far the hips may go over (m), how much of the aim the body takes (rad), how fast the body joins a kick (1/s)
 const LAND = { at: -0.75, into: 0.5, ease: 0.14 };      // where the run's cycle is as the kicking foot comes down (rad: just before its plant), and how far into the ease back to the run that is
@@ -123,9 +144,9 @@ function spanFor(m, bn, K, s, pw) {
 // is with the boot on the ball, qf: how the foot is turned then, turn: where the ball goes off his heading
 // (rad), B: the ball (where it was struck, once it has been), live: the ball now, all in model space. Returns how much of a kick the pose is (0..1).
 export function poseKick(m, bn, s, A, qf, turn, dt, B, live = null) {
-  const K = KICKS[s.kind], c0 = K.clips[0], first = !!m.firstPerson, after = s.t - s.wind, pw = s.power ?? 0.5;
+  const K = kickOf(s), c0 = K.clips[0], first = !!m.firstPerson, after = s.t - s.wind, pw = s.power ?? 0.5;
   // (a chip is stopped short; a man at a run has his next stride to take, where the man recorded stood and watched)
-  const chip = s.kind === 'shot' ? 1 - smooth((pw - 0.15) / 0.12) : 0, follow = K.follow * (1 - 0.5 * chip) * (1 - 0.4 * smooth((m.gait ? m.gait.s : 0) / 6));
+  const chip = s.kind === 'shot' ? 1 - smooth((pw - 0.15) / 0.12) : 0, follow = K.follow * (0.875 + 0.25 * strikeDice(s, 1.7)) * (1 - 0.5 * chip) * (1 - 0.4 * smooth((m.gait ? m.gait.s : 0) / 6));
   const kk = m.kick || (m.kick = { P: newKick(), s: null, w: 0, wb: 0, live: false, tip: 0, lock: new THREE.Quaternion(), g: {}, carry: false, span: 0 }), P = kk.P, mixk = smooth((pw - 0.45) / 0.45) * (1 - chip);
   if (kk.s !== s) {      // a new strike
     kk.s = s; kk.wb = 0; kk.fresh = true; kk.landed = false; kk.pl = 1; Object.assign(kk.g, { on: false, seen: false, x: 0, z: 0, lx: 0, lz: 0, bx: 0, bz: 0 });
