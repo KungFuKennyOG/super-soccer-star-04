@@ -9,7 +9,7 @@ import * as THREE from 'three';
 const FOG_V = THREE.ShaderChunk.fog_pars_vertex, FOG_VM = THREE.ShaderChunk.fog_vertex, FOG_F = THREE.ShaderChunk.fog_pars_fragment, FOG_FM = THREE.ShaderChunk.fog_fragment;
 const fogU = () => THREE.UniformsUtils.clone(THREE.UniformsLib.fog);
 
-import { POSES, LAYOUT } from './fantex.js';
+import { POSES, LAYOUT, BUILDS, STYLES } from './fantex.js';
 
 const DEF = POSES.map(([n], i) => `#define P_${n} ${i}.0`).join('\n');
 // What a fan is doing: returns (arms pose + 32 if the arms are mirrored, lift in metres over sitting,
@@ -86,10 +86,12 @@ const L = LAYOUT, LAY = `#define ATL vec2(${f1(L.W)}, ${f1(L.H)})
 #define TORSO_W ${f1(L.torso.w)}
 #define TORSO_H ${f1(L.torso.h)}
 #define TORSO_Y ${f1(L.torso.y)}
-#define LEGS ${LEGS}`;
+#define LEGS ${LEGS}
+#define NSTYLES ${f1(STYLES.length)}`;
 
-// atlas: fanAtlas(). pal: 16 colours (fans.js), set per ground. Per fan: aFan (torso + 16 x long sleeves,
-// mine, phase, role), aCol (shirt, second colour, skin + 8 x hair, head style), aLook (mirrored or
+// atlas: fanAtlas(). pal: 16 colours (fans.js), set per ground. Per fan: aFan (torso (top + 8 x build) + 64 x
+// long sleeves, mine, phase, role), aCol (shirt, second colour, skin + 8 x hair, head: style + 16 x face +
+// 32 x beard (0 none, 1 stubble, 2 goatee and moustache, 3 full) + 128 x glasses), aLook (mirrored or
 // not, where he looks relative to the play x and z, 1 / 2: talks to the neighbour on his left / right).
 // crowd: the match-moment uniforms plus uBall (where the play is; uBallOn 0: use the viewer).
 export function fanMaterial(atlas, light, crowd) {
@@ -99,7 +101,7 @@ export function fanMaterial(atlas, light, crowd) {
     vertexShader: `${LAY}
 attribute vec4 aSeat; attribute vec4 aFan; attribute vec4 aCol; attribute vec4 aLook; attribute vec2 aShade;
 uniform float uTop[${NP}], uHW[${NP}], uDay, uPoses, uBallOn; uniform vec3 uPal[16], uBall;
-varying vec2 vLoc; varying vec4 vCell; varying vec3 vMir; varying vec3 vShirt, vAcc, vSkin, vHair, vLegs; varying float vSh;
+varying vec2 vLoc; varying vec4 vCell; varying vec3 vMir; varying vec3 vShirt, vAcc, vSkin, vHair, vLegs; varying float vSh; varying vec3 vFace;
 ${FAN_STATE}
 ${FOG_V}
 void main() {
@@ -107,7 +109,10 @@ void main() {
   if (uPoses > 0.5) st = vec4(floor(fract(aFan.z * 7.0) * ${NP}.0), 0.45, 1.0, step(0.5, fract(aFan.z * 3.0)));   // the look page's line-up of every pose
   float pose = mod(st.x, 32.0), armMir = st.x >= 32.0 ? -1.0 : 1.0;
   int pi = int(pose + 0.5);
-  float s = aSeat.w, bodyMir = aLook.x, hw = uHW[pi], top = uTop[pi];
+  BUILD_W
+  float build = floor(mod(aFan.x, 64.0) / 8.0), bw = BW[int(build)];
+  float s = aSeat.w, bodyMir = aLook.x, hw = uHW[pi] * max(1.0, bw), top = uTop[pi];
+  float head = aCol.w, style = mod(head, 16.0), face = mod(floor(head / 16.0), 2.0), beard = mod(floor(head / 32.0), 4.0), specs = floor(head / 128.0);
   vec3 base = aSeat.xyz + vec3(0.0, 0.2 + st.y, 0.0);
   vec3 d = cameraPosition - base; d.y = 0.0; d = normalize(d + vec3(1e-5, 0.0, 0.0));
   vec3 right = vec3(d.z, 0.0, -d.x);
@@ -117,7 +122,8 @@ void main() {
   float ang = atan(dot(dir, right), dot(dir, d));
   if (aLook.w > 0.5 && fract(uTime / 9.0 + aFan.z) < 0.4) ang = (aLook.w > 1.5 ? 1.25 : -1.25);
   float aa = abs(ang), view = aa < 0.13 ? 0.0 : aa < 0.8 ? 1.0 : 2.0, headMir = ang < 0.0 ? -1.0 : 1.0;
-  vCell = vec4(pose * 2.0 + floor(aFan.x / 16.0), aCol.w * 9.0 + view * 3.0 + st.w, mod(aFan.x, 16.0), 0.0);
+  vCell = vec4(pose * 2.0 + floor(aFan.x / 64.0), (face * NSTYLES + style) * 9.0 + view * 3.0 + st.w, mod(aFan.x, 64.0), bw);
+  vFace = vec3(beard, specs, fh(aFan.z, 7.7));
   vMir = vec3(bodyMir * armMir, headMir, bodyMir);
   float lean = 0.035 * sin(uTime * (0.5 + aFan.z) + aFan.z * 40.0);
   float ly = mix(-LEGS, top, position.y), lx = position.x * 2.0 * hw;
@@ -129,26 +135,26 @@ void main() {
   vSh = mix(aShade.y, aShade.x, uDay);
   vec4 mvPosition = viewMatrix * vec4(p, 1.0); gl_Position = projectionMatrix * mvPosition;
 ${FOG_VM}
-}`.replace('SKIN_HAIR', `const vec3 SKIN[6] = ${arr(6, SKINS)}; const vec3 HAIR[8] = ${arr(8, HAIRS)};`),
+}`.replace('SKIN_HAIR', `const vec3 SKIN[6] = ${arr(6, SKINS)}; const vec3 HAIR[8] = ${arr(8, HAIRS)};`).replace('BUILD_W', `const float BW[${BUILDS.length}] = float[${BUILDS.length}](${BUILDS.map(b => b.arms.toFixed(2)).join(', ')});`),
     fragmentShader: `${LAY}
 uniform sampler2D uA, uB; uniform vec3 uAmb, uSun, uFlood; uniform float uWet;
-varying vec2 vLoc; varying vec4 vCell; varying vec3 vMir; varying vec3 vShirt, vAcc, vSkin, vHair, vLegs; varying float vSh;
+varying vec2 vLoc; varying vec4 vCell; varying vec3 vMir; varying vec3 vShirt, vAcc, vSkin, vHair, vLegs; varying float vSh; varying vec3 vFace;
 ${FOG_F}
 vec2 gX, gY;
 // one layer: the cell's top-left (px), where this fragment is in it (px from its top-left), its size and
 // px per cm. False if outside it or clear there.
-bool layer(vec2 cell, vec2 q, vec2 size, float k, out vec4 a, out vec2 b) {
+bool layer(vec2 cell, vec2 q, vec2 size, float k, out vec4 a, out vec4 b) {
   if (q.x < 0.0 || q.y < 0.0 || q.x > size.x || q.y > size.y) return false;
   vec2 uv = (cell + q) / ATL, dx = gX * k / ATL, dy = gY * k / ATL;
   a = textureGrad(uA, uv, dx, dy);
   if (a.a < 0.5) return false;
-  b = textureGrad(uB, uv, dx, dy).rg;
+  b = textureGrad(uB, uv, dx, dy);
   return true;
 }
 void main() {
   vec2 cm = vLoc * 100.0;
   gX = dFdx(cm); gY = dFdy(cm);
-  vec4 a = vec4(0.0); vec2 b = vec2(0.0);
+  vec4 a = vec4(0.0), b = vec4(0.0);
   vec3 c;
   if (vLoc.y < 0.0) {
     // his legs, under the sprite: two trouser legs, shoes at the bottom, in the shade of the row in front
@@ -157,13 +163,21 @@ void main() {
     c = (k > 0.86 ? vec3(0.08) : vLegs * (1.0 - 0.3 * k)) * (1.1 - leg * 4.0);
   } else {
     float ac = floor(vCell.x + 0.5), hc = floor(vCell.y + 0.5), tc = floor(vCell.z + 0.5);
-    bool hit = layer(vec2(mod(ac, ARM_PER) * ARM_W, floor(ac / ARM_PER) * ARM_H), vec2(cm.x * vMir.x + ARM_W * 0.5, ARM_H - cm.y), vec2(ARM_W, ARM_H), 1.0, a, b);
+    bool hit = layer(vec2(mod(ac, ARM_PER) * ARM_W, floor(ac / ARM_PER) * ARM_H), vec2(cm.x * vMir.x / vCell.w + ARM_W * 0.5, ARM_H - cm.y), vec2(ARM_W, ARM_H), 1.0 / vCell.w, a, b);
     if (!hit) hit = layer(vec2(mod(hc, HEAD_PER) * HEAD_W, HEAD_Y + floor(hc / HEAD_PER) * HEAD_H), vec2(cm.x * vMir.y / HEAD_CM + HEAD_W * 0.5, (HEAD_TOP - cm.y) / HEAD_CM), vec2(HEAD_W, HEAD_H), 1.0 / HEAD_CM, a, b);
-    if (!hit) hit = layer(vec2(mod(tc, 16.0) * TORSO_W, TORSO_Y), vec2(cm.x * vMir.z + TORSO_W * 0.5, TORSO_H - cm.y), vec2(TORSO_W, TORSO_H), 1.0, a, b);
+    if (!hit) hit = layer(vec2(mod(tc, 16.0) * TORSO_W, TORSO_Y + floor(tc / 16.0) * TORSO_H), vec2(cm.x * vMir.z + TORSO_W * 0.5, TORSO_H - cm.y), vec2(TORSO_W, TORSO_H), 1.0, a, b);
     if (!hit) discard;
     float ia = 1.0 / a.a;
     vec3 tint = vec3(1.0) + a.g * ia * (vShirt - 1.0) + a.b * ia * (vAcc - 1.0) + b.r * ia * (vSkin - 1.0) + b.g * ia * (vHair - 1.0);
     c = a.r * ia * tint * 1.2;
+    // a beard or stubble where the head's mask says (graded: 1 chin and lip, 0.6 jaw, 0.35 cheeks), in his
+    // hair colour, with a little grain; glasses: dark frames, lenses a touch blue-grey with a glint
+    float bm = b.b * ia, grain = 0.85 + 0.3 * fract(sin(dot(floor(cm * 3.0), vec2(12.99, 78.23))) * 43758.5);
+    vec3 whisk = vHair * 0.8 * a.r * ia * 1.2 * grain;
+    if (vFace.x > 0.5 && vFace.x < 1.5) c = mix(c, c * mix(vec3(1.0), vHair * 1.4 + 0.1, 0.6), 0.55 * smoothstep(0.25, 0.4, bm));
+    else if (vFace.x > 1.5) c = mix(c, whisk, smoothstep(vFace.x > 2.5 ? 0.28 : 0.8, vFace.x > 2.5 ? 0.42 : 0.9, bm) * 0.92);
+    float gm = b.a * ia;
+    if (vFace.y > 0.5 && gm > 0.2) c = gm > 0.75 ? vec3(0.07, 0.07, 0.08) + 0.25 * vFace.z * vec3(0.5, 0.4, 0.2) : mix(c, vec3(0.42, 0.46, 0.52), 0.45);
   }
   gl_FragColor = vec4(c * vSh * (uAmb + uSun * 0.7 + uFlood * 0.8) * 1.15 * (1.0 - 0.2 * uWet), 1.0);
 ${FOG_FM}

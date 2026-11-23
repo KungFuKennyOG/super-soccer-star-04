@@ -1,24 +1,24 @@
 // The crowd's sprites, made in code once and shared by every ground. A fan is three layers that the
-// shader (fanmat.js) lays over each other on his card: his torso (16: eight kinds of top, slim and
-// broad), his head (8 styles x 3 views: facing you, three-quarters, near profile, x 3 mouths: shut,
-// open, a gasp; fanhead.js) and his arms (24 poses x short or long sleeves; fanpaint.js). So a head
+// shader (fanmat.js) lays over each other on his card: his torso (40: eight kinds of top x five builds,
+// fanpaint.js BUILDS), his head (2 faces x 9 styles x 3 views: facing you, three-quarters, near profile,
+// x 3 mouths: shut, open, a gasp; fanhead.js) and his arms (24 poses x short or long sleeves). So a head
 // can look either way whatever his arms do. Colours are put on in the shader: a sprite holds only
-// light and shade and four masks (shirt, second colour, skin, hair).
-//   A: RGBA 1024 x 1176 (L x alpha, shirt, accent, alpha), premultiplied so the mips don't darken
-//      the edges; B: RG (skin, hair). 7.2 MB, about 9.6 MB with mips.
+// light and shade and six masks (shirt, second colour, skin, hair, beard, glasses).
+//   A: RGBA 1024 x 1512 (L x alpha, shirt, accent, alpha), premultiplied so the mips don't darken
+//      the edges; B: RGBA (skin, hair, beard, glasses). 12.4 MB, about 16.5 MB with mips.
 // Also the seat tile the empty stand is painted with (seats and the stairway's steps).
 import * as THREE from 'three';
 import { canvas, hash } from './paint.js';
-import { painter, paintArms, paintTorso, POSES, TOPS, ARMS, TORSO } from './fanpaint.js';
-import { paintHeads, HEAD, STYLES } from './fanhead.js';
+import { painter, paintArms, paintTorso, POSES, TOPS, ARMS, TORSO, BUILDS } from './fanpaint.js';
+import { paintHeads, HEAD, STYLES, FACES } from './fanhead.js';
 
-export { POSES, TOPS, STYLES };
+export { POSES, TOPS, STYLES, BUILDS, FACES };
 export const P = Object.fromEntries(POSES.map(([n], i) => [n, i]));
 export const LAYOUT = {
-  W: 1024, H: 1176,
+  W: 1024, H: 1512,
   arms: { w: ARMS.w, h: ARMS.h, per: 9, y: 0, x0: ARMS.x0 },                 // cell = pose * 2 + long sleeves
-  head: { w: HEAD.w, h: HEAD.h, per: 25, y: 960, x0: HEAD.x0, y0: HEAD.y0, cm: HEAD.cm, at: 74 },   // cell = style * 9 + view * 3 + mouth; at: his head's middle, cm above the seat
-  torso: { w: TORSO.w, h: TORSO.h, per: 16, y: 1104, x0: TORSO.x0 },       // cell = top + 8 if broad
+  head: { w: HEAD.w, h: HEAD.h, per: 25, y: 960, x0: HEAD.x0, y0: HEAD.y0, cm: HEAD.cm, at: 74 },   // cell = (face * styles + style) * 9 + view * 3 + mouth; at: his head's middle, cm above the seat
+  torso: { w: TORSO.w, h: TORSO.h, per: 16, y: 1296, x0: TORSO.x0 },       // cell = top + 8 * build
 };
 const cellAt = (L, c) => [(c % L.per) * L.w, L.y + Math.floor(c / L.per) * L.h];
 
@@ -32,18 +32,18 @@ export function fanAtlas() {
     const p = painter(x, pass);
     const inCell = ([ox, oy], w, h, fn) => { x.save(); x.beginPath(); x.rect(ox, oy, w, h); x.clip(); fn(ox, oy); x.restore(); };
     POSES.forEach(([, pose], pi) => [0, 1].forEach(long => inCell(cellAt(LAYOUT.arms, pi * 2 + long), ARMS.w, ARMS.h, (ox, oy) => paintArms(p, pose, long, ox, oy))));
-    TOPS.forEach((t, ti) => [0, 1].forEach(broad => inCell(cellAt(LAYOUT.torso, ti + broad * 8), TORSO.w, TORSO.h, (ox, oy) => paintTorso(p, t, broad, ox, oy))));
+    TOPS.forEach((t, ti) => BUILDS.forEach((b, bi) => inCell(cellAt(LAYOUT.torso, ti + bi * 8), TORSO.w, TORSO.h, (ox, oy) => paintTorso(p, t, b, ox, oy))));
   }
   const get = k => cv[k].getContext('2d').getImageData(0, 0, W, H).data, A = get('alb'), M = get('mask');
-  const a = new Uint8Array(W * H * 4), b = new Uint8Array(W * H * 2);
+  const a = new Uint8Array(W * H * 4), b = new Uint8Array(W * H * 4);
   for (let y = 0; y < H; y++) for (let xx = 0; xx < W; xx++) {
     const i = (y * W + xx) * 4, al = A[i + 3];
     if (!al) continue;
     // a darker rim round each shape, so an arm reads against the body and one fan against the next
     const edge = [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dy]) => { const X = xx + dx, Y = y + dy; return X < 0 || Y < 0 || X >= W || Y >= H || A[(Y * W + X) * 4 + 3] < 100; });
     const L = A[i] * (edge ? 0.74 : 1) * (0.97 + 0.06 * hash(xx >> 1, y >> 1, 3));
-    a[i] = Math.round(L * al / 255); a[i + 1] = M[i]; a[i + 2] = M[i + 1]; a[i + 3] = al;
-    b[(y * W + xx) * 2] = M[i + 2];
+    a[i] = Math.min(255, Math.round(L * al / 255)); a[i + 1] = M[i]; a[i + 2] = M[i + 1]; a[i + 3] = al;   // (clamped: a lit 255 with grain wrapped round to black)
+    b[i] = M[i + 2];
   }
   paintHeads({ a, b }, W, c => cellAt(LAYOUT.head, c));
   // per arms pose: how high (cm above the seat) and how far out (cm) the card must reach, head and body included
@@ -61,7 +61,7 @@ export function fanAtlas() {
     t.magFilter = THREE.LinearFilter; t.minFilter = THREE.LinearMipmapLinearFilter; t.generateMipmaps = true; t.anisotropy = 4; t.unpackAlignment = 1; t.userData.keep = true; t.needsUpdate = true;
     return t;
   };
-  fanTex = { a: tex(a, THREE.RGBAFormat), b: tex(b, THREE.RGFormat), top, hw, bytes: W * H * 6, ms: Math.round(performance.now() - t0), raw: { a, b } };
+  fanTex = { a: tex(a, THREE.RGBAFormat), b: tex(b, THREE.RGBAFormat), top, hw, bytes: W * H * 8, ms: Math.round(performance.now() - t0), raw: { a, b } };
   return fanTex;
 }
 

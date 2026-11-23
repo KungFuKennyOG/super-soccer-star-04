@@ -13,8 +13,12 @@ import { LIGHT_DIR } from './player.js';
 const PITCH_P = new THREE.Vector3(0, 3, -15), SEAT = 0.52, PACKED = 0.46, AISLE = 15;
 const NEUTRAL = ['#1c1e24', '#2b3550', '#4a4f58', '#3a4a38', '#6b5a44', '#7a7f88'];
 // the tops (fantex.js TOPS): collar, stripes, band, scarf, zip jacket + scarf, hoodie, track jacket, polo
-const TOP_W = [22, 18, 8, 16, 12, 8, 8, 8], STYLE_W = [26, 14, 8, 10, 8, 10, 10, 0];   // head styles: short, buzz, bald, cap, beanie, long, curly, (hood)
-const SKIN_W = [0.3, 0.25, 0.18, 0.12, 0.09, 0.06], HAIR_W = [0.22, 0.25, 0.18, 0.1, 0.08, 0.08, 0.04, 0.05];
+const TOP_W = [22, 18, 8, 16, 12, 8, 8, 8], STYLE_W = [26, 14, 6, 10, 8, 6, 9, 0, 5];   // head styles: short, buzz, bald, cap, beanie, long, curly, (hood), receding
+// builds (fanpaint.js BUILDS): slim, average, broad, heavy for the men; women are their own build. Women
+// are about one in eight of a football crowd (UK league surveys of the 2000s put them at 10 to 15%).
+const BUILD_W = [24, 38, 20, 18], WOMEN = [0.13, 0.06], WOMAN = 4;
+const WOMAN_STYLE_W = [10, 0, 0, 6, 8, 60, 16, 0, 0];
+const SKIN_W = [0.3, 0.25, 0.18, 0.12, 0.09, 0.06], HAIR_W = [0.22, 0.25, 0.18, 0.1, 0.08, 0.04, 0.04, 0.05], GREY = 5;
 const v = () => new THREE.Vector3();
 
 function seeded(s) { let r = (Math.abs(Math.floor(s)) * 16807 + 11) % 2147483647 || 1; return () => (r = (r * 16807) % 2147483647) / 2147483647; }
@@ -106,12 +110,21 @@ export class Crowd {
     const shirt = neutral ? 8 + Math.floor(R() * 6) : base + (top === 1 ? w.top[0][0] : w.top[pick(w.top.map(q => q[1]), R())][0]);
     let acc = base + w.acc[pick(w.acc.map(q => q[1]), R())][0];
     if (acc === shirt) { const o = w.top.map(q => q[0]).find(i => base + i !== shirt); if (o !== undefined) acc = base + o; }
-    const style = top === 5 && R() < 0.5 ? 7 : pick(STYLE_W, R()), broad = R() < 0.4 ? 8 : 0;
-    const kid = !packed && R() < 0.03, scale = kid ? 0.8 : 0.95 + R() * 0.1, b = 0.9 + R() * 0.2;
+    // who he is: a kid, a woman or a man of some build and age; his face, beard and glasses
+    const kid = !packed && R() < 0.03, woman = !kid && R() < WOMEN[packed ? 1 : 0], old = !kid && R() < 0.16;
+    const build = kid ? 0 : woman ? WOMAN : pick(BUILD_W, R());
+    let style = top === 5 && R() < 0.5 ? 7 : pick(woman ? WOMAN_STYLE_W : STYLE_W, R());
+    if (old && !woman && (style === 0 || style === 1 || style === 6) && R() < 0.55) style = R() < 0.5 ? 8 : 2;   // older men: thinning on top
+    const face = woman || kid ? 0 : R() < 0.45 ? 1 : 0;
+    const beard = woman || kid ? 0 : pick([50, 26, 12, 12], R());          // none, stubble, goatee and moustache, a full beard
+    const glasses = !kid && R() < (old ? 0.3 : 0.08) ? 1 : 0;
+    const hair = old && R() < 0.75 ? GREY : pick(HAIR_W, R());
+    const scale = kid ? 0.8 : woman ? 0.9 + R() * 0.08 : 0.92 + R() * 0.16, b = 0.9 + R() * 0.2;
     const chat = !packed && R() < 0.1 ? (R() < 0.5 ? 1 : 2) : 0;
     const f = {
-      p, torso: top + broad + (top >= 4 && top <= 6 ? 16 : 0), mine, phase: R(), role, scale, shade: [shade[0] * b, shade[1] * b], band, k, t,
-      col: [shirt, acc, pick(SKIN_W, R()) + 8 * pick(HAIR_W, R()), style], look: [R() < 0.5 ? -1 : 1, (R() - 0.5) * 34, (R() - 0.5) * 20, chat],
+      p, torso: top + 8 * build + (top >= 4 && top <= 6 ? 64 : 0), mine, phase: R(), role, scale, shade: [shade[0] * b, shade[1] * b], band, k, t,
+      col: [shirt, acc, pick(SKIN_W, R()) + 8 * hair, style + 16 * face + 32 * beard + 128 * glasses], look: [R() < 0.5 ? -1 : 1, (R() - 0.5) * 34, (R() - 0.5) * 20, chat],
+      who: { kid, woman, old, build, face, beard, glasses },
     };
     this.fans.push(f);
     if (ultra) this.ultras.push(f);
