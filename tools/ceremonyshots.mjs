@@ -18,10 +18,11 @@ const VIEWS = {
   stands: [[5, 11, -31], [0, 1.6, 0.5], 24], wide: [[13, 4.5, -13], [0, 1.8, 0.6], 38], squad: [[0, 2.3, -2.6], [0, 1.75, 2], 52],
   squadL: [[-1.3, 2.25, -0.6], [-1.6, 1.7, 2.2], 50], squadR: [[1.3, 2.25, -0.6], [1.6, 1.7, 2.2], 50], pair: [[0, 2.5, 0.6], [0, 2.3, 2.66], 42],
   feet: [[0, 1.0, -1.2], [0, 0.75, 2], 60], press: [[0, 3.0, 0.6], [0, 0.6, -4], 60], side: [[7.5, 2.4, 1.6], [0, 1.6, 1.8], 40], top: [[0, 13, 0.4], [0, 0, 0.5], 50],
+  clapA: [[-1.9, 2.05, -0.4], [-1.9, 1.85, 1.25], 46], clapB: [[2.0, 2.0, -0.2], [2.2, 1.85, 1.2], 46], clapSide: [[-4.2, 2.0, 1.6], [-2.55, 1.85, 1.3], 30],
   yes: [[-2.3, 1.9, -1.9], [-2.55, 1.55, 1.2], 38], gk: [[2.3, 1.9, -1.9], [2.55, 1.55, 1.2], 38],
   medalF: [[-1.75, 2.3, 1.0], [-1.85, 2.24, 2.62], 24], medalS: [[-3.1, 2.3, 2.2], [-1.85, 2.22, 2.62], 22], medalB: [[-1.6, 2.5, 3.25], [-1.85, 2.4, 2.62], 50],
   pressF: [[0, 1.6, -0.9], [0, 0.9, -2.9], 62], pressL: [[-2.2, 1.5, -1.3], [-1.6, 0.95, -3.0], 50], pressS: [[5.2, 1.3, -2.8], [0, 0.9, -2.8], 34], pressBk: [[0.6, 2.2, -6.2], [0, 1.0, -2.8], 40],
-  behind: [[0, 3.3, 3.1], [0, 1.9, -1], 62],
+  behind: [[0, 3.3, 3.1], [0, 1.9, -1], 62], swap: [[2.3, 1.5, -0.3], [2.3, 0.9, -3.1], 52],
   // (the quick page has no you: these stand where your eyes are)
   lookEyes: [[0, 2.17, 0], [0, 1.55, -2.4], 62], lookCup: [[0, 2.17, 0], [0, 1.75, -0.6], 50], lookUp: [[0, 2.17, 0], [0, 2.75, -0.5], 62], cupStands: [[3, 5, -14], [0, 1.9, -0.5], 9], cupSide: [[1.2, 2.3, -1.3], [0, 1.85, -0.6], 40],
 };
@@ -42,22 +43,24 @@ const save = async (name, data) => { await writeFile(`${out}/${name}.png`, Buffe
 // LOOK=1: the quick page (tools/ceremonylook.html: stage, squad and press on a plain pitch, no stadium). Stills of
 // VIEWS at each of T (seconds; the cup is taken at 1.5 and up from 2), or FILM=view:secs.
 if (process.env.LOOK) {
-  await page.goto(`${server.url}/tools/ceremonylook.html?team=${team}&kind=${kind}&time=${time}`, { waitUntil: 'load' });
+  await page.goto(`${server.url}/tools/ceremonylook.html?team=${team}&kind=${kind}&time=${time}${process.env.Q ? '&' + process.env.Q : ''}`, { waitUntil: 'load' });
   await page.waitForFunction(() => window.__look && window.__look.ready);
   const UP = (process.env.UP || '2:99').split(':').map(Number), st = t => ({ held: t >= UP[0] - 0.5, up: t >= UP[0] && t < UP[1] }), views = (process.env.VIEWS || 'squad,pressF').split(',');
   let now = 0;
   const to = async t => { while (now < t - 1e-6) { const d = Math.min(process.env.MEASURE || process.env.FILM ? 1 / 30 : 0.25, t - now); await page.evaluate(([a, b]) => window.__look.step(a, b), [d, st(now)]); now += d; } };
   // MEASURE=secs (LOOK): how far any photographer's arm is inside his trunk, head or camera, and how near two of them come
   if (process.env.MEASURE) {
-    const worst = [], seen = {}; let near = 9;
+    const worst = [], seen = {}, medal = []; let near = 9;
     for (let i = 0; i < +process.env.MEASURE * 30; i++) {
       await to((i + 1) / 30);
       const [m, acts] = await page.evaluate(() => [window.__look.measure(), window.__look.acts()]);
+      (await page.evaluate(() => window.__look.medals())).forEach((g, k) => { medal[k] = Math.min(medal[k] ?? 9, g); });
       near = Math.min(near, m.near);
       m.arms.forEach((a, k) => { const w = worst[k] || (worst[k] = { trunk: 0, head: 0, cam: 0 }); for (const n in a) if (a[n] > w[n]) { w[n] = a[n]; w[n + 'At'] = `${now.toFixed(2)} ${acts[k].act}`; } });
       acts.forEach(a => { (seen[a.i] || (seen[a.i] = new Set())).add(a.act + (a.kneel < 0.05 ? '' : a.kneel > 0.95 ? '-kneel' : '-rising')); });
     }
     worst.forEach((w, k) => console.log(`man ${k}: in trunk ${(w.trunk * 100).toFixed(1)} cm (${w.trunkAt || '-'}), in head ${(w.head * 100).toFixed(1)} cm (${w.headAt || '-'}), in camera ${(w.cam * 100).toFixed(1)} cm (${w.camAt || '-'}); did: ${[...seen[k]].join(' ')}`));
+    console.log(`squad, nearest a hand came to his own medal (cm): ${medal.map(g => (g * 100).toFixed(1)).join(' ')}`);
     console.log(`nearest two men came: ${near.toFixed(2)} m`);
   } else
 if (process.env.FILM) {
