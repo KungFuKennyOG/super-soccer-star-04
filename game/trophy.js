@@ -9,6 +9,7 @@ import { uiPlane, PAL, text, box, maroon, glyph, measure } from './ps2/ui.js';
 import { sfx } from './audio.js';
 import { buildHand } from './ps2/hands.js';
 import { buildTrophy2, buildPlinth2 } from './ps2/trophies.js';
+import { trophyTime } from './ps2/trophymat.js';
 import { buildStage, STAGE, CUP_NAME } from './ps2/stage.js';
 import { createPress } from './presscast.js';
 import { buildConfetti, buildJets, buildFlashes } from './ps2/confetti.js';
@@ -104,6 +105,7 @@ export function createCeremony(scene, camera, hands, o = {}) {
       vrMode = vr;
       if (trophy) root.remove(trophy);
       clear();
+      trophyTime(!!(stadium && stadium.ground && stadium.ground.recipe.time === 'night'));   // the metal reflects the ground as it is lit
       trophy = buildTrophy2(kind); trophy.position.copy(rest); root.add(trophy);
       // posed hands that hold the cup properly: they replace your controller hands while you grip it
       // (and are your hands in the browser). Left hand on your left (+x here), fingers wrapping in.

@@ -8,68 +8,88 @@
 import * as THREE from 'three';
 import { canvas, fbm, hash, mix, clamp01, sstep } from './paint.js';
 
-let ENV = null;
+const ENVS = {}, MATS = [];
+let NIGHT = false;
 const SUN = new THREE.Vector3(-0.42, 0.74, -0.52).normalize();
-// The stadium seen from the centre circle at chest height: direction (unit x, y, z) -> lit rgb in out.
-export function stadiumAt(x, y, z, out) {
+// The stadium seen from the stage at chest height: direction (unit x, y, z) -> lit rgb in out. night: under the
+// floodlights (a dark sky with haze over the roofs, the stands and the pitch lit).
+// The stands and the far pitch are never black and carry no thin bright lines. A cup's round belly is a convex
+// mirror: it squeezes everything behind you into a patch a few centimetres across, and black stands with a pale
+// line of ad boards through them came out as a dark blotch with a ring in it (it read as a pair of lips on the
+// silver cup). Now that patch is a soft mid grey that darkens toward the roof line and the sky is still far
+// brighter than it: the contrast that reads as polished metal is between sky, stands and ground, in broad bands.
+export function stadiumAt(x, y, z, out, night = false) {
   const az = Math.atan2(z, x), el = Math.asin(Math.max(-1, Math.min(1, y))), sa = Math.abs(Math.sin(az)), ca = Math.abs(Math.cos(az));
   const dWall = 1 / Math.hypot(ca / 78, sa / 54), dFront = 1 / Math.hypot(ca / 60, sa / 40);   // an oval ground: the roof line dips gently toward the ends
   const roof = Math.atan(27 / dWall), boards = Math.atan(0.1 / dFront) + 0.012, long = sa > 0.6;
   let r, g, b;
   if (el > roof) {
-    // sky: deep overhead, brightening to a pale band over the roofs; thin cloud; the sun behind it
     const k = Math.pow(1 - (el - roof) / (Math.PI / 2 - roof), 2.2);
-    r = mix(0.2, 1.02, k); g = mix(0.36, 1.08, k); b = mix(0.7, 1.18, k);
-    const cl = sstep(0.5, 0.78, fbm(az * 2.2 + 9, el * 5, 3, 0) + 0.12 * Math.sin(az * 3)) * 0.75;
-    r = mix(r, 1.45, cl); g = mix(g, 1.45, cl); b = mix(b, 1.5, cl);
-    const d = Math.acos(Math.max(-1, Math.min(1, x * SUN.x + y * SUN.y + z * SUN.z)));
-    const s = 26 * Math.exp(-d * d / 0.0035) + 3.2 * Math.exp(-d * d / 0.05) + 0.8 * Math.exp(-d * d / 0.4);
-    r += s; g += s * 0.96; b += s * 0.86;
+    if (night) {
+      // night: near black overhead, the floodlights' haze over the roofs
+      r = mix(0.1, 0.42, k * k); g = mix(0.12, 0.45, k * k); b = mix(0.2, 0.56, k * k);
+    } else {
+      // sky: deep overhead, brightening to a pale band over the roofs; thin cloud; the sun behind it
+      r = mix(0.2, 1.02, k); g = mix(0.36, 1.08, k); b = mix(0.7, 1.18, k);
+      const cl = sstep(0.5, 0.78, fbm(az * 2.2 + 9, el * 5, 3, 0) + 0.12 * Math.sin(az * 3)) * 0.75;
+      r = mix(r, 1.45, cl); g = mix(g, 1.45, cl); b = mix(b, 1.5, cl);
+      const d = Math.acos(Math.max(-1, Math.min(1, x * SUN.x + y * SUN.y + z * SUN.z)));
+      const s = 26 * Math.exp(-d * d / 0.0035) + 3.2 * Math.exp(-d * d / 0.05) + 0.8 * Math.exp(-d * d / 0.4);
+      r += s; g += s * 0.96; b += s * 0.86;
+    }
   } else if (el > boards) {
-    // the stands: black under the roof, a faint crowd, the lit fascia along the roof edge, lamps under it
-    const t = (el - boards) / (roof - boards), k = 0.02 + 0.07 * t * (0.6 + 0.8 * fbm(az * 30, t * 12, 5, 0));
-    r = k * 1.1; g = k; b = k * 1.05;
-    const f = sstep(0.88, 0.95, t) * (long ? 1.4 : 1.0); r += f; g += f; b += f * 1.04;
-    const ad = sstep(0.09, 0.03, t) * 0.5; r += ad; g += ad; b += ad;                    // the ad boards: one pale line on the horizon
+    // the stands: one soft mid tone from the boards to the roof (a crowd in even light), the lit roof edge a
+    // glow into the sky, not a line
+    const t = (el - boards) / (roof - boards), crowd = 0.96 + 0.08 * fbm(az * 5, t * 3, 5, 0);   // (barely any grain: squeezed small, a crowd's speckle was a hatched patch)
+    const k = (night ? 0.4 : 0.33) * crowd * (1 - 0.15 * t);
+    r = k; g = k; b = k * 1.03;
+    const f = sstep(0.75, 1.0, t) * (long ? 0.4 : 0.3) * (night ? 0.6 : 1); r += f; g += f; b += f * 1.04;
   } else {
-    // the pitch as polished metal wants it: dark under the stands so the horizon is one clean line, lifting
-    // to a pale ground bounce further down (mown stripes across it), a little darker at your feet. Greyer
-    // than grass: a green mirror reads as painted, not polished.
-    const d = 1.3 / Math.tan(Math.max(0.02, boards - el)), ux = x / Math.hypot(x, z), dn = -el;
-    const stripe = 1 + 0.22 * sstep(30, 10, d) * sstep(0.6, 3, d) * Math.max(-1, Math.min(1, 3 * Math.sin(ux * d * Math.PI / 5.5)));
-    const k = (0.035 + 0.7 * sstep(0.0, 0.42, dn) - 0.3 * sstep(0.9, 1.5, dn)) * stripe;
+    // the pitch: the same tone as the stands where it meets them (no line there), lifting to a pale ground
+    // bounce further down, a little darker at your feet. Greyer than grass: a green mirror reads as painted,
+    // not polished. No mown stripes: squeezed small they were a row of teeth.
+    const dn = -el;
+    const k = (night ? 0.4 : 0.33) + (night ? 0.45 : 0.4) * sstep(0.02, 0.5, dn) - 0.28 * sstep(0.9, 1.5, dn);
     r = k * 0.94; g = k * 0.97; b = k * 0.9;
   }
-  // the four floodlight banks over the corners: a block of lamps, hot, and its glare
+  // the four floodlight banks over the corners: a block of lamps, hot, and its glare (wider at night)
   for (let c = 0; c < 4; c++) {
     const fa = (c < 2 ? 1 : -1) * (c % 2 ? 0.62 : Math.PI - 0.62); let da = az - fa; da -= Math.round(da / (2 * Math.PI)) * 2 * Math.PI;
     const de = el - 0.5, grid = Math.abs(da) < 0.07 && Math.abs(de) < 0.036 ? 1 : 0;
-    const s = grid * 20 + 0.9 * Math.exp(-(da * da + de * de) / 0.02);
+    const s = grid * (night ? 30 : 20) + (night ? 1.6 : 0.9) * Math.exp(-(da * da + de * de) / (night ? 0.045 : 0.02));
     r += s; g += s * 0.98; b += s * 0.93;
   }
   out[0] = r; out[1] = g; out[2] = b;
 }
 // 1024 x 512 half-float equirect (half floats filter on every WebGL2 device; 32-bit float filtering is
 // an extension the Quest may lack). Row 0 is straight down.
-export function stadiumEnv() {
-  if (ENV) return ENV;
+export function stadiumEnv(night = false) {
+  const key = night ? 'night' : 'day';
+  if (ENVS[key]) return ENVS[key];
   const W = 1024, H = 512, h16 = new Uint16Array(W * H * 4), c = [0, 0, 0], one = THREE.DataUtils.toHalfFloat(1);
   for (let py = 0; py < H; py++) {
     const el = ((py + 0.5) / H - 0.5) * Math.PI, y = Math.sin(el), ce = Math.cos(el);
     for (let px = 0; px < W; px++) {
       const az = ((px + 0.5) / W - 0.5) * 2 * Math.PI, i = (py * W + px) * 4;
-      stadiumAt(Math.cos(az) * ce, y, Math.sin(az) * ce, c);
+      stadiumAt(Math.cos(az) * ce, y, Math.sin(az) * ce, c, night);
       h16[i] = THREE.DataUtils.toHalfFloat(c[0]); h16[i + 1] = THREE.DataUtils.toHalfFloat(c[1]); h16[i + 2] = THREE.DataUtils.toHalfFloat(c[2]); h16[i + 3] = one;
     }
   }
   const t = new THREE.DataTexture(h16, W, H, THREE.RGBAFormat, THREE.HalfFloatType);
   t.mapping = THREE.EquirectangularReflectionMapping; t.magFilter = t.minFilter = THREE.LinearFilter; t.needsUpdate = true;
-  ENV = t;
+  ENVS[key] = t;
   return t;
 }
 
 // ---------- materials ----------
-const std = o => new THREE.MeshStandardMaterial({ envMap: stadiumEnv(), ...o });
+const std = o => { const m = new THREE.MeshStandardMaterial({ envMap: stadiumEnv(NIGHT), ...o }); MATS.push(m); return m; };
+// Day or floodlit night: every material made here reflects that stadium from now on (game/trophy.js says which
+// as the ceremony starts; the night picture is painted and filtered the first time it is asked for).
+export function trophyTime(night) {
+  if (!!night === NIGHT) return;
+  NIGHT = !!night;
+  for (const m of MATS) { m.envMap = stadiumEnv(NIGHT); m.needsUpdate = true; }
+}
 // gold: the reflectance of the metal itself, a little deeper; its darks come out umber, its lights pale yellow
 // (and where it reflects something dark it goes deeper and redder, as gold does when it mostly reflects itself)
 export const goldMat = (o = {}) => {
