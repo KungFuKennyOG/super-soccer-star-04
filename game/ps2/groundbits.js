@@ -62,7 +62,8 @@ export function lightsAndBits(G, L, glow, plan, recipe) {
     G.quad(f(-BL / 2 + 0.05, 0.02, -0.015), f(BL / 2 - 0.05, 0.02, -0.015), f(BL / 2 - 0.05, BH, -0.015), f(-BL / 2 + 0.05, BH, -0.015), { reg: adRegion(i++), uv: [0, 0, 1, 1], glow: 0.22, face: f(0, 0.5, 5) });
   };
   for (let x = -BX + BL / 2; x < BX; x += BL) board(x, BZ, 0);
-  for (let z = BZ + BL / 2; z < 4; z += BL) { board(-BX, z, Math.PI / 2); board(BX, z, -Math.PI / 2); }
+  for (let z = BZ + BL / 2; z < (plan.boards.full ? -BZ : 4); z += BL) { board(-BX, z, Math.PI / 2); board(BX, z, -Math.PI / 2); }
+  if (plan.boards.full) for (let x = -BX + BL / 2; x < BX; x += BL) board(x, -BZ, Math.PI);      // a whole pitch: the other end's boards
   // the TV gantry under the left stand's roof (where the replay camera films from)
   const left = plan.stands[1];
   if (left.p.roof) {

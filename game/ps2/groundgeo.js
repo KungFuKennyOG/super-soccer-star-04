@@ -3,9 +3,10 @@
 // material. The light each face takes is baked here (aLit), from the sun direction the players'
 // shadows use and the direction to the floodlit pitch.
 import * as THREE from 'three';
+import { ARENA } from './arena.js';
 import { LIGHT_DIR } from './player.js';
 
-const PITCH_C = new THREE.Vector3(0, 4, -16);         // the middle of the half pitch, a little up
+const PITCH_C = new THREE.Vector3(0, 4, ARENA.centreZ - (ARENA.full ? 0 : 1));         // the middle of the half pitch, a little up
 const v3 = () => new THREE.Vector3();
 const N = v3(), T = v3();
 

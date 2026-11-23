@@ -4,6 +4,7 @@
 // the roof (arches: 'four' one over each stand, 'long' two along the sides), buildings filling a
 // corner (cornerFill: 'block'), and what you see over low stands (skyline: houses, city, park).
 import * as THREE from 'three';
+import { ARENA } from './arena.js';
 import { region } from './groundtex.js';
 import { strip } from './ground.js';
 import { canvas, hash, smoothTex } from './paint.js';
@@ -59,7 +60,7 @@ export function extras(G, L, run, p, recipe, id) {
       const u = k / n, t = t0 + (t1 - t0) * u, y = y0 - 6 + (peak + 6) * Math.sin(Math.PI * u), cur = [run.pt(t, z - 0.7, y), run.pt(t, z + 0.7, y), run.pt(t, z, y - (long ? 3 : 1.4))];
       if (prev) {
         if (long) L.quad(prev[0], cur[0], cur[2], prev[2], { reg: region('lattice'), uv: [0, 0, 1, 1], color: c });
-        else { G.quad(prev[0], cur[0], cur[1], prev[1], { reg: region('paint'), color: c, face: V().copy(cur[0]).setY(cur[0].y + 10) }); G.quad(prev[1], cur[1], cur[2], prev[2], { reg: region('paint'), color: c.map(v => v * 0.8), face: V(0, 3, -15) }); G.quad(prev[0], cur[0], cur[2], prev[2], { reg: region('paint'), color: c.map(v => v * 0.7) }); }
+        else { G.quad(prev[0], cur[0], cur[1], prev[1], { reg: region('paint'), color: c, face: V().copy(cur[0]).setY(cur[0].y + 10) }); G.quad(prev[1], cur[1], cur[2], prev[2], { reg: region('paint'), color: c.map(v => v * 0.8), face: V(0, 3, ARENA.centreZ) }); G.quad(prev[0], cur[0], cur[2], prev[2], { reg: region('paint'), color: c.map(v => v * 0.7) }); }
       }
       prev = cur;
     }
@@ -76,7 +77,7 @@ export function cornerBlock(G, run, p) {
 
 // What shows over the stands: a ring of silhouettes 95 m out (alpha cut), lit a little at night.
 export function skyline(SK, kind, plan) {
-  const R = 95, cz = -15, n = 28, H = { houses: 14, city: 30, park: 22 }[kind] || 20;
+  const R = ARENA.full ? 125 : 95, cz = ARENA.centreZ, n = 28, H = { houses: 14, city: 30, park: 22 }[kind] || 20;
   for (let k = 0; k < n; k++) {
     const a0 = k / n * Math.PI * 2, a1 = (k + 1) / n * Math.PI * 2, A = V(Math.sin(a0) * R, 0, cz + Math.cos(a0) * R), B = V(Math.sin(a1) * R, 0, cz + Math.cos(a1) * R);
     SK.quad(A, B, V(B.x, H, B.z), V(A.x, H, A.z), { uv: [k / 3.5, 0, (k + 1) / 3.5, 1], glow: 0.1, face: V(0, H / 2, cz) });

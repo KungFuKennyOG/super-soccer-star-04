@@ -17,6 +17,7 @@ import { buildGround2 } from './ground.js';
 import { buildTurf, buildMarkings } from './turf.js';
 import { buildGoal2 } from './goal2.js';
 import { cloudTexture } from './groundtex.js';
+import { ARENA } from './arena.js';
 
 // amb / sun / flood: what the baked weights mix (0..1 each channel). hemi / key: the scene's lights.
 export const TIMES2 = {
@@ -44,7 +45,7 @@ void main() {
 }`,
   });
   const mesh = new THREE.Mesh(new THREE.SphereGeometry(210, 24, 12), m);          // inside the game camera's 260 m far plane from anywhere on the pitch
-  mesh.position.z = -15; mesh.renderOrder = -10; mesh.frustumCulled = false;
+  mesh.position.z = ARENA.full ? 0 : -15; mesh.renderOrder = -10; mesh.frustumCulled = false;
   return { mesh, uniforms };
 }
 
@@ -58,6 +59,9 @@ export function buildStadium(scene) {
   const turf = buildTurf(light); scene.add(turf.mesh);
   const marks = buildMarkings(light); scene.add(marks);
   const goal = buildGoal2(light); scene.add(goal.group);
+  // a whole pitch (game/ps2/arena.js): the same goal again at the other end, turned round
+  const goalB = ARENA.full ? buildGoal2(light) : null;
+  if (goalB) { goalB.group.rotation.y = Math.PI; scene.add(goalB.group); }
 
   let ground = null, time = TIMES2.night, weather = 'clear', jumpOurs = 0, jumpTheirs = 0, cheering = false, ooh = 0, goalT = 99, theirT = 99;
   const drop = g => {
@@ -85,6 +89,7 @@ export function buildStadium(scene) {
   }
   const api = {
     netHit: goal.hit,
+    netHitFar: (x, y) => goalB && goalB.hit(-x, y),        // the goal at +z on a whole pitch
     cheer: on => { if (on && !cheering) goalT = 0; cheering = on; },
     theirs: () => { jumpTheirs = 1; theirT = 0; },
     ooh: () => { ooh = 1; },
@@ -105,7 +110,7 @@ export function buildStadium(scene) {
     get weatherBright() { return time.wx; },
     update(dt, t, ball) {
       if (ball) { jump.uBall.value.set(ball.x, ball.y || 0, ball.z); jump.uBallOn.value = 1; }
-      goal.update(dt);
+      goal.update(dt); if (goalB) goalB.update(dt);
       light.uTime.value = t;
       jumpOurs += ((cheering ? 1 : 0) - jumpOurs) * Math.min(1, dt * 3);
       jumpTheirs = Math.max(0, jumpTheirs - dt * 0.15);                   // their end celebrates for about 6 s

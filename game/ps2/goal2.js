@@ -2,10 +2,11 @@
 // (one lit mesh), and the net (one mesh): a painted 12 cm mesh, alpha blended so it stays a grey veil
 // far off rather than vanishing, that bulges where the ball hits it (in its vertex shader).
 import * as THREE from 'three';
-import { GOAL, PITCH } from '../../rules/tuning.js';
+import { GOAL } from '../../rules/tuning.js';
+import { ARENA } from './arena.js';
 import { netTexture } from './groundtex.js';
 
-const P = GOAL.post, H = GOAL.h, HW = GOAL.halfW, Z = GOAL.z, ZB = GOAL.z - GOAL.depth, HB = H * 0.82;
+const P = GOAL.post, H = GOAL.h, HW = GOAL.halfW, Z = ARENA.goalZ, ZB = ARENA.goalZ - GOAL.depth, HB = H * 0.82;
 
 // a tube from a to b (radius r, n sides), coloured
 function tube(parts, a, b, r, color, n = 12) {
@@ -52,8 +53,8 @@ export function buildGoal2(light) {
   tube(parts, V(-X, HB, ZB), V(X, HB, ZB), 0.022, '#9ea2a8', 6);
   // corner flags at the two corners on the goal line
   for (const s of [-1, 1]) {
-    tube(parts, V(s * PITCH.halfW, 0, Z), V(s * PITCH.halfW, 1.55, Z), 0.018, '#f2d21a', 6);
-    const f = new THREE.PlaneGeometry(0.42, 0.3); f.translate(s * (PITCH.halfW - 0.21), 1.4, Z); parts.push([f, new THREE.Color('#d81a2a')]);
+    tube(parts, V(s * ARENA.halfW, 0, Z), V(s * ARENA.halfW, 1.55, Z), 0.018, '#f2d21a', 6);
+    const f = new THREE.PlaneGeometry(0.42, 0.3); f.translate(s * (ARENA.halfW - 0.21), 1.4, Z); parts.push([f, new THREE.Color('#d81a2a')]);
   }
   const frame = new THREE.Mesh(merge(parts), new THREE.MeshPhongMaterial({ vertexColors: true, specular: 0x444444, shininess: 30, emissive: 0x4a4a4a, side: THREE.DoubleSide }));
   group.add(frame);

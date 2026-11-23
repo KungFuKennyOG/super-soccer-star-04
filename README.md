@@ -14,6 +14,8 @@ npm run check                   # lint + unit tests
 
 `docs/ps2-look.md` says where it stands and what's next; `CLAUDE.md` has every decision. Motion data: CMU Graphics Lab Motion Capture Database (mocap.cs.cmu.edu, created with funding from NSF EIA-0196217).
 
+On the `flat-11v11` branch: `brawl.html`, a flat-screen 11 v 11 (or 6 v 6) on a whole pitch in the same look, keyboard or pad, with an optional brawl mode where tackles send people flying. See `docs/brawl.md`.
+
 Everything below describes the game as it plays.
 
 You plus two teammates attack one goal against three defenders and a keeper.

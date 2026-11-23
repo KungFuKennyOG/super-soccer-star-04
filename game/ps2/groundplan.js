@@ -4,7 +4,7 @@
 //
 // A stand's own frame: x along its length, its front wall at z = 0, rising away from the pitch toward
 // -z. A stand's profile is the cross-section: tiers, the fascia between them, the back wall, the roof.
-import { GOAL, PITCH } from '../../rules/tuning.js';
+import { ARENA } from './arena.js';
 
 export const FRONT = 1.2;           // the front wall's height (the first row sits just above it)
 export const ROW = 0.8;             // one row of seats, front to back (m)
@@ -60,10 +60,11 @@ export function gable(p) {
 // round the outside) or 'access' (four corner stair towers).
 export const CORNERS = { endL: [-1, 'end', 0, Math.PI / 2, 'left'], endR: [1, 'end', 0, -Math.PI / 2, 'right'], nearL: [-1, 'near', Math.PI / 2, Math.PI, 'left'], nearR: [1, 'near', -Math.PI / 2, -Math.PI, 'right'] };
 export function planGround(recipe) {
-  const W = PITCH.halfW, gap = recipe.gap;
-  const endZ = GOAL.z - 3.4 - gap, sideX = W + 1.8 + gap, nearZ = 7 + gap, midZ = (GOAL.z + 7) / 2;
+  const W = ARENA.halfW, G = ARENA.goalZ, gap = recipe.gap;
+  const endZ = G - 3.4 - gap, sideX = W + 1.8 + gap, nearZ = ARENA.nearZ + gap, midZ = (G + ARENA.nearZ) / 2;
   const roofed = id => !recipe.roofOn || recipe.roofOn.includes(id);
-  const tiersOf = id => (id === 'left' || id === 'right' ? recipe[id] || recipe.side : recipe[id]);
+  // a whole pitch (ARENA.full): the near stand is the other end, built as the end is
+  const tiersOf = id => (id === 'left' || id === 'right' ? recipe[id] || recipe.side : id === 'near' && ARENA.full ? recipe.end : recipe[id]);
   const stand = (id, len, x, z, yaw, o = {}) => ({ id, len, x, z, yaw, tiers: tiersOf(id), p: profile(tiersOf(id), roofed(id) ? recipe.roof : 'none'), ...o });
   const stands = [
     stand('end', 2 * sideX, 0, endZ, 0, { isEnd: true }),
@@ -79,7 +80,7 @@ export function planGround(recipe) {
   let board;
   if (e.roof) board = { y: e.top + 3.7 - 4.2, z: endZ + e.roof.zFront + 0.6 };
   else board = { y: e.top + 7, z: endZ + e.back - 0.7 };
-  const lights = { kind: recipe.lights, pylons: [], aim: [0, 0, GOAL.z + 16] };
+  const lights = { kind: recipe.lights, pylons: [], aim: [0, 0, ARENA.full ? 0 : G + 16] };
   if (recipe.lights === 'pylons') for (const [x, z] of [[-sideX - 12, endZ - 10], [sideX + 12, endZ - 10], [-sideX - 12, nearZ + 6], [sideX + 12, nearZ + 6]]) lights.pylons.push({ x, z, h: topY + 16 });
   // towers outside the stands: the four corners, then along the sides and ends
   let towers = [];
@@ -90,9 +91,9 @@ export function planGround(recipe) {
     towers = ring.slice(0, n).map(([x, z], i) => ({ x, z, r: 3, h: topY + (i < 4 ? 9 : 1) }));
   }
   // a running track: the band between the pitch's surround and the stands (a rounded oval)
-  const track = recipe.track ? { inX: W + 4, inZ0: GOAL.z - 6, inZ1: 3, outX: sideX - 0.3, outZ0: endZ + 0.3, outZ1: nearZ - 0.3 } : null;
+  const track = recipe.track ? { inX: W + 4, inZ0: G - 6, inZ1: ARENA.full ? -G + 6 : 3, outX: sideX - 0.3, outZ0: endZ + 0.3, outZ1: nearZ - 0.3 } : null;
   // ad boards round the half pitch, as game/stadium.js stands them
-  const boards = { x: W + 1.6, z: GOAL.z - 3.2, len: 6, h: 0.9 };
+  const boards = { x: W + 1.6, z: G - 3.2, len: 6, h: 0.9, full: ARENA.full };
   // the home end's curva and the away block, as fractions along the end stand (game/grounds.js); a kop
   // end is home fans end to end, and the away fans are in the stand behind you
   const curva = recipe.kop ? { from: -0.47, to: 0.47 } : { from: -0.36, to: 0.1 }, block = { from: 0.15, to: 0.5, on: recipe.kop ? 'near' : 'end' };

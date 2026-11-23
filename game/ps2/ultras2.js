@@ -3,12 +3,13 @@
 // and one or two big ones, and banners draped over the front wall with generic words. Two draws
 // (flags instanced, banners). Which fans hold flags is fans.js's choice.
 import * as THREE from 'three';
+import { ARENA } from './arena.js';
 import { FRONT } from './groundplan.js';
 import { flagAtlas, bannerAtlas, bannerUV } from './groundtex.js';
 import { flagMaterial, bannerMaterial } from './groundmat.js';
 
 const FLAG_W = 1.35, FLAG_H = 0.9, POLE = 2.5, HANDS = 0.65 + 0.5, BIG = 2.1;
-const PITCH = new THREE.Vector3(0, 0, -16);
+const PITCH = new THREE.Vector3(0, 0, ARENA.centreZ - (ARENA.full ? 0 : 1));
 
 function seeded(s) { let r = (s * 16807 + 11) % 2147483647 || 1; return () => (r = (r * 16807) % 2147483647) / 2147483647; }
 const pal = cols => { const c = cols.filter(Boolean); return [c[0], c.find(x => x !== c[0]) || '#f2f1ea', c[2] || c[0]]; };

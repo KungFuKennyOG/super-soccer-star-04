@@ -4,6 +4,7 @@
 // each). The floodlights, towers and pitchside boards are in groundbits.js, the flags and banners in
 // ultras2.js. Draw calls per ground: structure 1, lattice 1, seats 1, fans 1, glows 1, flags 1, banners 1.
 import * as THREE from 'three';
+import { ARENA } from './arena.js';
 import { planGround, gable, FRONT } from './groundplan.js';
 import { Geo, GlowGeo, frameAt } from './groundgeo.js';
 import { structureAtlas, region, adRegion } from './groundtex.js';
@@ -13,7 +14,7 @@ import { lightsAndBits } from './groundbits.js';
 import { buildUltras2 } from './ultras2.js';
 import { extras, cornerBlock, skyline, skylineTex, END_CORNER } from './groundextras.js';
 
-const PITCH_P = new THREE.Vector3(0, 3, -15);
+const PITCH_P = new THREE.Vector3(0, 3, ARENA.centreZ);   // (read when the module loads: brawl.html sets the arena before importing the stadium)
 const v = () => new THREE.Vector3();
 
 // A run: where a stand's cross-section is swept. Straight: along x for `len`. Corner: round (cx, cz)

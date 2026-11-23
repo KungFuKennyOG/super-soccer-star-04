@@ -5,12 +5,13 @@
 // home curva and the away end stand all game; some of them wave flags (ultras2.js draws the flags).
 // Two draws: the seats (the empty stand) and every fan in one instanced draw.
 import * as THREE from 'three';
+import { ARENA } from './arena.js';
 import { fanAtlas, seatTile } from './fantex.js';
 import { fanMaterial, seatMaterial } from './fanmat.js';
 import { LIGHT_DIR } from './player.js';
 
 // SEAT: one seat's width (m), a little under groundplan.js's 0.6 so shoulders nearly touch, as they do
-const PITCH_P = new THREE.Vector3(0, 3, -15), SEAT = 0.52, PACKED = 0.46, AISLE = 15;
+const PITCH_P = new THREE.Vector3(0, 3, ARENA.centreZ), SEAT = 0.52, PACKED = 0.46, AISLE = 15;
 const NEUTRAL = ['#1c1e24', '#2b3550', '#4a4f58', '#3a4a38', '#6b5a44', '#7a7f88'];
 // the tops (fantex.js TOPS): collar, stripes, band, scarf, zip jacket + scarf, hoodie, track jacket, polo
 const TOP_W = [22, 18, 8, 16, 12, 8, 8, 8], STYLE_W = [26, 14, 8, 10, 8, 10, 10, 0];   // head styles: short, buzz, bald, cap, beanie, long, curly, (hood)

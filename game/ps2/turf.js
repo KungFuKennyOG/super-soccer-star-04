@@ -3,7 +3,7 @@
 // a worn goalmouth, the stands' shadow on a sunny day, a pool of floodlight at night, a running track
 // where the recipe has one, wet and snowed-over looks. And the white lines of the half pitch.
 import * as THREE from 'three';
-import { GOAL, PITCH } from '../../rules/tuning.js';
+import { ARENA } from './arena.js';
 import { canvas, hash, vnoise, eachPixel, smoothTex } from './paint.js';
 
 const FOG = [THREE.ShaderChunk.fog_pars_vertex, THREE.ShaderChunk.fog_vertex, THREE.ShaderChunk.fog_pars_fragment, THREE.ShaderChunk.fog_fragment];
@@ -26,7 +26,7 @@ function grassTex() {
 export function buildTurf(light) {
   const uniforms = {
     ...THREE.UniformsUtils.clone(THREE.UniformsLib.fog), ...light, uGrass: { value: grassTex() },
-    uMow: { value: new THREE.Vector2(0, 6) }, uGoalZ: { value: GOAL.z },
+    uMow: { value: new THREE.Vector2(0, 6) }, uGoalZ: { value: ARENA.goalZ }, uFull: { value: ARENA.full ? 1 : 0 },
     uShade: { value: new THREE.Vector4(-99, 99, 0, 0) },     // in the stands' shadow: x below .x, z above .y; .z how dark
     uTrackIn: { value: new THREE.Vector4(0, 0, 0, 0) },       // a track: inner half-sizes (x, z), centre z, width (0: none)
     uBox: { value: new THREE.Vector3(99, -99, 99) },          // the grass ends at the stands: half-width, far z, near z
@@ -38,7 +38,7 @@ ${FOG[0]}
 void main() { vec4 w = modelMatrix * vec4(position, 1.0); vW = w.xyz; vV = cameraPosition - w.xyz; vec4 mvPosition = viewMatrix * w; gl_Position = projectionMatrix * mvPosition;
 ${FOG[1]}
 }`,
-    fragmentShader: `uniform sampler2D uGrass; uniform vec2 uMow; uniform float uGoalZ, uWet, uSnow, uTime; uniform vec4 uShade, uTrackIn; uniform vec3 uBox; uniform vec3 uAmb, uSun, uFlood; varying vec3 vW; varying vec3 vV;
+    fragmentShader: `uniform sampler2D uGrass; uniform vec2 uMow; uniform float uGoalZ, uFull, uWet, uSnow, uTime; uniform vec4 uShade, uTrackIn; uniform vec3 uBox; uniform vec3 uAmb, uSun, uFlood; varying vec3 vW; varying vec3 vV;
 ${FOG[2]}
 float sq(float x, float e) { return clamp((abs(fract(x * 0.5) - 0.5) * 4.0 - 1.0) / e, -1.0, 1.0); }   // a soft square wave, -1 / 1 a band
 void main() {
@@ -49,7 +49,8 @@ void main() {
   float d = length(vV), near = 0.5 * (texture2D(uGrass, p * 0.45).r + texture2D(uGrass, p.yx * 0.39 + 0.3).r), far = texture2D(uGrass, p.yx * 0.06).r;
   col *= 0.36 + 0.9 * mix(near, 0.5, smoothstep(5.0, 28.0, d)) + 0.36 * far;
   // the goalmouth and the penalty spot, worn
-  float wear = exp(-pow((p.x) / 3.2, 2.0) - pow((p.y - uGoalZ - 2.2) / 2.0, 2.0)) * 0.7 + exp(-pow(p.x / 1.0, 2.0) - pow((p.y - uGoalZ - 11.0) / 1.0, 2.0)) * 0.5;
+  float wy = uFull > 0.5 ? -abs(p.y) : p.y;     // a whole pitch: both goalmouths worn
+  float wear = exp(-pow((p.x) / 3.2, 2.0) - pow((wy - uGoalZ - 2.2) / 2.0, 2.0)) * 0.7 + exp(-pow(p.x / 1.0, 2.0) - pow((wy - uGoalZ - 11.0) / 1.0, 2.0)) * 0.5;
   wear *= 0.6 + 0.4 * far;
   col = mix(col, vec3(0.36, 0.32, 0.22) * (0.7 + 0.6 * near), clamp(wear, 0.0, 0.8));
   // a running track: a rounded oval round the pitch, red with lanes
@@ -66,7 +67,7 @@ void main() {
   if (abs(p.x) > uBox.x || p.y < uBox.y || p.y > uBox.z) col = vec3(0.34, 0.34, 0.35) * (0.7 + 0.5 * far);
   float shade = (1.0 - smoothstep(uShade.x - 0.8, uShade.x + 0.8, p.x)) + smoothstep(uShade.y - 0.8, uShade.y + 0.8, p.y);
   float sunK = 1.0 - uShade.z * clamp(shade, 0.0, 1.0);
-  float pool = 1.0 - 0.45 * smoothstep(18.0, 55.0, length(vec2(p.x, p.y + 16.0)));
+  float pool = 1.0 - 0.45 * (uFull > 0.5 ? smoothstep(30.0, 90.0, length(vec2(p.x, p.y * 0.7))) : smoothstep(18.0, 55.0, length(vec2(p.x, p.y + 16.0))));
   vec3 light = uAmb + uSun * 0.87 * sunK + uFlood * pool;
   col *= light;
   // wet: darker, and a glossy sheen toward the horizon; snow: white, worn through in the goalmouth
@@ -81,8 +82,8 @@ ${FOG[3]}
 }`,
   });
   mat.extensions = { derivatives: true };
-  const mesh = new THREE.Mesh(new THREE.PlaneGeometry(220, 200), mat);
-  mesh.rotation.x = -Math.PI / 2; mesh.position.z = -20;
+  const mesh = new THREE.Mesh(new THREE.PlaneGeometry(ARENA.full ? 300 : 220, ARENA.full ? 320 : 200), mat);
+  mesh.rotation.x = -Math.PI / 2; mesh.position.z = ARENA.full ? 0 : -20;
   return {
     mesh, uniforms,
     // recipe: mowing pattern; plan: groundplan.js (track, and the stands that throw shadow on a sunny day)
@@ -109,14 +110,21 @@ export function buildMarkings(light) {
     idx.push(b, b + 2, b + 1, b + 1, b + 2, b + 3);
   };
   const arc = (cx, cz, r, a0, a1, n = 16, w) => { for (let i = 0; i < n; i++) { const a = a0 + (a1 - a0) * i / n, b = a0 + (a1 - a0) * (i + 1) / n; seg(cx + Math.sin(a) * r, cz + Math.cos(a) * r, cx + Math.sin(b) * r, cz + Math.cos(b) * r, w); } };
-  const X = PITCH.halfW, G = GOAL.z;
-  seg(-X, G, X, G); seg(-X, G, -X, 0); seg(X, G, X, 0); seg(-X, 0, X, 0);
-  seg(-16, G, -16, G + 16.5); seg(16, G, 16, G + 16.5); seg(-16, G + 16.5, 16, G + 16.5);
-  seg(-9.16, G, -9.16, G + 5.5); seg(9.16, G, 9.16, G + 5.5); seg(-9.16, G + 5.5, 9.16, G + 5.5);
-  arc(0, G + 11, 0.06, 0, Math.PI * 2, 8, 0.07); arc(0, 0, 0.06, 0, Math.PI * 2, 8, 0.07);       // the spots
-  arc(0, G + 11, 9.15, -0.93, 0.93, 14);
-  arc(0, 0, 9.15, Math.PI / 2, Math.PI * 1.5, 24);
-  arc(-X, G, 1, 0, Math.PI / 2, 5); arc(X, G, 1, -Math.PI / 2, 0, 5);
+  const X = ARENA.halfW;
+  // one end (s = 1: the goal line at goalZ; s = -1 the other end of a whole pitch)
+  const end = s => {
+    const G = ARENA.goalZ * s, k = s;
+    seg(-X, G, X, G); seg(-X, G, -X, 0); seg(X, G, X, 0);
+    seg(-16, G, -16, G + 16.5 * k); seg(16, G, 16, G + 16.5 * k); seg(-16, G + 16.5 * k, 16, G + 16.5 * k);
+    seg(-9.16, G, -9.16, G + 5.5 * k); seg(9.16, G, 9.16, G + 5.5 * k); seg(-9.16, G + 5.5 * k, 9.16, G + 5.5 * k);
+    arc(0, G + 11 * k, 0.06, 0, Math.PI * 2, 8, 0.07);
+    if (k > 0) { arc(0, G + 11, 9.15, -0.93, 0.93, 14); arc(-X, G, 1, 0, Math.PI / 2, 5); arc(X, G, 1, -Math.PI / 2, 0, 5); }
+    else { arc(0, G - 11, 9.15, Math.PI - 0.93, Math.PI + 0.93, 14); arc(-X, G, 1, Math.PI / 2, Math.PI, 5); arc(X, G, 1, Math.PI, Math.PI * 1.5, 5); }
+  };
+  end(1); if (ARENA.full) end(-1);
+  seg(-X, 0, X, 0);
+  arc(0, 0, 0.06, 0, Math.PI * 2, 8, 0.07);       // the centre spot
+  if (ARENA.full) arc(0, 0, 9.15, 0, Math.PI * 2, 40); else arc(0, 0, 9.15, Math.PI / 2, Math.PI * 1.5, 24);
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); g.setIndex(idx);
   const mat = new THREE.ShaderMaterial({
