@@ -55,7 +55,7 @@ export function gable(p) {
 // The whole ground. Stands: end (behind the goal), left and right sides, near (behind you), and
 // corner sweeps round the meeting point of the stands either side. Fields the PS1 builder doesn't read
 // (all optional): left / right (a side's own tiers), roofOn (which stands have a roof), corners as a
-// list ('endL', 'endR', 'nearL', 'nearR'), cornerFill: 'block' (buildings instead of seats), kop
+// list ('endL', 'endR', 'nearL', 'nearR'), cornerTiers (their own tiers), cornerFill: 'block' (buildings instead of seats), kop
 // (the home end packed end to end; the away fans move behind you), towers as a count (ramp towers
 // round the outside) or 'access' (four corner stair towers).
 export const CORNERS = { endL: [-1, 'end', 0, Math.PI / 2, 'left'], endR: [1, 'end', 0, -Math.PI / 2, 'right'], nearL: [-1, 'near', Math.PI / 2, Math.PI, 'left'], nearR: [1, 'near', -Math.PI / 2, -Math.PI, 'right'] };
@@ -72,7 +72,8 @@ export function planGround(recipe) {
     stand('near', 2 * sideX, 0, nearZ, Math.PI),
   ];
   const which = recipe.corners === true ? Object.keys(CORNERS) : Array.isArray(recipe.corners) ? recipe.corners : [];
-  const corners = which.map(k => { const [sx, at, a0, a1, side] = CORNERS[k]; return { id: k, x: sx * sideX, z: at === 'end' ? endZ : nearZ, a0, a1, side, block: recipe.cornerFill === 'block', tiers: tiersOf(side), p: profile(tiersOf(side), roofed(side) ? recipe.roof : 'none') }; });
+  const cornerTiers = side => recipe.cornerTiers || tiersOf(side);       // cornerTiers: corners lower than the sides (Old Trafford's north corners, Porto's lower ring)
+  const corners = which.map(k => { const [sx, at, a0, a1, side] = CORNERS[k]; return { id: k, x: sx * sideX, z: at === 'end' ? endZ : nearZ, a0, a1, side, block: recipe.cornerFill === 'block', tiers: cornerTiers(side), p: profile(cornerTiers(side), roofed(side) ? recipe.roof : 'none') }; });
   const topY = Math.max(...stands.map(s => s.p.top), ...corners.map(c => c.p.top));
   // the scoreboard (and big screen) hangs as game/grounds.js hangs it: under the end's roof edge, or over an open end
   const e = stands[0].p;

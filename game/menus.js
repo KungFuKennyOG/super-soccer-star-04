@@ -2,7 +2,7 @@
 // player on a turntable wearing the kit, the cup hub (group table or bracket), and message screens.
 // Navigate with a stick or the arrow keys, confirm with the trigger / A / Enter, back with B / Esc.
 import * as THREE from 'three';
-import { ps1 } from './ps1.js';
+import { buildPlinth } from './ps2/props.js';
 import { YEAR, uiPlane } from './ps2/ui.js';
 import { renderBackdrop } from './ps2/menuscene.js';
 import { MW, MH, paintMode, paintSettings, paintTeam, paintHub, paintMessage } from './ps2/menudraw.js';
@@ -25,14 +25,13 @@ export const MODES = [
 
 // Settings, changed with left/right. Locker rows only offer what you've unlocked.
 export const LENGTHS = [{ name: 'SHORT', mul: 0.6 }, { name: 'NORMAL', mul: 1 }, { name: 'LONG', mul: 1.5 }, { name: 'EPIC', mul: 2.5 }];
-export const WOBBLES = ['OFF', 'LOW', 'FULL'];
 export const COMMENTARY = ['OFF', 'TEXT', 'VOICE'];
 export const REPLAYS = ['OFF', 'ON'];
 export const JUICE = ['OFF', 'ON'];
 export const SKILLS = ['OFF', 'GESTURE', 'GRIP + GESTURE'];
 export const ROWS = [
   { key: 'difficulty', name: 'DIFFICULTY', opts: DIFFICULTY.map(d => d.name) },
-  { key: 'length', name: 'MATCH LENGTH', opts: LENGTHS.map(l => l.name) }, { key: 'wobble', name: 'PS1 WOBBLE', opts: WOBBLES },
+  { key: 'length', name: 'MATCH LENGTH', opts: LENGTHS.map(l => l.name) },
   { key: 'commentary', name: 'COMMENTARY', opts: COMMENTARY }, { key: 'replays', name: 'GOAL REPLAYS', opts: REPLAYS },
   { key: 'juice', name: 'HIT EFFECTS', opts: JUICE }, { key: 'skills', name: 'SKILL MOVES', opts: SKILLS },
   { key: 'weather', name: 'WEATHER', opts: WEATHER_SETTING },
@@ -45,10 +44,7 @@ export function createMenus(scene, camera, renderer = null) {
 
   // the turntable: a plinth with a spotlight disc and whoever's kit you're looking at
   const table3d = new THREE.Group(); root.add(table3d);
-  const plinth = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.62, 0.18, 16), ps1({ color: '#1c2538' }));
-  plinth.position.y = 0.09; table3d.add(plinth);
-  const ring = new THREE.Mesh(new THREE.CylinderGeometry(0.63, 0.63, 0.04, 16), ps1({ color: '#ffc933', lit: false }));
-  ring.position.y = 0.02; table3d.add(ring);
+  table3d.add(buildPlinth().group);                    // game/ps2/props.js: top at 0.18 m
   let model = null, modelFor = null;
 
   const head = new THREE.Vector3(), dir = new THREE.Vector3();

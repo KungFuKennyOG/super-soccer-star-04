@@ -141,7 +141,7 @@ test('settings, and matches in the snow and rain', { timeout: 900000 }, async t 
   await page.waitForFunction(() => window.__sss.menus.screen === 'settings');
   await page.keyboard.press('ArrowRight');                   // difficulty: HARD (the default) to LEGEND
   await page.waitForFunction(() => window.__sss.settings.difficulty === 2);
-  await menuTo(page, 7);
+  await menuTo(page, 6);
   await page.keyboard.press('ArrowRight');                   // weather: CLEAR
   await page.waitForFunction(() => window.__sss.settings.weather === 1);
   await page.waitForTimeout(400);

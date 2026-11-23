@@ -1,13 +1,24 @@
-// The crowd's bodies and arms, painted in code with canvas paths at 1 cm a pixel: 16 torsos (8 kinds of
-// top, slim and broad) from the seat to the neck, and the arms in every pose, with short sleeves or
-// long, as their own layer over the torso and the head (fanmat.js puts the three together). Limbs
-// are shaded round (lit from the upper left), with creases at the elbow, cuffs and hems; hands are
-// shapes (an open hand, a fist). Three passes paint the same shapes: 'alb' light and shade, 'mask'
-// (R shirt, G second colour, B skin) and 'hair' (nothing here is hair, so it stays black).
+// The crowd's bodies and arms, painted in code with canvas paths at 1 cm a pixel: 40 torsos (8 kinds of
+// top x 5 builds: slim, average, broad, heavy, a woman's) from the seat to the neck, and the arms in every
+// pose, with short sleeves or long, as their own layer over the torso and the head (fanmat.js puts the
+// three together and widens or narrows the arms to the build, BUILDS[].arms). Limbs are shaded round (lit
+// from the upper left), with creases at the elbow, cuffs and hems; hands are shapes (an open hand, a fist).
+// Three passes paint the same shapes: 'alb' light and shade, 'mask' (R shirt, G second colour, B skin)
+// and 'hair' (nothing here is hair, so it stays black).
 
 // the arms cell: 112 x 160 (x from -56 cm, y up from the seat); the torso cell: 64 x 72 (x from -32)
 export const ARMS = { w: 112, h: 160, x0: -56 }, TORSO = { w: 64, h: 72, x0: -32 };
 export const SHOULDER = [17.5, 55];                     // the arms' joints (cm from the middle, up from the seat)
+// Builds: half widths (cm) at the neck, shoulder, chest, waist and hip; belly: how far the belly pushes out
+// the sides (heavy); bust; arms: how much the arms layer is widened to meet the shoulders (and how thick
+// the arms look). From adult anthropometry: shoulder breadth 36 to 44 cm in men, 33 to 37 in women.
+export const BUILDS = [
+  { name: 'slim', nw: 5.2, sw: 18, cw: 16, ww: 14.5, hw: 15, arms: 0.91 },
+  { name: 'average', nw: 5.6, sw: 19.5, cw: 17.5, ww: 16.2, hw: 16.5, arms: 1 },
+  { name: 'broad', nw: 6.1, sw: 21.5, cw: 20.5, ww: 18, hw: 18.5, arms: 1.1 },
+  { name: 'heavy', nw: 6.3, sw: 21, cw: 21, ww: 23, hw: 21.5, belly: 1, arms: 1.1 },
+  { name: 'woman', nw: 4.5, sw: 16.5, cw: 16.2, ww: 12.8, hw: 16.8, bust: 1, arms: 0.85, low: 2 },
+];
 // The poses: [elbow, wrist] of the arm on the right of the picture (cm), l: the other when it isn't the
 // mirror; hand: 'open' | 'fist' | 'flat'; scarf: held between the hands.
 export const POSES = [
@@ -65,14 +76,14 @@ export function painter(x, pass) {
 }
 
 // a limb from a to b (px), widths wa and wb, round ends, shaded across
-function limb(p, kind, L, a, b, wa, wb, capA = true) {
+function limb(p, kind, L, a, b, wa, wb, capA = true, capB = true) {
   const dx = b[0] - a[0], dy = b[1] - a[1], len = Math.hypot(dx, dy) || 1;
   let nx = -dy / len, ny = dx / len;
   if (nx + ny > 0) { nx = -nx; ny = -ny; }                      // n toward the upper left: the lit side
   const m = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2], w = (wa + wb) / 4;
   p.fill(kind, L, c => {
     c.moveTo(a[0] + nx * wa / 2, a[1] + ny * wa / 2); c.lineTo(b[0] + nx * wb / 2, b[1] + ny * wb / 2); c.lineTo(b[0] - nx * wb / 2, b[1] - ny * wb / 2); c.lineTo(a[0] - nx * wa / 2, a[1] - ny * wa / 2); c.closePath();
-    if (capA) { c.moveTo(a[0] + wa / 2, a[1]); c.arc(a[0], a[1], wa / 2, 0, 7); } c.moveTo(b[0] + wb / 2, b[1]); c.arc(b[0], b[1], wb / 2, 0, 7);
+    if (capA) { c.moveTo(a[0] + wa / 2, a[1]); c.arc(a[0], a[1], wa / 2, 0, 7); } if (capB) { c.moveTo(b[0] + wb / 2, b[1]); c.arc(b[0], b[1], wb / 2, 0, 7); }
   }, [m[0] + nx * w, m[1] + ny * w], [m[0] - nx * w, m[1] - ny * w]);
 }
 
@@ -95,14 +106,19 @@ export function paintArms(p, pose, long, ox, oy) {
   for (const [[e, wr], side, hk] of arms) {
     const S = X(side * SHOULDER[0], SHOULDER[1]), E = X(...e), Wr = X(...wr);
     // forearm: sleeve or skin, a cuff at the wrist; upper arm: the sleeve, short ones ending above the elbow
-    if (long) { limb(p, 'shirt', 0.8, E, Wr, 10, 8); limb(p, 'shirt', 0.62, [E[0] + (Wr[0] - E[0]) * 0.86, E[1] + (Wr[1] - E[1]) * 0.86], Wr, 7.6, 7.6); }
+    if (long) { limb(p, 'shirt', 0.8, E, Wr, 10, 8); limb(p, 'shirt', 0.72, [E[0] + (Wr[0] - E[0]) * 0.88, E[1] + (Wr[1] - E[1]) * 0.86], Wr, 7.8, 7.8); }
     else limb(p, 'skin', 0.88, E, Wr, 9, 6.8);
     if (long) { limb(p, 'shirt', 0.84, S, E, 12.5, 10.5, false); p.fill('shirt', 0.84, c => { c.arc(S[0], S[1] + 0.5, 5, 0, 7); }, [S[0] - 4, S[1] - 4], [S[0] + 4, S[1] + 4]); }
     else {
-      limb(p, 'skin', 0.86, [S[0] + (E[0] - S[0]) * 0.4, S[1] + (E[1] - S[1]) * 0.4], E, 10.5, 9);
-      const k = 0.5, H = [S[0] + (E[0] - S[0]) * k, S[1] + (E[1] - S[1]) * k];
-      limb(p, 'shirt', 0.86, S, H, 12, 11.5, false); p.fill('shirt', 0.86, c => { c.arc(S[0], S[1] + 0.5, 5, 0, 7); }, [S[0] - 4, S[1] - 4], [S[0] + 4, S[1] + 4]);
-      p.stroke('shade', 0.25, 1.2, [[H[0] - 5, H[1]], [H[0] + 5, H[1]]].map(([x, y]) => [x, y]));   // the hem's shadow
+      // a short sleeve: the bare upper arm out of it, the sleeve flaring a little to an open hem square
+      // to the arm, its turned edge catching the light and a soft shadow on the skin under it (a dark
+      // band straight across read as an armband)
+      const k = 0.46, H = [S[0] + (E[0] - S[0]) * k, S[1] + (E[1] - S[1]) * k], dx = E[0] - S[0], dy = E[1] - S[1], len = Math.hypot(dx, dy) || 1;
+      const ux = dx / len, uy = dy / len, nx = -uy, ny = ux;
+      limb(p, 'skin', 0.86, [S[0] + dx * 0.3, S[1] + dy * 0.3], E, 10, 9);
+      limb(p, 'skin', 0.68, [H[0] - ux * 0.5, H[1] - uy * 0.5], [H[0] + ux * 2.2, H[1] + uy * 2.2], 10.2, 10, false, false);   // the sleeve's shadow on the skin
+      limb(p, 'shirt', 0.86, S, H, 12, 13.4, false, false); p.fill('shirt', 0.86, c => { c.arc(S[0], S[1] + 0.5, 5, 0, 7); }, [S[0] - 4, S[1] - 4], [S[0] + 4, S[1] + 4]);
+      p.stroke('shirt', 1.02, 1.1, [[H[0] + nx * 5.6 - ux * 0.9, H[1] + ny * 5.6 - uy * 0.9], [H[0] - nx * 5.6 - ux * 0.9, H[1] - ny * 5.6 - uy * 0.9]]);   // the hem's turned edge
     }
     p.stroke('shade', 0.22, 1, [[E[0] - 2.5, E[1] - 1.5], [E[0] + 1.5, E[1] + 1]]);       // the crease at the elbow
     if (pose.scarf && side === 1) scarfHeld(p, X(...wr), X(...l[1]));
@@ -121,22 +137,27 @@ function scarfHeld(p, a, b) {
   for (const [e, s] of [[a, 1], [b, -1]]) for (let k = -2; k <= 2; k++) p.stroke('acc', 0.7, 0.8, [[e[0] + s * 1.5 + k, e[1] + 3], [e[0] + s * 2 + k * 1.2, e[1] + 9]]);
 }
 
-// One torso in the cell at (ox, oy): top t (TOPS), broad or slim.
-export function paintTorso(p, t, broad, ox, oy) {
+// One torso in the cell at (ox, oy): top t (TOPS), build b (BUILDS).
+export function paintTorso(p, t, b, ox, oy) {
   const X = (x, y) => [ox + TORSO.w / 2 + x, oy + TORSO.h - y];
-  const sw = broad ? 21.5 : 19.5, ww = broad ? 19 : 15.5, x = p.x;
-  // the neck (under the head's), then the body: trapezius, deltoids, sides, hips
-  p.fill('skin', 0.78, c => { const [a, b] = X(-5.6, 70); c.rect(a, b, 11.2, 14); }, X(-5.6, 64), X(5.6, 64));
+  const sw = b.sw, ww = b.ww, x = p.x, lo = b.low || 0;
+  // the neck (under the head's), then the body: trapezius, deltoids, chest, waist, hips; smoothed
+  // through the midpoints of the outline's points
+  p.fill('skin', 0.78, c => { const [a, q] = X(-b.nw, 70); c.rect(a, q, 2 * b.nw, 14); }, X(-b.nw, 64), X(b.nw, 64));
+  const R = [[b.nw + 0.4, 64 - lo / 2], [14 - lo, 63 - lo], [sw, 58 - lo], [sw + 2, 53 - lo], [sw - 0.5, 46 - lo], [b.cw + (b.bust ? 1 : 0), 39], [b.ww + (b.belly ? 2.5 : 0), 24], [b.hw, 11], [b.hw + 0.5, 0]];
   const body = c => {
-    c.moveTo(...X(-6, 64)); c.quadraticCurveTo(...X(-14, 63), ...X(-sw, 58)); c.quadraticCurveTo(...X(-sw - 2, 53), ...X(-sw + 0.5, 46));
-    c.quadraticCurveTo(...X(-ww - 1, 30), ...X(-ww, 14)); c.lineTo(...X(-ww - 0.5, 0)); c.lineTo(...X(ww + 0.5, 0)); c.lineTo(...X(ww, 14));
-    c.quadraticCurveTo(...X(ww + 1, 30), ...X(sw - 0.5, 46)); c.quadraticCurveTo(...X(sw + 2, 53), ...X(sw, 58)); c.quadraticCurveTo(...X(14, 63), ...X(6, 64)); c.closePath();
+    const pts = [...R.map(([px, py]) => [-px, py]).reverse(), ...R];
+    c.moveTo(...X(...pts[0]));
+    for (let i = 1; i < pts.length - 1; i++) { const m = [(pts[i][0] + pts[i + 1][0]) / 2, (pts[i][1] + pts[i + 1][1]) / 2]; c.quadraticCurveTo(...X(...pts[i]), ...X(...m)); }
+    c.lineTo(...X(...pts[pts.length - 1])); c.closePath();
   };
   p.fill('shirt', 0.86, body, X(-sw, 40), X(sw, 40));
   if (p.alb) {                                                    // folds: from the armpits down, creases over the belly, shade low down
     x.save(); x.beginPath(); body(x); x.clip();
-    for (const s of [-1, 1]) p.stroke('shade', 0.16, 2.2, [X(s * (sw - 3), 46), X(s * (sw - 8), 34), X(s * 7, 24)]);
+    for (const s of [-1, 1]) p.stroke('shade', 0.16, 2.2, [X(s * (sw - 3), 46 - lo), X(s * (sw - 8), 34), X(s * 7, 24)]);
     p.stroke('shade', 0.12, 1.6, [X(-ww + 2, 13), X(0, 11), X(ww - 2, 13)]); p.stroke('shade', 0.1, 1.4, [X(-ww + 4, 19), X(0, 17.5), X(ww - 4, 19)]);
+    if (b.bust) for (const s of [-1, 1]) p.stroke('shade', 0.2, 2.4, [X(s * 11, 42), X(s * 6.5, 38.5), X(s * 2.5, 41)]);
+    if (b.belly) { p.stroke('shade', 0.26, 3, [X(-ww + 1, 14), X(0, 9.5), X(ww - 1, 14)]); p.stroke('shade', 0.1, 6, [X(-ww + 3, 30), X(-ww + 1, 22)]); }
     const g = x.createLinearGradient(0, X(0, 30)[1], 0, X(0, 0)[1]); g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, 'rgba(0,0,0,0.38)');
     x.fillStyle = g; x.fillRect(ox, oy, TORSO.w, TORSO.h);
     x.restore();
@@ -152,7 +173,7 @@ export function paintTorso(p, t, broad, ox, oy) {
   if (t.kind === 'jacket' || t.kind === 'track') {
     p.stroke('shade', 0.45, 1.1, [X(0.4, 62), X(0.4, 2)]);                               // the zip
     p.fill('shirt', 0.7, c => { c.moveTo(...X(-7, 65)); c.lineTo(...X(-3, 58)); c.lineTo(...X(0, 64)); c.lineTo(...X(3, 58)); c.lineTo(...X(7, 65)); c.lineTo(...X(5.5, 68)); c.lineTo(...X(-5.5, 68)); c.closePath(); });   // the collar stood up
-    if (t.kind === 'track') { for (const s of [-1, 1]) p.fill('acc', 0.84, c => { const [a, b] = X(s * (sw - 3) - 1.2, 58); c.rect(a, b, 2.4, 50); }); p.fill('acc', 0.8, c => { const [a, b] = X(-ww, 4); c.rect(a, b, 2 * ww, 3.5); }); }
+    if (t.kind === 'track') { for (const s of [-1, 1]) p.fill('acc', 0.84, c => { const [a, b] = X(s * (sw - 3) - 1.2, 58); c.rect(a, b, 2.4, 50); }); p.fill('acc', 0.8, c => { const [a, q] = X(-b.hw, 4); c.rect(a, q, 2 * b.hw, 3.5); }); }
   }
   if (t.kind === 'hoodie') {
     p.fill('shirt', 0.68, c => { c.ellipse(...X(0, 63), 11, 4.5, 0, 0, 7); });              // the hood down behind the neck
@@ -167,5 +188,5 @@ export function paintTorso(p, t, broad, ox, oy) {
       for (let k = -2; k <= 2; k++) p.stroke('acc', 0.7, 0.7, [X(sx + k * 1.3, 61 - len), X(sx + k * 1.4, 58 - len)]);
     }
   }
-  p.fill('fixed', 0.2, c => { const [a, b] = X(-ww - 0.5, 5); c.rect(a, b, 2 * ww + 1, 5); });   // trousers at the bottom: his lap
+  p.fill('fixed', 0.2, c => { const [a, q] = X(-b.hw - 0.5, 5); c.rect(a, q, 2 * b.hw + 1, 5); });   // trousers at the bottom: his lap
 }

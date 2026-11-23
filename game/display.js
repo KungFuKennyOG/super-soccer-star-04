@@ -1,15 +1,15 @@
-// Settings (saved in localStorage) and the display side of them: the low browser resolution and the
-// PS1 vertex wobble, which depends on whether you're in the headset.
+// Settings (saved in localStorage) and the display side of them: the browser's resolution. The PS1 vertex
+// wobble setting is gone (the '04 look has nothing it could wobble); the few ps1() materials still in
+// the game are kept still.
 import { PS1 } from './ps1.js';
 
-export const LINES = 480;          // the PS1 wobble's grid in the browser (the picture itself is now drawn at full resolution)
 const SETTINGS_KEY = 'sss96.settings';
 
 // difficulty (0 normal, 1 hard, 2 legend: DIFFICULTY in rules/tuning.js; HARD by default since Kenny found
-// the first defence too easy), match length (index into LENGTHS), PS1 wobble (0 off, 1 low, 2 full), commentary (0 off, 1 text,
+// the first defence too easy), match length (index into LENGTHS), commentary (0 off, 1 text,
 // 2 voice), goal replays and hit effects (0 off, 1 on), skill gestures (0 off, 1 on, 2 only with the right grip held),
 // weather (0 random, 1 clear, 2 rain, 3 snow), and the locker (LOCKER option indices)
-const DEFAULTS = { difficulty: 1, length: 1, wobble: 1, commentary: 2, replays: 1, juice: 1, skills: 1, weather: 0, ball: 0, boots: 0, heads: 0 };
+const DEFAULTS = { difficulty: 1, length: 1, commentary: 2, replays: 1, juice: 1, skills: 1, weather: 0, ball: 0, boots: 0, heads: 0 };
 // The locker: your ball, boots and big heads, picked in SETTINGS.
 export const LOCKER = {
   ball: { name: 'BALL', options: ['CLASSIC', 'STAR', 'RETRO', 'GOLD'] },
@@ -17,25 +17,26 @@ export const LOCKER = {
   heads: { name: 'BIG HEADS', options: ['OFF', 'ON'] },
 };
 export function loadSettings() {
-  try { return { ...DEFAULTS, ...JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}') }; } catch (e) { return { ...DEFAULTS }; }
+  try {
+    const s = { ...DEFAULTS, ...JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}') };
+    delete s.wobble;                                  // saved by older versions (the PS1 WOBBLE setting)
+    return s;
+  } catch (e) { return { ...DEFAULTS }; }
 }
 export function saveSettings(settings) { try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); } catch (e) {} }
 
-// Vertex wobble: the snap grid in screen lines (smaller = wobblier). In the headset the texture warp
-// stays off except at FULL, since it swims as your head moves.
-export function applyWobble(renderer, settings) {
-  const vr = renderer.xr.isPresenting, w = settings.wobble;
-  const lines = vr ? [8192, 1500, 900][w] : [8192, LINES * 2.5, LINES * 1.5][w];
-  const aspect = vr ? 1 : innerWidth / innerHeight;
-  PS1.snap.value.set(Math.round(lines * aspect), lines);
-  PS1.affine.value = w === 0 || (vr && w < 2) ? 0 : 1;
+// The PS1 materials' vertex snap and texture warp: off everywhere (the grid out of reach, perspective-correct
+// textures). Kept as a function because main.js calls it after settings change and on resize.
+export function applyWobble() {
+  PS1.snap.value.set(8192, 8192);
+  PS1.affine.value = 0;
 }
 
-// The browser renders at the screen's own resolution (up to 2x pixel density). It was LINES lines scaled up
+// The browser renders at the screen's own resolution (up to 2x pixel density). It was 480 lines scaled up
 // with hard pixels for the PS1 look; Kenny asked for more resolution with the '04 one.
 export function lowRes(renderer, settings) {
   if (renderer.xr.isPresenting) return;
   renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 2));
   renderer.setSize(innerWidth, innerHeight, false);
-  applyWobble(renderer, settings);
+  applyWobble();
 }

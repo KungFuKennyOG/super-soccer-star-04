@@ -1,9 +1,9 @@
 // Goal replays. Every frame of play is recorded (ball and players) into a ring buffer; after a goal
 // the last few seconds play back, slowing down for the finish, filmed by a TV camera on the gantry
-// and shown on an old CRT that floats in front of you plus the stadium's big screen. The replay uses
+// and shown on a slim monitor that floats in front of you plus the stadium's big screen. The replay uses
 // its own copies of the players (built per match) so the live ones are never disturbed.
 import * as THREE from 'three';
-import { ps1 } from './ps1.js';
+import { buildMonitor } from './ps2/props.js';
 import { uiPlane, text, box } from './ps2/ui.js';
 import { animate, placeModel } from './actors.js';
 import { buildBall04 } from './ps2/ball.js';
@@ -69,10 +69,7 @@ export function createReplay(scene, renderer) {
 
   // a CRT on a stand in front of you
   const tv = new THREE.Group();
-  const body = new THREE.Mesh(new THREE.BoxGeometry(1.64, 1.04, 0.62), ps1({ color: '#2a2a30' }));
-  body.position.z = -0.32; tv.add(body);
-  const screen = new THREE.Mesh(new THREE.PlaneGeometry(1.44, 0.81), ps1({ map: rt.texture, lit: false, fog: false }));
-  screen.position.z = 0.002; tv.add(screen);
+  tv.add(buildMonitor(rt.texture).group);              // a slim broadcast monitor with a thin bezel (game/ps2/props.js)
   // the REPLAY tag in the screen's corner: a red light and the word on a dark outlined tab
   const tag = uiPlane(256, 64, 0.34, 0.085);
   tag.m.position.set(-0.52, 0.33, 0.004); tv.add(tag.m);
@@ -85,7 +82,7 @@ export function createReplay(scene, renderer) {
   const fresh = () => { for (const m of Object.values(ghosts)) { m.strike = null; m.dive = null; m.special = null; m.trick = null; m.gait = null; m.inert = m.charge = m.beat = m.land = null; m.phOff = m.chargeK = m.kickK = m.cheerK = m.cheerA = m.cheerW = 0; m.cheer = null; } };   // (the gait starts afresh: nobody turns round from where the last replay left him)
   tv.visible = false; scene.add(tv);
   // and on the stadium's big screen, over the scoreboard
-  const jumbo = new THREE.Mesh(new THREE.PlaneGeometry(12, 6.75), ps1({ map: rt.texture, lit: false, fog: false }));
+  const jumbo = new THREE.Mesh(new THREE.PlaneGeometry(12, 6.75), new THREE.MeshBasicMaterial({ map: rt.texture, fog: false, toneMapped: false }));
   jumbo.visible = false; scene.add(jumbo);
 
   const headPos = new THREE.Vector3(), headDir = new THREE.Vector3(), v3 = new THREE.Vector3();
