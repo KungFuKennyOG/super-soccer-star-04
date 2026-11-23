@@ -42,6 +42,15 @@ export const GAIT = {
   low: 0.06,                                   // m lower at speed (room for the legs to reach; coached: stay low)
   step: { far: 0.1, turn: 0.4, time: 0.2 },    // one-off steps: a foot this far (m) or this turned (rad) off its place steps, in this long
 };
+export const CROSS = {
+  // the crossover step, for a long way across goal quickly (coached: side-steps for short distances, crossover steps
+  // for long ones; "turn the hips and run in the direction they want to go", the upper body kept facing the ball; then
+  // a few quick shuffles to get set). on / off: m/s across him, held for `after` s before he goes into it; hips: rad
+  // they turn to the run; back: the share of that the spine and chest turn back to the ball; feet: rad the boots point
+  // into the run; front / behind: m ahead of his line the trailing foot lands (it crosses in front) and the leading
+  // one; cycle, duty: s for both feet to step once, and the share of it a foot is down (a run: there is a flight)
+  on: 2.5, off: 1.8, after: 0.2, hips: 0.8, back: 0.8, feet: 0.95, front: 0.19, behind: -0.09, cycle: 0.46, duty: 0.42, lift: 0.07, reach: 0.24, low: 0.035,
+};
 export const SPLIT = {
   // the split step (pre-jump): a hop only just off the grass, timed to land as the ball leaves the boot. fly: s in
   // the air (a body that rises `up` and falls again takes 2 x sqrt(2 x up / g) = 0.128 s); wide: m wider he lands;
@@ -156,9 +165,25 @@ export function stance(m, p, dt, t, ball) {
   }
   // the shuffle's clock: across goal the near foot leads and the far one closes; out and back the feet take turns
   const side = Math.abs(lx) >= Math.abs(lz) * 0.8, near = lx > 0 ? 'L' : 'R';
-  const C = side ? mix(G.cycle[0], G.cycle[1], k) : mix(0.42, 0.5, k), duty = side ? mix(G.duty[0], G.duty[1], k) : mix(0.6, 0.42, k), lag = side ? mix(G.lag[0], G.lag[1], k) : 0.5;
+  // the crossover: going across quicker than a shuffle can for more than a moment, his hips turn to the run and his
+  // feet take turns, the trailing one crossing in front; back to the shuffle as he slows
+  const X = CROSS, fast = side && !busy && !hold && Math.abs(lx) > (g.xOn ? X.off : X.on);
+  if (dt > 0) {
+    g.xT = fast ? (g.xT || 0) + dt : 0;
+    if (!g.xOn && g.xT > X.after) { g.xOn = true; g.xDir = Math.sign(lx); } else if (g.xOn && (!fast || Math.sign(lx) !== g.xDir)) g.xOn = false;
+    g.cross = clamp((g.cross || 0) + (g.xOn ? dt / 0.16 : -dt / 0.22), 0, 1);
+  }
+  const cross = ease(g.cross || 0), xd = g.xDir || 1;
+  const C = mix(side ? mix(G.cycle[0], G.cycle[1], k) : mix(0.42, 0.5, k), X.cycle, cross), duty = mix(side ? mix(G.duty[0], G.duty[1], k) : mix(0.6, 0.42, k), X.duty, cross), lag = mix(side ? mix(G.lag[0], G.lag[1], k) : 0.5, 0.5, cross);
   const width = mix(SET.width + Hb.width, 0.36, hold) + wide + (side ? G.wide * Math.min(sp, 2.2) * (1 - hold) : 0);
-  const lift = n => { const f = kf[n]; if (!f.air) f.air = { from: f.p.clone(), yaw0: f.yaw, t: 0, T: g.on ? (1 - duty) * C : G.step.time }; };
+  // (each step is a side-step or a crossover step from the moment the foot lifts, never half of each; a foot that
+  // crosses the other one, or comes back from across it, swings out round it: `bow` m ahead of his line or behind)
+  const lift = n => {
+    const f = kf[n], sd = n === 'L' ? 1 : -1; if (f.air) return;
+    const a = f.air = { from: f.p.clone(), yaw0: f.yaw, t: 0, T: g.on ? (1 - duty) * C : G.step.time, x: g.xOn ? 1 : 0, bow: 0 };
+    const me = toLocal(m, f.p, V(0, 0, 0)), ot = toLocal(m, kf[n === 'L' ? 'R' : 'L'].p, V(0, 0, 0));
+    if (a.x) a.bow = (sd === xd ? -1 : 1) * 0.08; else if (sd * (me.x - ot.x) < 0.12) a.bow = (me.z >= ot.z ? 1 : -1) * 0.1;
+  };
   if (!g.on && sp > G.on && !busy) { g.on = true; g.lead = side ? near : g.last; g.ph = lag + duty - 1e-3; }
   else if (g.on && (sp < G.off || busy)) g.on = false;
   if (g.on) {
@@ -167,7 +192,9 @@ export function stance(m, p, dt, t, ball) {
     for (const n of ['L', 'R']) { const end = (n === g.lead ? lag : 0) + duty; if (Math.floor(g.ph - end) > Math.floor(prev - end)) lift(n); }
   }
   const home = {};
-  for (const [n, sd] of [['L', 1], ['R', -1]]) home[n] = toWorldPt(m, V(sd * width / 2, 0, SET.ahead), V(0, 0, 0));
+  // (in the crossover the feet land on two lines along his run: the trailing foot's in front of the leading foot's,
+  // so the one passes in front of the other and never through it)
+  for (const [n, sd] of [['L', 1], ['R', -1]]) { const xk = kf[n].air ? kf[n].air.x || 0 : 0; home[n] = toWorldPt(m, V(sd * width / 2 * (1 - xk), 0, SET.ahead + xk * (sd === xd ? X.behind : X.front)), V(0, 0, 0)); }
   if (!g.on && !busy && !kf.L.air && !kf.R.air) {
     // standing or creeping: a foot left behind its place, or pointing too far off it, steps (the worse one; in turn when it's close)
     let pick = null, worst = G.step.far * (1 + 0.4 * hold);
@@ -189,10 +216,10 @@ export function stance(m, p, dt, t, ball) {
   const off = (n, sd, w, out) => { toLocal(m, w, out); out.x -= sd * 0.09; out.z -= hz; out.y = 0; return out; };
   if (sp > 0.05) for (const [n, sd] of [['L', 1], ['R', -1]]) {
     const f = kf[n], o = off(n, sd, f.p, tmp);
-    if (!f.air && !busy && o.length() > maxR * 0.95 && o.x * lx + o.z * lz < 0) lift(n);
+    if (!f.air && !busy && o.length() > maxR * mix(0.95, 0.84, cross) && o.x * lx + o.z * lz < 0) lift(n);
   }
   // the feet: planted, or in the air on the way to where they'll be wanted when they land
-  const at = {}, toes = {}, E = g.on ? Math.min(G.reach, sp * duty * C / 2) : 0;
+  const at = {}, toes = {}, E = g.on ? Math.min(mix(G.reach, X.reach, cross), sp * duty * C / 2) : 0;
   for (const [n, sd] of [['L', 1], ['R', -1]]) {
     const f = kf[n], o = kf[n === 'L' ? 'R' : 'L'];
     let up = 0, u = 0;
@@ -204,13 +231,14 @@ export function stance(m, p, dt, t, ball) {
       // feet never cross and never come together: it lands on its own side of the other one
       const tl = toLocal(m, to, V(0, 0, 0)), ol = toLocal(m, o.p, V(0, 0, 0));
       if (a.jit) { tl.x += a.jit[0]; tl.z += a.jit[1]; }
-      if (sd * (tl.x - ol.x) < G.gap) tl.x = ol.x + sd * G.gap;
+      if (sd * (tl.x - ol.x) < G.gap && Math.abs(tl.z - ol.z) < 0.19) tl.x = ol.x + sd * G.gap;      // (unless it lands clear in front of it or behind: the crossover)
       // ...and within reach of the leg
       const dx = tl.x - sd * 0.09, dz = tl.z - hz, dr = Math.hypot(dx, dz), lim = maxR * 0.86;
       if (dr > lim) { tl.x = sd * 0.09 + dx * lim / dr; tl.z = hz + dz * lim / dr; }
       toWorldPt(m, tl, to);
-      f.p.copy(a.from).lerp(to, ease(u)); f.yaw = turnTo(a.yaw0, yaw + sd * SET.toeOut, ease(u));
-      up = Math.sin(Math.PI * u) * (a.hop ? S.up : G.lift[0] + G.lift[1] * Math.min(sp, 3.5));
+      f.p.copy(a.from).lerp(to, ease(u)); f.yaw = turnTo(a.yaw0, yaw + (a.x ? xd * X.feet : sd * SET.toeOut), ease(u));
+      if (a.bow) { const bow = Math.sin(Math.PI * u) * a.bow; f.p.x += Math.sin(yaw) * bow; f.p.z += Math.cos(yaw) * bow; }
+      up = Math.sin(Math.PI * u) * (a.hop ? S.up : a.x ? X.lift : G.lift[0] + G.lift[1] * Math.min(sp, 3.5));
       if (u >= 1) { f.air = null; g.last = n; m.phase = (m.phase || 0) + Math.PI; }
     }
     toes[n] = SET.heel * (1 - hold) + (f.air && !f.air.hop ? 0.22 * Math.sin(Math.PI * u) : 0) + L.heel * bk * (0.5 + 0.5 * Math.sin(beat + sd * 0.7));
@@ -218,14 +246,16 @@ export function stance(m, p, dt, t, ball) {
   }
   // hips: low in the set and level as he moves (no bobbing), sinking into the split step's landing, up and loose
   // when the ball is far; never higher than both legs reach
-  const Hset = mix(mix(SET.hips, SET.hipsFar, far) + Hb.hips, 0.93, hold) - sink - G.low * ease(sp / 2.6) * (1 - hold);
+  const Hset = mix(mix(SET.hips, SET.hipsFar, far) + Hb.hips, 0.93, hold) - sink - (G.low * ease(sp / 2.6) + X.low * cross) * (1 - hold);
   if (g.H === null) { g.H = m.kLast && m.kState !== 'run' ? m.kLast[m.kLast.length - 2] : Hset; g.Hv = 0; }
   if (dt > 0) { const w = 16; g.Hv += (w * w * (Hset - g.H) - 2 * w * g.Hv) * dt; g.H += g.Hv * dt; }
   // (hz: sat back a little: bent forward, his weight stays over the balls of his feet)
   let H = g.H + S.rise * hop + bnc;
   for (const [n, sd] of [['L', 1], ['R', -1]]) {
     const dx = at[n].x - wsh - sd * 0.09, dz = at[n].z - hz, dh2 = dx * dx + dz * dz;
-    H = Math.min(H, at[n].y + Math.sqrt(Math.max(0.01, 0.85 * 0.85 - dh2)));
+    const top = at[n].y + Math.sqrt(Math.max(0.01, 0.85 * 0.85 - dh2));
+    // (held down by a leg at full stretch, he comes back up from there on the spring, not in one frame)
+    if (top < H) { H = top; g.H = Math.min(g.H, top - S.rise * hop - bnc); g.Hv = Math.min(g.Hv, 0); }
   }
   bn.hips.position.set(wsh, H, hz);
   const lean = clamp(lx * 0.012, -0.04, 0.04);                                 // a touch into the way he's going, from the hips
@@ -233,9 +263,12 @@ export function stance(m, p, dt, t, ball) {
   const tilt = wsh * L.tilt;
   if (dt > 0) g.rock = (g.rock || 0) + ((g.on ? L.rock * Math.min(1, sp / 1.5) * Math.sin(TAU * g.ph) * (side ? 1 : 0.4) : 0) - (g.rock || 0)) * (1 - Math.exp(-dt * 10));   // (smoothed: the clock jumps when he turns back)
   const rock = g.rock || 0;
-  bn.hips.rotation.set(mix(SET.pitch, 0.08, hold) * mix(1, 0.55, far) + sink * 1.2 - bnc * 0.5, 0, -lean - tilt);
-  bn.spine.rotation.set(mix(0.16, 0.02, hold) * mix(1, 0.5, far) + L.breath * 0.4 * breath, wsh * 0.6, lean * 0.8 + tilt * 0.7 + rock);
-  bn.chest.rotation.set(mix(0.1, 0.03, Math.max(hold, far)) + L.breath * breath, 0, lean * 0.2 + tilt * 0.4 + rock * 0.5);
+  // (the crossover: hips to the run, spine and chest most of the way back to the ball)
+  const hy = xd * X.hips * cross;
+  bn.hips.rotation.set(mix(SET.pitch, 0.08, hold) * mix(1, 0.55, far) * (1 - 0.35 * cross) + sink * 1.2 - bnc * 0.5, 0, -lean - tilt);
+  if (hy) bn.hips.quaternion.premultiply(tq.setFromAxisAngle(tmp.set(0, 1, 0), hy));
+  bn.spine.rotation.set(mix(0.16, 0.02, hold) * mix(1, 0.5, far) + L.breath * 0.4 * breath, wsh * 0.6 - hy * X.back * 0.5, lean * 0.8 + tilt * 0.7 + rock);
+  bn.chest.rotation.set(mix(0.1, 0.03, Math.max(hold, far)) + L.breath * breath, -hy * X.back * 0.5, lean * 0.2 + tilt * 0.4 + rock * 0.5);
   for (const [n, sd] of [['L', 1], ['R', -1]]) setLeg(bn, n, at[n], toes[n], kf[n].yaw - yaw, sd * SET.kneeOut * (1 - hold));
   // weight: springs on the trunk and arms (before the hands are put where they go)
   sway(m, bn, p, dt, { mv: 0.6, run: 0 });

@@ -37,6 +37,8 @@ const SETUPS = {
   creep: { secs: 6, from: 17, fx: -3, move: t => ({ x: t < 3 ? 0.3 : -0.3, z: 0 }) },                                 // small adjusting steps
   inout: { secs: 6, from: 24, fx: -2, move: t => ({ x: 0.1, z: t < 3 ? -0.7 : 0.7 }) },                               // off his line and back
   split: { tx: 3.4, ty: 2.2, hold: 1.0, from: 22, secs: 2.5 },
+  // a long way across goal and back, quickly (his spot is scripted: the sim rarely sends him further than a shuffle covers): the crossover step
+  cross: { secs: 6, from: 20, fx: 0, gkPath: t => 3.3 * (Math.min(Math.max(t - 0.6, 0), 1.0) - Math.min(Math.max(t - 2.8, 0), 1.6)) + 1.0 * Math.min(Math.max(t - 4.6, 0), 0.6) },
   idle: { secs: 10, from: 15, fx: 0 },                                                                                // you stand on the ball 15 m out (&from=): how alive he is as he waits                                                         // the split step, then a dive
 };
 const LET_GO = 1.0;
@@ -69,6 +71,11 @@ export function keeperLog(name, q) {
     const ev = stepSim(w, it, DT, () => 0.5);
     if (w.dead && ev.some(e => e.type === 'goal' || e.type === 'saved' || e.type === 'parried')) w.dead = false;   // play on: no restart on the page
     log.push({ ev, gk: { ...gk, save: gk.save && { ...gk.save } }, you: { ...w.you }, ball: { ...w.ball }, before, owner: w.owner });
+  }
+  // (a scripted keeper: where he is across goal, m, by time; eased so he starts and stops as the sim's does)
+  if (S.gkPath) {
+    let x = S.gkPath(0), v = 0;
+    log.forEach((r, i) => { const want = (S.gkPath((i + 1) * DT) - S.gkPath(i * DT)) / DT; v += Math.max(-24 * DT, Math.min(24 * DT, want - v)); x += v * DT; Object.assign(r.gk, { x, vx: v, vz: 0, save: null, dive: 0, holding: false }); });
   }
   return log;
 }
