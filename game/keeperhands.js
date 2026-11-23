@@ -85,18 +85,18 @@ export function diveGrip(kind, c, s, u, k = 1) {
   du.copy(u).normalize(); dw.set(0, 0, 1).cross(du).multiplyScalar(s).normalize(); dz.crossVectors(du, dw).multiplyScalar(s);   // (dz: square to the reach, toward the shooter)
   for (const lo of ['L', 'R']) {
     const sd = lo === 'L' ? 1 : -1, bottom = sd === s, t = bottom ? -1 : 1;
-    let a, b, e, fu = 1, fz = 0.12, fw = 0, back = 0;          // d = a u + b z + e w; f = fu u + fz z + fw w
+    let a, b, e, fu = 1, fz = 0.12, fw = 0, back = 0, fwd = 0;          // d = a u + b z + e w; f = fu u + fz z + fw w
     if (kind === 'dlow') { if (bottom) { a = -0.3; b = -0.9; e = -0.28; } else { a = -0.12 - 0.15 * (1 - k); b = -0.3 - 0.55 * (1 - k); e = 0.42 + 0.55 * k; fz = 0.35 * k; } }
     else if (kind === 'dw') { a = -0.28; b = -0.86; e = t * 0.42; fw = t * 0.2; }
     else if (kind === 'dboth') { a = -0.42; b = -0.82; e = t * 0.38; fw = t * 0.2; }
-    else if (kind === 'dnear') { if (bottom) { a = -0.5; b = -0.84; e = -0.05; } else { a = -0.45; b = -0.78; e = 0.32 + 0.5 * (1 - k); back = 0.12 + 0.3 * (1 - k); } }
+    else if (kind === 'dnear') { if (bottom) { a = -0.5; b = -0.84; e = -0.05; } else { a = -0.45; b = -0.78; e = 0.32 + 0.5 * (1 - k); back = 0.12 + 0.3 * (1 - k); fwd = 0.16 * (1 - k); } }
     else if (kind === 'dtop') { if (!bottom) { a = -0.5; b = -0.84; e = 0.1; } else { a = -0.45; b = -0.6; e = -0.6; back = 0.2 + 0.25 * (1 - k); } }
     else throw new Error('grip ' + kind);
     const d = new THREE.Vector3().addScaledVector(du, a).addScaledVector(dz, b).addScaledVector(dw, e).normalize();
     const f = new THREE.Vector3().addScaledVector(du, fu).addScaledVector(dz, fz).addScaledVector(dw, fw);
     const o = g[lo] = { palm: new THREE.Vector3().copy(c).addScaledVector(d, R), N: d.clone().negate(), F: f };
     o.F.addScaledVector(o.N, -f.dot(o.N)).normalize();
-    if (back) o.palm.addScaledVector(du, -back);                // the other hand doesn't get there
+    if (back) o.palm.addScaledVector(du, -back).addScaledVector(dz, fwd);   // the other hand doesn't get there (and is kept in front of his face)
   }
   return g;
 }
