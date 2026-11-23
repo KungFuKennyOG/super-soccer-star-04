@@ -47,6 +47,19 @@ export const SPLIT = {
   // sink: m the hips give into the landing over `give` s; held `hold` s, then eased off
   fly: 0.128, up: 0.02, rise: 0.01, wide: 0.08, sink: 0.055, give: 0.14, hold: 0.55,
 };
+export const LIVE = {
+  // how alive he is standing (m, rad, Hz, s). From how keepers stand and move while they wait (coaching: stay on
+  // the balls of the feet, keep the feet moving with small adjusting steps, relaxed hands, never flat-footed
+  // and frozen); the sizes are by eye, kept small.
+  near: [9, 17],                               // m to the ball: on his toes and bouncing inside the first, not past the second
+  bounce: [0.011, 2.1], heel: 0.03,            // the bounce (m up and down, a second) and how much more the heels lift with it (rad)
+  shift: [0.02, 0.9], tilt: 1.6,               // his weight from foot to foot (m, rad/s) and the hips' tilt per m of it
+  breath: 0.012,                               // rad the chest rises and falls
+  reset: [1.1, 2.6], resetBy: 0.04,            // every so many s he re-sets a foot, by up to this far
+  float: 0.014, follow: 13, trail: 0.004,      // hands: m they drift, how quickly they follow (1/s), m left behind per m/s2
+  rock: 0.03,                                  // shuffling: rad the shoulders rock a step
+};
+const rnd = g => ((g.rs = ((g.rs ?? 12345) * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff);
 const tmp = new THREE.Vector3(), tq = new THREE.Quaternion(), te = new THREE.Euler();
 
 export const toLocal = (m, w, out) => { m.root.updateMatrixWorld(true); return m.root.worldToLocal(out.set(w.x, w.y, w.z)); };
@@ -98,7 +111,17 @@ export function stance(m, p, dt, t, ball) {
   g.px = root.position.x; g.pz = root.position.z;
   const cy = Math.cos(yaw), sy = Math.sin(yaw), lx = g.vx * cy - g.vz * sy, lz = g.vx * sy + g.vz * cy;   // across him (+ his left), and forward
   const sp = Math.hypot(g.vx, g.vz), k = clamp(sp / G.top, 0, 1), hold = ease(g.hold);
-  const far = ball ? clamp((Math.hypot(ball.x - p.x, ball.z - p.z) - 18) / 10, 0, 1) : 0;
+  const bd = ball ? Math.hypot(ball.x - p.x, ball.z - p.z) : 30, far = clamp((bd - 18) / 10, 0, 1);
+  // alive (Kenny: "the goalie looks a bit stiff"): a keeper waiting is never still. His weight drifts from foot to
+  // foot, he breathes, his hands float, he re-sets a foot every second or two, and with the ball close he is
+  // light on his toes, bouncing a centimetre at about two a second. All of it fades as he moves or holds the ball.
+  const L = LIVE, still = (1 - ease(sp / 1.2)) * (1 - hold), close = 1 - clamp((bd - L.near[0]) / (L.near[1] - L.near[0]), 0, 1);
+  const beat = t * TAU * L.bounce[1] + 0.6 * Math.sin(t * 0.9), swell = 0.65 + 0.35 * Math.sin(t * 0.53 + 1.3);
+  const bnc = L.bounce[0] * Math.sin(beat) * still * close * swell;
+  // (eased in and out over about half a second: it must not jerk his hips as he sets off)
+  if (dt > 0) g.calm = (g.calm ?? 1) + ((sp < 0.3 ? 1 : 0) - (g.calm ?? 1)) * (1 - Math.exp(-dt * (sp < 0.3 ? 2.5 : 7)));
+  const wsh = (L.shift[0] * Math.sin(t * L.shift[1]) + L.shift[0] * 0.5 * Math.sin(t * L.shift[1] * 0.41 + 2)) * ease(g.calm ?? 1) * (1 - 0.5 * hold);
+  const breath = Math.sin(t * mix(2.1, 2.9, close));
   // the split step
   let hop = 0, wide = 0, sink = 0, busy = false;
   if (m.split !== undefined && m.split < S.hold + 0.5) {
@@ -131,6 +154,12 @@ export function stance(m, p, dt, t, ball) {
       if (e > worst) { worst = e; pick = n; }
     }
     if (pick) lift(pick);
+    else if (dt > 0 && (g.fid = (g.fid ?? 0.9) - dt) <= 0) {
+      // nothing to correct: he re-sets a foot anyway, a few centimetres, the feet in turn
+      const n = g.last === 'L' ? 'R' : 'L';
+      g.fid = mix(L.reset[0], L.reset[1], rnd(g)) * (1 + 1.5 * far) * (1 + hold);
+      if (hold < 0.5) { lift(n); kf[n].air.jit = [(rnd(g) - 0.5) * 2 * L.resetBy, (rnd(g) - 0.5) * 2 * L.resetBy * 0.8]; }
+    }
   }
   // how far from under its hip a foot can be with the hips where they are (the leg's length); whatever the clock
   // says, a foot the body is leaving behind at the end of its leg comes with it
@@ -152,6 +181,7 @@ export function stance(m, p, dt, t, ball) {
       if (sp > 0.05) { to.x += g.vx / sp * E; to.z += g.vz / sp * E; }
       // feet never cross and never come together: it lands on its own side of the other one
       const tl = toLocal(m, to, V(0, 0, 0)), ol = toLocal(m, o.p, V(0, 0, 0));
+      if (a.jit) { tl.x += a.jit[0]; tl.z += a.jit[1]; }
       if (sd * (tl.x - ol.x) < G.gap) tl.x = ol.x + sd * G.gap;
       // ...and within reach of the leg
       const dx = tl.x - sd * 0.09, dz = tl.z - hz, dr = Math.hypot(dx, dz), lim = maxR * 0.86;
@@ -161,7 +191,7 @@ export function stance(m, p, dt, t, ball) {
       up = Math.sin(Math.PI * u) * (a.hop ? S.up : G.lift[0] + G.lift[1] * Math.min(sp, 3.5));
       if (u >= 1) { f.air = null; g.last = n; m.phase = (m.phase || 0) + Math.PI; }
     }
-    toes[n] = SET.heel * (1 - hold) + (f.air && !f.air.hop ? 0.22 * Math.sin(Math.PI * u) : 0);
+    toes[n] = SET.heel * (1 - hold) + (f.air && !f.air.hop ? 0.22 * Math.sin(Math.PI * u) : 0) + L.heel * still * close * swell * (0.5 + 0.5 * Math.sin(beat + sd * 0.7));
     at[n] = toLocal(m, f.p, V(0, 0, 0)); at[n].y = ankleFor(toes[n]) + up;
   }
   // hips: low in the set and level as he moves (no bobbing), sinking into the split step's landing, up and loose
@@ -170,30 +200,43 @@ export function stance(m, p, dt, t, ball) {
   if (g.H === null) { g.H = m.kLast && m.kState !== 'run' ? m.kLast[m.kLast.length - 2] : Hset; g.Hv = 0; }
   if (dt > 0) { const w = 16; g.Hv += (w * w * (Hset - g.H) - 2 * w * g.Hv) * dt; g.H += g.Hv * dt; }
   // (hz: sat back a little: bent forward, his weight stays over the balls of his feet)
-  let H = g.H + S.rise * hop + 0.004 * Math.sin(t * 2.3 + (m.phase || 0) * 0.1);
+  let H = g.H + S.rise * hop + bnc;
   for (const [n, sd] of [['L', 1], ['R', -1]]) {
-    const dx = at[n].x - sd * 0.09, dz = at[n].z - hz, dh2 = dx * dx + dz * dz;
+    const dx = at[n].x - wsh - sd * 0.09, dz = at[n].z - hz, dh2 = dx * dx + dz * dz;
     H = Math.min(H, at[n].y + Math.sqrt(Math.max(0.01, 0.85 * 0.85 - dh2)));
   }
-  bn.hips.position.set(0, H, hz);
+  bn.hips.position.set(wsh, H, hz);
   const lean = clamp(lx * 0.012, -0.04, 0.04);                                 // a touch into the way he's going, from the hips
-  bn.hips.rotation.set(mix(SET.pitch, 0.08, hold) * mix(1, 0.55, far) + sink * 1.2, 0, -lean);
-  bn.spine.rotation.set(mix(0.16, 0.02, hold) * mix(1, 0.5, far), 0, lean * 0.8); bn.chest.rotation.set(mix(0.1, 0.03, Math.max(hold, far)), 0, lean * 0.2);
+  // (his weight over one foot drops that hip's side a little and the spine straightens over it; a shuffle rocks the shoulders)
+  const tilt = wsh * L.tilt;
+  if (dt > 0) g.rock = (g.rock || 0) + ((g.on ? L.rock * Math.min(1, sp / 1.5) * Math.sin(TAU * g.ph) * (side ? 1 : 0.4) : 0) - (g.rock || 0)) * (1 - Math.exp(-dt * 10));   // (smoothed: the clock jumps when he turns back)
+  const rock = g.rock || 0;
+  bn.hips.rotation.set(mix(SET.pitch, 0.08, hold) * mix(1, 0.55, far) + sink * 1.2 - bnc * 1.5, 0, -lean - tilt);
+  bn.spine.rotation.set(mix(0.16, 0.02, hold) * mix(1, 0.5, far) + L.breath * 0.4 * breath, wsh * 0.6, lean * 0.8 + tilt * 0.7 + rock);
+  bn.chest.rotation.set(mix(0.1, 0.03, Math.max(hold, far)) + L.breath * breath, 0, lean * 0.2 + tilt * 0.4 + rock * 0.5);
   for (const [n, sd] of [['L', 1], ['R', -1]]) setLeg(bn, n, at[n], toes[n], kf[n].yaw - yaw, sd * SET.kneeOut * (1 - hold));
   // weight: springs on the trunk and arms (before the hands are put where they go)
   sway(m, bn, p, dt, { mv: 0.6, run: 0 });
   if (p.holding) {
     const b = holdPoint(bn, V(0, 0, 0));
     placeHands(bn, grip('hug', b, 1), 1, 0.6, 1.5, true);
-    m.held = b;
+    m.held = b; g.hp = null;
     lookAt(bn, V(0, 1.6, 12), 0.6);
     return;
   }
   m.held = null;
   // hands out in front at waist height, palms to the ball, a little alive; lower and looser when it's far away
   const tb = ball ? toLocal(m, ball, V(0, 0, 0)) : V(0, 1, 10), gr = {};
+  // (how hard he is starting or stopping, across and along, m/s2, smoothed: the hands are left behind by a few cm)
+  const ac = g.ac ??= { x: 0, z: 0, lx, lz };
+  if (dt > 1e-5) { const q = 1 - Math.exp(-dt * 10); ac.x += (clamp((lx - ac.lx) / dt, -14, 14) * L.trail - ac.x) * q; ac.z += (clamp((lz - ac.lz) / dt, -14, 14) * L.trail - ac.z) * q; }
+  ac.lx = lx; ac.lz = lz;
   for (const [n, sd] of [['L', 1], ['R', -1]]) {
-    const palm = V(sd * mix(SET.hands[0], 0.24, far), SET.hands[1] - 0.12 * far + 0.01 * Math.sin(t * 3.1 + sd), mix(SET.hands[2], 0.26, far)).applyQuaternion(bn.hips.quaternion).add(bn.hips.position);
+    const palm = V(sd * mix(SET.hands[0], 0.24, far), SET.hands[1] - 0.12 * far, mix(SET.hands[2], 0.26, far)).applyQuaternion(bn.hips.quaternion).add(bn.hips.position);
+    // the hands float (each on its own slow path), trail his body when it starts and stops, and ride his bounce late
+    palm.x += L.float * Math.sin(t * 1.3 + sd * 1.1) * sd - ac.x; palm.y += L.float * 1.3 * Math.sin(t * 1.7 + sd * 2) + L.breath * 0.3 * breath; palm.z += L.float * Math.sin(t * 1.1 + sd * 0.7) - ac.z;
+    const hp = (g.hp ??= {})[n] ??= palm.clone();
+    palm.copy(hp.lerp(palm, dt > 0 ? 1 - Math.exp(-dt * L.follow) : 1));
     // the hands hang ready off bent elbows: fingers forward and a little down, palms turned in toward each other and
     // half to the ball, wrists straight (palms square to the ball with the fingers up folded the wrists right back)
     const N = V(-sd * 0.75, -0.25, 0.6).lerp(V(-sd, -0.1, 0.1), far).normalize(), F = V(sd * 0.12, mix(-0.3, -0.75, far), 1).normalize();
