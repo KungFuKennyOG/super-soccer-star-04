@@ -215,33 +215,3 @@ export function poseRagdoll(m) {
   };
   walk(bn.hips, tq2.identity().clone());
 }
-
-// The old get-up (a blend from lying to standing: he swings up like a plank). game/brawl/view.js still calls these two
-// until it is wired to game/brawl/getup.js (startGetUp / poseGetUp); delete them then.
-// Remember the ragdoll's last pose in the frame of where he'll stand, then each frame of the
-// get-up, after the normal animation has posed him, ease from that pose into it. k: 0 → 1.
-export function holdForGetUp(m) {
-  const bn = m.bone;
-  poseRagdoll(m);
-  m.root.updateMatrixWorld(true);
-  m.getUp = { q: {}, hips: null };
-  for (const [n, b] of Object.entries(bn)) m.getUp.q[n] = b.quaternion.clone();
-  m.getUp.hipsW = bn.hips.position.clone();
-  m.rag = null;
-}
-export function getUpBlend(m, k) {
-  const G = m.getUp, bn = m.bone;
-  if (!G) return;
-  const e = k * k * (3 - 2 * k);
-  // the lying hips, in the frame of the root as the animation has placed it
-  m.root.updateMatrixWorld(true);
-  const rq = m.root.quaternion, inv = tq.copy(rq).invert();
-  const hipsL = tmp.copy(G.hipsW).sub(m.root.position).applyQuaternion(inv);
-  for (const [n, b] of Object.entries(bn)) {
-    if (!G.q[n]) continue;
-    const from = n === 'hips' ? tq2.copy(inv).multiply(G.q[n]) : G.q[n];
-    b.quaternion.copy(from.clone().slerp(b.quaternion, e));
-  }
-  bn.hips.position.lerpVectors(hipsL, bn.hips.position, e);
-  if (k >= 1) m.getUp = null;
-}

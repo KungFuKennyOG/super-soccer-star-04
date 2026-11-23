@@ -49,6 +49,11 @@ try {
       t = s;
       await page.screenshot({ path: `${out}/t${String(s).padStart(3, '0')}.png` });
       const st = await page.evaluate(() => { const w = window.brawl.w; return { score: w.score, hits: w.stats.hits, longest: +w.stats.longest.toFixed(1), phase: w.phase, flying: w.players.filter(p => p.state !== 'up').length }; });
+      if (process.env.FOLLOW) {
+        // a close-up of whoever FOLLOW names (FOLLOW="w.ref", FOLLOW="w.byId[w.sp.taker]"), fixed on where he was first
+        await page.evaluate(([expr, s]) => { const w = window.brawl.w, p = new Function('w', `return (${expr})`)(w); if (p) window.__f = (s.fixed && window.__f) || { x: p.x, z: p.z }; const f = window.__f; if (f) window.brawl.look([f.x + 6, 2.6, f.z + 3], [f.x, 0.9, f.z]); window.brawl.look(null); }, [process.env.FOLLOW, { fixed: !!process.env.FIXED }]);
+        await page.screenshot({ path: `${out}/t${String(s).padStart(3, '0')}-follow.png` });
+      }
       if (process.env.CLOSE) {
         // a closer look at whoever is off his feet (or the ball)
         const ok = await page.evaluate(() => { const w = window.brawl.w, p = w.players.find(q => q.state === 'air') || w.players.find(q => q.state !== 'up'); const a = p ? (p.air || p) : w.ball; window.brawl.look([a.x + 7, 3.2, a.z + 4], [a.x, 0.6, a.z]); window.brawl.look(null); return !!p; });

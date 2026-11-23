@@ -10,8 +10,10 @@ import { heldBall } from '../keeperpose.js';
 import { struck } from '../strike.js';
 import { squadLooks } from '../squad.js';
 import { matchKit, keeperKit } from '../../rules/teams.js';
-import { BODY } from '../../rules/brawl/tuning.js';
-import { startRagdoll, stepRagdoll, poseRagdoll, holdForGetUp, getUpBlend } from './ragdoll.js';
+import { startRagdoll, stepRagdoll, poseRagdoll } from './ragdoll.js';
+import { startGetUp, poseGetUp } from './getup.js';
+import { THROW, poseThrowIn, throwInBall } from './throwin.js';
+import { poseRefSignal, cardTransform } from './refpose.js';
 
 const seedOf = id => [...id].reduce((a, c) => a + c.charCodeAt(0), 0);
 
@@ -45,16 +47,37 @@ export function createView(scene, w, models, refModel = null) {
   const ball = buildBall04(); scene.add(ball.mesh, ball.shadow);
   const arrow = buildArrow04(); arrow.scale.setScalar(2.2); scene.add(arrow);
   const held = new THREE.Vector3();
+  // the referee's card, shown in his raised hand
+  const card = new THREE.Mesh(new THREE.PlaneGeometry(0.075, 0.105), new THREE.MeshBasicMaterial({ color: '#f2d22e', side: THREE.DoubleSide }));
+  card.visible = false; scene.add(card);
+  // a throw-in: from the ball at his chest, up over his head while he waits, then the throw (its timing is
+  // the sim's: rules/brawl/setpiece.js counts p.throwT while he holds it and sp.rt once he throws), and the
+  // follow-through after it's gone
+  const thrown = THROW.windup + THROW.release + THROW.follow;
+  function throwIn(m, p, dt) {
+    const sp = w.sp;
+    if (p.throwing && sp && sp.taker === p.id) m.throwT = sp.stage === 'throw' ? sp.rt : Math.min(0, -THROW.hold + (p.throwT || 0));
+    else if (m.throwT != null && m.throwT < thrown) m.throwT += dt;
+    else { m.throwT = null; return; }
+    poseThrowIn(m, m.throwT);
+  }
   return {
     ball,
     // events from the sim that the models act on
     events(ev) {
       for (const e of ev) {
+        if (e.type === 'signal' && refModel) {
+          // the referee: the whistle is its own layer (his left hand), the rest one at a time
+          const sig = { kind: e.kind, dir: e.dir, red: e.color === 'red', t: 0 };
+          if (e.kind === 'whistle') refModel.whistle = sig; else refModel.sig = sig;
+          if (e.kind === 'card') card.material.color.set(e.color === 'red' ? '#d8261e' : '#f2d22e');
+          continue;
+        }
         const p = w.byId[e.id], m = models[e.id];
         if (!m) continue;
         if (e.type === 'launch') startRagdoll(m, { x: p.air.vx, y: p.air.vy, z: p.air.vz });
         else if (e.type === 'miss' && !e.quiet) startRagdoll(m, { x: p.vx * 1.4, y: 0.5, z: p.vz * 1.4 });
-        else if (e.type === 'getup' && m.rag) { holdForGetUp(m); m.upT = 0; }
+        else if (e.type === 'getup' && m.rag) { startGetUp(m); m.upT = 0; }
         else if (e.type === 'pass' || e.type === 'shot' || e.type === 'clear') {
           const b = w.ball, h = Math.hypot(b.vx, b.vz) || 1;
           if (!p.holding && p.line !== 'gk') struck(m, e.type === 'shot' ? 'shot' : 'pass', { x: b.vx / h, z: b.vz / h }, e.power || 0.5);
@@ -77,16 +100,25 @@ export function createView(scene, w, models, refModel = null) {
         placeModel(m, p);
         const celebrate = w.phase === 'goal' && p.team === w.scorers && p.state === 'up';
         animate(m, p, dt, t, celebrate, false, w.ball, w.owner === p.id && !p.holding);
-        if (m.getUp) { m.upT += dt; getUpBlend(m, Math.min(1, m.upT / BODY.getup)); }
+        if (m.getUp) { poseGetUp(m, p, m.upT); m.upT += dt; }
+        throwIn(m, p, dt);
       }
       if (refModel && w.ref) {
         placeModel(refModel, w.ref);
         animate(refModel, w.ref, dt, t, false, false, w.ball, false);
+        for (const k of ['sig', 'whistle']) {
+          const s = refModel[k];
+          if (s && !poseRefSignal(refModel, s, s.t)) refModel[k] = null;
+          if (s) s.t += dt;
+        }
+        card.visible = !!(refModel.sig && cardTransform(refModel, card.position, card.quaternion));
       }
       ball.update(w.ball, dt);
       // the keeper's ball is drawn between his gloves
       const gk = w.owner && w.byId[w.owner];
       if (gk && gk.holding && heldBall(models[gk.id], held)) ball.mesh.position.copy(held);
+      // and a throw-in's between the thrower's palms
+      if (gk && gk.throwing && throwInBall(models[gk.id], held)) ball.mesh.position.copy(held);
       const you = w.byId[w.ctrl];
       arrow.visible = !!you && you.state !== 'air' && !w.demo;
       if (arrow.visible) arrow.position.set(you.x, 2.75 + Math.sin(t * 6) * 0.08, you.z);

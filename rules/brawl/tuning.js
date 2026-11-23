@@ -54,7 +54,7 @@ export const HIT = {
 };
 
 // A body in the air: its middle (about hip height) under gravity, bouncing and sliding to a stop.
-export const BODY = { y: 0.95, rest: 0.22, bounce: 0.3, slide: 12, down: [1.3, 2.1], getup: 0.75, ground: 0.25 };
+export const BODY = { y: 0.95, rest: 0.22, bounce: 0.3, slide: 12, down: [1.3, 2.1], getup: 1.5, ground: 0.25 };
 
 // The AI. press: how many defenders go for the man on the ball; tackleAt: lunge from this far;
 // aggro: how often a lunge is a full-speed sprint at him (a big hit) rather than a jab.
@@ -91,6 +91,6 @@ export const FOUL = {
 // it (game/brawl/throwin.js's wind-up plus release). Free kicks within wallFrom m of goal get a wall.
 export const TAKE = {
   reach: 0.4, walkMax: 5, aiWait: [0.8, 1.6], penWait: 1.4, humanWait: 12,
-  runup: { free: 2.2, penalty: 3.2, corner: 1.6, goalkick: 2.2 }, runSpeed: 4.2, throwRelease: 0.55,
+  runup: { free: 2.2, penalty: 3.2, corner: 1.6, goalkick: 2.2 }, runSpeed: 4.2, throwRelease: 0.56,
   gap: 9.15, wallFrom: 32, wall: { 6: 2, 11: 4 }, spot: 11,
 };
