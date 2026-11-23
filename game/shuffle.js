@@ -19,7 +19,7 @@ import { ankleOf, footOf, reachLeg, aimFoot } from './legik.js';
 const SIDE = CLIPS.shuffle, BACK = CLIPS.back, NB = BONES.length, SOLE = 0.085, REACH = 0.835;
 const LEGS = new Set(['hips', 'upperLegL', 'lowerLegL', 'footL', 'toeL', 'upperLegR', 'lowerLegR', 'footR', 'toeR']);
 const PAIR = BONES.map(n => (/[LR]$/.test(n) ? BONES.indexOf(n.slice(0, -1) + (n.endsWith('L') ? 'R' : 'L')) : -1));
-const RISE = { side: 0.035, back: -0.03 };      // m the hips sit above (below) the recording's: the slide is a basketball crouch, the walk stands tall
+const RISE = { side: 0, back: -0.03 };      // m the hips sit above (below) the recording's: the slide is a basketball crouch, the walk stands tall
 const smooth = x => { const k = Math.min(1, Math.max(0, x)); return k * k * (3 - 2 * k); }, clamp = (v, a, b) => Math.min(b, Math.max(a, v));
 const A = newPose(), B = newPose(), M = newPose(), pt = new THREE.Vector3();
 const AV = { L: new THREE.Vector3(), R: new THREE.Vector3() }, AQ = { L: new THREE.Quaternion(), R: new THREE.Quaternion() };
@@ -57,7 +57,7 @@ export function shuffleLegs(m, bn, g, dt) {
   applyPose(bn, P, w, LEGS);
   const h = bn.hips.position, ux = g.ux, uz = g.uz, k = (clamp((g.cover || len) / len, 0.45, 1.35) - 1) * w;
   // at less than the recording's pace the hop between steps is smaller (hs), and the hips ride nearer its low point
-  const hs = kb + (1 - kb) * clamp(g.s / 2.6, 0.6, 1);
+  const hs = kb + (1 - kb) * clamp(g.s / 3.2, 0.45, 0.8);
   h.y += rise * w;
   const rp = m.root.position, ry = m.root.rotation.y, c = Math.cos(ry), sn = Math.sin(ry), fade = Math.exp(-dt * 14);
   let top = 9;
@@ -68,6 +68,7 @@ export function shuffleLegs(m, bn, g, dt) {
     const rel = (a.x - h.x) * ux + (a.z - h.z) * uz;
     a.x += ux * rel * k; a.z += uz * rel * k;
     a.y -= Math.max(0, a.y - 0.11) * (1 - hs) * w;
+    if (n === 'L') h.y -= Math.max(0, h.y - 0.8) * (1 - hs) * 0.8 * w;      // (and the hips bob less)
     // a foot bearing weight keeps its spot on the pitch (the ball of the foot down and going back under him)
     const ball = pt.set(0, -SOLE, 0.1).applyQuaternion(AQ[n]), bx = a.x + ball.x, bz = a.z + ball.z, by = a.y + ball.y, along = bx * ux + bz * uz;
     const back = dt > 0 && L.pu !== null ? (along - L.pu) / dt : 0;
@@ -89,7 +90,7 @@ export function shuffleLegs(m, bn, g, dt) {
     top = Math.min(top, a.y - pt.y + Math.sqrt(Math.max(0.01, REACH * REACH - dx * dx - dz * dz)));
   }
   // the slide's feet close up but never touch or cross: at least a foot's width between the ankles across his way
-  if (S.side > 0.3) { const gap = ((AV.L.x - AV.R.x) * ux + (AV.L.z - AV.R.z) * uz) * S.dir, lack = Math.max(0, 0.2 - gap) * 0.5 * S.side * S.dir; AV.L.x += ux * lack; AV.L.z += uz * lack; AV.R.x -= ux * lack; AV.R.z -= uz * lack; }
+  if (S.side > 0.3) { const gap = ((AV.L.x - AV.R.x) * ux + (AV.L.z - AV.R.z) * uz) * S.dir, lack = Math.max(0, 0.27 - gap) * 0.5 * S.side * S.dir; AV.L.x += ux * lack; AV.L.z += uz * lack; AV.R.x -= ux * lack; AV.R.z -= uz * lack; }
   h.y = Math.min(h.y, top);
   for (const n of 'LR') { reachLeg(bn, n, AV[n]); aimFoot(bn, n, AQ[n]); }
   return w;

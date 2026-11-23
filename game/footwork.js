@@ -21,6 +21,7 @@ import { P } from './body.js';
 import { CLIPS, BONES, applyPose } from './mocap.js';
 import { sampleOnce, newOnce } from './keepercap.js';
 import { ankleOf, footOf, reachLeg, aimFoot } from './legik.js';
+import { inertialize } from './inertia.js';
 
 export const FOOT = {
   cutLat: 9, cutSpeed: 2.4, cutWide: 0.33, cutAhead: 0.1, cutStep: 0.07, cutMax: 0.42, cutEnd: 4, cutSink: 0.08, cutReach: 0.56,      // m/s2 across his way to begin; m/s; m out from under the hip; m along his way; s to get the foot there; s at most; m/s2 it ends under; m the hips drop
@@ -60,7 +61,8 @@ export function footwork(m, bn, p, g, dt) {
     S.top = Math.max(s, S.top - dt * 6);                  // how fast he was going a moment ago
     S.still = s < 0.3 ? S.still + dt : 0;
   }
-  if (busy) { if (S.mode || S.k > 0) { S.mode = null; S.k = 0; S.rk = 0; S.L = foot(); S.R = foot(); } return; }
+  // something else takes his legs (a beaten man's reaction, the ball): what the feet were doing is eased into it (game/inertia.js)
+  if (busy) { if (S.mode || S.k > 0) { if (!m.firstPerson && !m.plain) inertialize(m, 0.08); S.mode = null; S.k = 0; S.rk = 0; S.w = 0; S.L = foot(); S.R = foot(); } return; }
   const rp = m.root.position, ry = m.root.rotation.y, c = Math.cos(ry), sn = Math.sin(ry);
   const toW = (mx, mz, out) => { out.x = rp.x + mx * c + mz * sn; out.z = rp.z - mx * sn + mz * c; return out; };
   const toM = (wx, wz, out) => { const dx = wx - rp.x, dz = wz - rp.z; out.x = dx * c - dz * sn; out.z = dx * sn + dz * c; return out; };
