@@ -24,7 +24,7 @@ import { ankleOf, footOf, reachLeg, aimFoot } from './legik.js';
 import { inertialize } from './inertia.js';
 
 export const FOOT = {
-  cutLat: 9, cutSpeed: 2.4, cutWide: 0.33, cutAhead: 0.1, cutStep: 0.07, cutMax: 0.42, cutEnd: 4, cutSink: 0.08, cutReach: 0.56,      // m/s2 across his way to begin; m/s; m out from under the hip; m along his way; s to get the foot there; s at most; m/s2 it ends under; m the hips drop
+  cutLat: 9, cutSpeed: 2.4, cutWide: 0.22, cutAhead: 0.1, cutStep: 0.07, cutMax: 0.42, cutEnd: 4, cutSink: 0.08, cutReach: 0.64, cutAfter: 0.08, sit: 0.2,      // m/s2 across his way to begin; m/s; m out from under the hip; m along his way; s to get the foot there; s at most; m/s2 it ends under; m the hips drop
   stopDecel: 8, stopSpeed: 2.2, ahead: 0.1, aheadMax: 0.42, side: 0.11, step: 0.15, settle: 0.2, lift: 0.07, far: 0.06, reach: 0.74, brake: 18,   // m/s2; m/s; s of his speed the foot lands ahead; m; m either side of his line; s a braking step; s a settling step; m; m off its place before a standing foot steps; m from the hip before a foot must be picked up; m/s2 the sim brakes at
 };
 const REACH = 0.835, ANK = P.ankleY, NB = BONES.length, HI = BONES.indexOf('hips');
@@ -57,6 +57,7 @@ export function footwork(m, bn, p, g, dt) {
     const ux = s > 0.3 ? p.vx / s : Math.sin(m.root.rotation.y), uz = s > 0.3 ? p.vz / s : Math.cos(m.root.rotation.y);
     along = S.ax * ux + S.az * uz; lat = S.ax * uz - S.az * ux;      // (his left across his way is (uz, -ux))
     S.cool = Math.max(0, (S.cool || 0) - dt);
+    S.latT = Math.abs(lat) > FOOT.cutLat && Math.abs(lat) > Math.abs(along) * 0.7 ? (S.latT || 0) + dt : 0;      // how long he has been pushed across his way
     S.vx = p.vx; S.vz = p.vz;
     S.top = Math.max(s, S.top - dt * 6);                  // how fast he was going a moment ago
     S.still = s < 0.3 ? S.still + dt : 0;
@@ -77,16 +78,17 @@ export function footwork(m, bn, p, g, dt) {
 
   // --- beginnings ---
   if (dt > 0 && !S.mode && g.mv > 0.5) {
-    if (!S.cool && s > FOOT.cutSpeed && Math.abs(lat) > FOOT.cutLat && Math.abs(lat) > Math.abs(along) * 0.7 && (g.jk || 0) < 0.5) {
+    if (!S.cool && s > FOOT.cutSpeed && S.latT > FOOT.cutAfter && (g.jk || 0) < 0.5) {      // (a nudge to his line, over in a few frames, is no cut)
       // a cut: the outside foot goes down wide, away from the way he is being pushed, a little ahead along his old line
       const side = Math.sign(lat), n = side > 0 ? 'R' : 'L', ux = p.vx / s, uz = p.vz / s, T = FOOT.cutStep;
       S.mode = 'cut'; S.t = 0; S.cool = 0.55; S.side = side; S.out = n; S.sharp = 0.5; S.L = foot(); S.R = foot();
       // (his left across his way is (uz, -ux) in the world; the outside is the other way from the push)
-      const ox = -side * uz, oz = side * ux, hx = rp.x + p.vx * T, hz = rp.z + p.vz * T;
-      stepTo(n, hx + ox * (FOOT.cutWide + 0.09) + ux * FOOT.cutAhead, hz + oz * (FOOT.cutWide + 0.09) + uz * FOOT.cutAhead, T, 0.03);
+      const ox = -side * uz, oz = side * ux, Tm = T + 0.06, hx = rp.x + p.vx * Tm + 0.5 * S.ax * Tm * Tm, hz = rp.z + p.vz * Tm + 0.5 * S.az * Tm * Tm;      // (from where his hips will be half way through the push)
+      const ah = FOOT.cutAhead;      // ahead of him as it lands, so that he goes over it: it is down for about a tenth of a second at a run
+      stepTo(n, hx + ox * (FOOT.cutWide + P.hipX) + ux * ah, hz + oz * (FOOT.cutWide + P.hipX) + uz * ah, T, 0.03);
       S[n].step.yaw1 = Math.atan2(ux, uz) + side * 0.25;
       // his stride is taken to that foot's stance (right foot planted round phase 0, left round half way): the push comes off it
-      m.land = { at: (n === 'R' ? 0 : Math.PI) - 0.35, t: 0, ease: 0.1 };
+      m.land = { at: (n === 'R' ? 0 : Math.PI) - 0.35, t: 0, ease: FOOT.cutStep };      // (eased over the time the foot takes to get there: once it is down nothing moves it)
       if (REC.cutA) { S.rec = 'cutA'; S.rt = 0.08; S.flip = side < 0; }
     } else if (S.top > FOOT.stopSpeed && along < -FOOT.stopDecel && Math.abs(lat) < -along * 0.6) {
       S.mode = 'stop'; S.t = 0; S.L = foot(); S.R = foot(); S.next = null;
@@ -151,7 +153,10 @@ export function footwork(m, bn, p, g, dt) {
     }
     hj.set(n === 'L' ? P.hipX : -P.hipX, -0.02, 0).applyQuaternion(h.quaternion);
     const dx = a.x - h.position.x - hj.x, dz = a.z - h.position.z - hj.z;
-    top = Math.min(top, a.y - hj.y + Math.sqrt(Math.max(0.01, REACH * REACH - dx * dx - dz * dz)));
+    const can = a.y - hj.y + Math.sqrt(Math.max(0.0001, REACH * REACH - dx * dx - dz * dz));
+    // a held foot his leg can no longer reach (his hips would have to sit more than FOOT.sit lower) is let go: it trails, or steps
+    if (F.lock && can < h0 - FOOT.sit) { letGo(n, 0.1); if (S.mode === 'cut' && n === S.out) S.mode = null; else if (S.mode === 'stop' && !S.next && s > 0.5) S.next = n; }
+    else top = Math.min(top, can);
   }
   // --- the pelvis: the recording's sink and tip since it began, and never higher than both legs reach ---
   S.rk = clamp(S.rk + (S.mode ? dt / 0.08 : -dt / 0.25), 0, 1);
@@ -167,7 +172,7 @@ export function footwork(m, bn, p, g, dt) {
     h.position.y += clamp(S.pose.h[1] - R.first.h[1], -0.14, 0.02) * w * (cut ? 0.6 : 0.8) - (cut ? FOOT.cutSink * w * smooth(S.t / 0.08) * (S.mode ? 1 : S.rk) : 0);
     S.w = w;
   } else S.w = 0;
-  h.position.y = Math.max(Math.min(h.position.y, top), h0 - 0.1);
+  h.position.y = Math.max(Math.min(h.position.y, top), h0 - FOOT.sit);
   for (const n of 'LR') { reachLeg(bn, n, AV[n]); aimFoot(bn, n, AQ[n]); }
 }
 const wrap = a => a - Math.PI * 2 * Math.round(a / (Math.PI * 2));

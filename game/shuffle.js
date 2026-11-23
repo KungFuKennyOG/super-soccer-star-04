@@ -67,13 +67,13 @@ export function shuffleLegs(m, bn, g, dt) {
     // reached as far along his way as the ground he covers in a turn of the cycle
     const rel = (a.x - h.x) * ux + (a.z - h.z) * uz;
     a.x += ux * rel * k; a.z += uz * rel * k;
-    a.y -= Math.max(0, a.y - 0.11) * (1 - hs) * w;
+    a.y -= Math.max(0, a.y - 0.17) * (1 - hs) * w;
     if (n === 'L') h.y -= Math.max(0, h.y - 0.8) * (1 - hs) * 0.8 * w;      // (and the hips bob less)
     // a foot bearing weight keeps its spot on the pitch (the ball of the foot down and going back under him)
     const ball = pt.set(0, -SOLE, 0.1).applyQuaternion(AQ[n]), bx = a.x + ball.x, bz = a.z + ball.z, by = a.y + ball.y, along = bx * ux + bz * uz;
     const back = dt > 0 && L.pu !== null ? (along - L.pu) / dt : 0;
     L.pu = along;
-    const down = w > 0.9 && dt > 0 && (L.on ? by < 0.075 && back < -0.15 * g.s : by < 0.045 && back < -0.4 * g.s);
+    const down = w > 0.9 && dt > 0 && (L.on ? by < 0.07 : by < 0.045 && back < -0.4 * g.s);
     if (down) {
       if (!L.on) { L.on = true; const mx = bx + L.ox, mz = bz + L.oz; L.wx = rp.x + mx * c + mz * sn; L.wz = rp.z - mx * sn + mz * c; }
       const dx = L.wx - rp.x, dz = L.wz - rp.z;
@@ -85,6 +85,7 @@ export function shuffleLegs(m, bn, g, dt) {
     const low = Math.min(ball.y, pt.set(0, -SOLE, -0.09).applyQuaternion(AQ[n]).y, pt.set(0, -0.04, 0.2).applyQuaternion(AQ[n]).y);
     L.oy += ((L.on ? -low - a.y : 0) - L.oy) * Math.min(1, dt * 30);
     a.y = Math.max(-low, a.y + L.oy);
+    if (!L.on && back > 0.3 * g.s) a.y = Math.max(a.y, -low + 0.035 * w);      // a foot being carried forward is clear of the grass (the recorded walk's skims it)
     pt.set(n === 'L' ? 0.09 : -0.09, -0.02, 0).applyQuaternion(bn.hips.quaternion);
     const dx = a.x - h.x - pt.x, dz = a.z - h.z - pt.z;
     top = Math.min(top, a.y - pt.y + Math.sqrt(Math.max(0.01, REACH * REACH - dx * dx - dz * dz)));

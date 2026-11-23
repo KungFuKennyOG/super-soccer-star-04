@@ -239,26 +239,51 @@ function pile(m, bn, ch, p, t) {
     unsink(bn);
     return;
   }
-  local(m, ch.you.x, ch.you.z, v); const yx = v.x, yz = v.z, near = Math.hypot(yx, yz) < 1.15;
+  // The two who pile on. A hug, from how people hold each other (no recording of one in the library): bodies together, so
+  // the upper arm lies along the other's side and the forearm bends across his back or chest (elbows at about a right
+  // angle, never straight: HUG.close is how far their own hips are brought in from where the sim stands them), hands flat
+  // on him, heads side by side.
+  local(m, ch.you.x, ch.you.z, v); const yx = v.x, yz = v.z, dist = Math.hypot(yx, yz) || 1, near = dist < 1.15, ux = yx / dist, uz = yz / dist;
+  // the way you face, as he sees it (fx, fz), and your left (lx, lz)
+  const a = m.root.rotation.y, fx = c.dx * Math.cos(a) - c.dz * Math.sin(a), fz = c.dx * Math.sin(a) + c.dz * Math.cos(a), lx = fz, lz = -fx;
+  const on = (f, l, y) => v2.set(yx + fx * f + lx * l, y, yz + fz * f + lz * l);      // a spot on you: f m ahead of your middle, l m to your left, y up
   if (ch.side < 0) {
-    // in front of you and to one side: onto his knees and his arms round you, his head past your shoulder
-    const w = arrived(m, p, near && c.t > 0.5, 2.5, 5) * (1 - smooth((u - 0.9) / 0.1)), late = 0.18;
+    // in front of you and to one side: onto his knees against you, his arms round your back (one high across your shoulder
+    // blades, one low round your ribs), his head past your left shoulder
+    const w = arrived(m, p, near && c.t > 0.5, 2.5, 5) * (1 - smooth((u - 0.9) / 0.1)), late = 0.18, sq = smooth((c.t - 1.3) / 0.5), in_ = Math.max(0, dist - HUG.kneel);
     blend(bn, w, () => {
-      kneel(bn, -0.2, 0.1, 0.15);
-      bn.spine.rotation.z = 0.16; bn.chest.rotation.z = 0.12; bn.neck.rotation.set(-0.15, 0, 0.1);      // his head goes past your left shoulder, not at your face
-      for (const n of ['L', 'R']) { const sd = n === 'L' ? 1 : -1; reachArm(bn, n, v2.set(yx + sd * 0.22, 1.02 - 0.1 * sd, yz + 0.1), pole.set(sd, -0.6, -0.3)); }
+      kneel(bn, -0.24, 0.1, 0.15);
+      bn.hips.position.x += ux * in_; bn.hips.position.z += uz * in_;
+      bn.spine.rotation.z = 0.14; bn.chest.rotation.z = 0.1; bn.neck.rotation.set(-0.1, 0, 0.12);      // his head goes past your left shoulder, not at your face
+      // (his left arm goes round your right side: he faces you)
+      reachArm(bn, 'L', on(-0.1 - 0.03 * sq, -0.19 + 0.03 * sq, 1.0), pole.set(1, -0.5, -0.4)); reachArm(bn, 'R', on(-0.1 - 0.03 * sq, 0.19 - 0.03 * sq, 0.84), pole.set(-1, -0.7, -0.4));      // (his hands come round onto the back of your ribs: further round and his forearms would be through you)
+      for (const n of ['L', 'R']) bn['hand' + n].rotation.set(0, n === 'L' ? -1.1 : 1.1, 0);          // palms on your back
       if (u > late) rise(bn, clamp((u - late) / (1 - late), 0, 1));
     });
     unsink(bn);
     return;
   }
-  // over your back: bent over you, a hand on each of your shoulders, bouncing
-  const w = arrived(m, p, near && c.t > PILE.mate, 2.5, 5) * (1 - smooth((u - 0.15) / 0.4)), b = Math.abs(Math.sin(t * 6 + seed * 7));
+  // from behind: he jumps onto your back (both feet off the grass as he lands on you, HUG.jump), his chest on your
+  // shoulders, his arms over them and crossed on your chest, his head beside yours; then he hangs there bouncing
+  const w = arrived(m, p, near && c.t > PILE.mate, 2.5, 5) * (1 - smooth((u - 0.15) / 0.4));
+  if (w > 0) m.hugT = (m.hugT || 0) + DT; else m.hugT = 0;
+  const T = m.hugT || 0, hop = Math.sin(Math.PI * clamp(T / HUG.jump[1], 0, 1)) * HUG.jump[0], b = Math.max(0, Math.sin((T - HUG.jump[1]) * 7 + seed * 3)) ** 2 * smooth((T - HUG.jump[1]) / 0.2);
+  const in2 = Math.max(0, dist - HUG.back), up = hop + 0.05 * b;
   blend(bn, w, () => {
-    bn.spine.rotation.set(0.3, 0, 0); bn.chest.rotation.set(0.22, 0, 0); bn.neck.rotation.set(-0.35, 0, 0);
-    for (const n of ['L', 'R']) { const sd = n === 'L' ? 1 : -1; reachArm(bn, n, v2.set(yx + sd * 0.2, 1.16 + 0.02 * b, yz + 0.05), pole.set(sd, 0.2, -0.6)); bn['hand' + n].rotation.set(-0.6, 0, 0); }
+    shift(bn, ux * in2, -0.13, uz * in2);                 // in against your back, knees bent
+    bn.spine.rotation.set(0.42, 0, -0.08); bn.chest.rotation.set(0.3, 0, -0.08); bn.neck.rotation.set(-0.5, 0, -0.1);     // over you, his head to your right
+    reachArm(bn, 'L', on(0.17, -0.07, 1.0), pole.set(1, 0.1, -0.5)); reachArm(bn, 'R', on(0.16, 0.05, 0.92), pole.set(-1, 0.1, -0.5));
+    for (const n of ['L', 'R']) bn['hand' + n].rotation.set(-0.3, n === 'L' ? 1.2 : -1.2, 0);         // palms on your chest
   });
-  if (w > 0) ride(bn, -w * (0.1 + 0.04 * b));
+  if (w > 0) ride(bn, w * up + 0.05 * w * (1 - w), 0, 1.1);      // (and clear of the grass while he lets go: the two poses' legs are mixed joint by joint)
+}
+// their hips' place in a hug (m from your middle: the sim stands them 0.62 and 0.58 away), and the jump onto your back (m up, s)
+const HUG = { kneel: 0.4, back: 0.36, jump: [0.2, 0.42] };
+// Moves his hips and leaves his feet where they are.
+function shift(bn, dx, dy, dz) {
+  ankleOf(bn, 'L', aL); ankleOf(bn, 'R', aR); footOf(bn, 'L', fL); footOf(bn, 'R', fR);
+  bn.hips.position.x += dx; bn.hips.position.y += dy; bn.hips.position.z += dz; aL.y += 0.015; aR.y += 0.015;
+  reachLeg(bn, 'L', aL); aimFoot(bn, 'L', fL); reachLeg(bn, 'R', aR); aimFoot(bn, 'R', fR);
 }
 function flip(m, bn, ch, p) {
   const c = ch.c, seed = gaitOf(m).seed;

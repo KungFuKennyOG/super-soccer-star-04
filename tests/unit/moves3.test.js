@@ -35,9 +35,56 @@ export function measure(rows, t0, t1) {
   }
   return { slide: pct(slide, 0.5), p90: pct(slide, 0.9), worst: pct(slide, 1), n: slide.length, jump, low };
 }
-const WIN = { m3cut: [1.2, 1.9], m3zig: [1.0, 3.0], m3stop: [1.2, 2.4], m3arrive: [1.0, 2.6], m3side: [0.8, 3.3], m3back: [0.8, 2.4] };
+const WIN = { m3cut: [1.2, 1.9], m3zig: [1.0, 3.0], m3stop: [1.2, 2.4], m3arrive: [1.0, 2.6], m3side: [0.9, 1.95], m3back: [0.8, 2.4] };
 const show = (k, r) => `${k}: planted feet ${r.slide.toFixed(2)} m/s (median), ${r.p90.toFixed(2)} (9 in 10), ${r.worst.toFixed(2)} (worst) over ${r.n} frames; worst joint jump ${(r.jump * 100).toFixed(1)} cm; lowest sole ${(r.low * 100).toFixed(1)} cm`;
 
-test('report', () => {
-  for (const [k, [a, b]] of Object.entries(WIN)) console.log(show(k, measure(run(k), a, b)));
+const M = (k, old) => measure(run(k, old ? { old: 1 } : {}), ...WIN[k]);
+
+test('a stop: braking steps and a settling step, and no planted foot slides', () => {
+  for (const k of ['m3stop', 'm3arrive']) {
+    const now = M(k), was = M(k, true);
+    console.log(show(k, now)); console.log(show(k + ' before', was));
+    assert.ok(now.p90 < 0.05, `${k}: nine planted frames in ten are still (${now.p90.toFixed(2)} m/s; before: ${was.p90.toFixed(2)})`);
+    assert.ok(now.jump < 0.16 && now.low > -0.01, `${k}: nothing jumps (${(now.jump * 100).toFixed(1)} cm), nothing under the grass`);
+  }
+  assert.ok(M('m3stop').worst < 0.3 && M('m3stop', true).p90 > 1, 'a hard stop: the worst planted frame is under 0.3 m/s where the feet used to slide at over 1');
+  // a foot comes down ahead of his hips while he is still moving fast
+  const rows = run('m3stop'), brake = rows.filter(r => r.t > 1.25 && r.t < 1.5 && r.fw && r.fw.mode === 'stop');
+  const ahead = Math.max(...brake.map(r => Math.max(...['footL', 'footR'].map(b => (r.W[b].low < 0.02 ? r.W[b].ankle.x - (r.J.hips.x + r.p.x) : -9)))));
+  assert.ok(brake.length > 8 && ahead > 0.25, `a braking foot is down ${(ahead * 100).toFixed(0)} cm ahead of his hips`);
+  const end = rows.filter(r => r.t > 3);
+  assert.ok(end.every(r => !r.fw.mode), 'and it is over once he stands');
+});
+
+test('a cut: the outside foot is planted wide and held while he is turned, hips down, then he goes', () => {
+  for (const [ang, out] of [[80, 'R'], [-80, 'L'], [50, 'R'], [120, 'R']]) {
+    const rows = run('m3cut', { ang }), cut = rows.filter(r => r.fw && r.fw.mode === 'cut'), held = cut.filter(r => r.fw[out] === 'lock'), other = out === 'R' ? 'L' : 'R', name = `a cut of ${ang} degrees`;
+    assert.ok(cut.length >= 6 && cut[0].t > 1.2 && cut[0].t < 1.36, `${name}: begins as his velocity is turned (${cut[0]?.t.toFixed(2)} s)`);
+    assert.ok(held.length >= 4 && cut.every(r => !r.fw[other]), `${name}: the ${out} foot is the one planted (${held.length} frames)`);
+    const b = 'foot' + out, still = held.slice(2), slide = Math.max(...still.slice(1).map((r, i) => Math.hypot(r.W[b].ball.x - still[i].W[b].ball.x, r.W[b].ball.z - still[i].W[b].ball.z) / DT));      // (after the two frames it lands over)
+    assert.ok(still.length >= 3 && slide < 0.05, `${name}: it stays where it is put (${slide.toFixed(3)} m/s over ${still.length} frames)`);
+    // wide of his body, on the side away from where he is going (he runs along +x: his left is -z)
+    const r = still[0], wide = (r.W[b].ankle.z - (r.p.z + r.J.hips.z)) * (out === 'R' ? 1 : -1);
+    assert.ok(wide > 0.2 && wide < 0.5, `${name}: ${(wide * 100).toFixed(0)} cm outside his hips`);
+    const before = rows.filter(q => q.t > 0.9 && q.t < 1.2), base = before.reduce((s, q) => s + q.hipY, 0) / before.length, low = Math.min(...cut.map(q => q.hipY));
+    assert.ok(base - low > 0.04 && base - low < 0.22, `${name}: his hips drop ${((base - low) * 100).toFixed(0)} cm`);
+    const m = measure(rows, 1.2, 1.9);
+    assert.ok(m.jump < 0.3 && m.low > -0.01, `${name}: no joint jumps (${(m.jump * 100).toFixed(0)} cm), nothing under the grass`);
+    if (ang === 80) console.log(show('m3cut', m), `| hips drop ${((base - low) * 100).toFixed(0)} cm, the foot ${(wide * 100).toFixed(0)} cm outside his hips, held ${held.length} frames (${(held.length / 72).toFixed(2)} s)`);
+  }
+  console.log(show('m3cut before', measure(run('m3cut', { old: 1 }), 1.2, 1.9)));
+  assert.ok(run('m3cut', { ang: 12 }).every(r => !r.fw || r.fw.mode !== 'cut'), 'a gentle change of direction is not a cut');
+});
+
+test('side-steps and backing off are on recorded strides, a foot that bears weight held to the pitch', () => {
+  for (const k of ['m3side', 'm3back', 'm3zig']) {
+    const now = M(k), was = M(k, true);
+    console.log(show(k, now)); console.log(show(k + ' before', was));
+    assert.ok(now.slide < 0.05, `${k}: planted feet ${now.slide.toFixed(2)} m/s (median)`);
+    assert.ok(now.jump < 0.3 && now.low > -0.012, `${k}: nothing jumps (${(now.jump * 100).toFixed(1)} cm), nothing under the grass (${(now.low * 100).toFixed(1)} cm)`);
+  }
+});
+
+test('a left-footed man, and your own first-person legs', () => {
+  for (const k of ['m3stop', 'm3cut', 'm3side']) { const r = measure(run(k, {}, 'L'), ...WIN[k]); assert.ok(r.jump < 0.3 && r.low > -0.012, `${k}, left-footed: ${show(k, r)}`); }
 });
