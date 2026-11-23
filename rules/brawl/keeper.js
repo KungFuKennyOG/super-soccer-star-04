@@ -10,8 +10,9 @@ import { isUp } from './hits.js';
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
 
 // Every step, for each keeper who is on his feet. Returns where he wants to be ({ x, z, speed }).
-export function keeperStep(w, p, dt, ev, rnd = Math.random) {
-  const b = w.ball, dir = dirOf(p.team), line = ownLine(w, p.team), end = -dir;
+// goal: the end he's keeping (-1 / 1), when it isn't his side's own (a shoot-out).
+export function keeperStep(w, p, dt, ev, rnd = Math.random, goal = null) {
+  const b = w.ball, dir = goal ? -goal : dirOf(w, p.team), line = goal ? goal * w.L : ownLine(w, p.team), end = -dir;
   if (p.holding) return { x: p.x, z: p.z, speed: 0 };
   // a shot (or any ball) on its way at his goal
   // (a shot, or anything else hit hard enough to be one; a pass is claimed below instead)
@@ -28,8 +29,9 @@ export function keeperStep(w, p, dt, ev, rnd = Math.random) {
       }
       p.save.eta = c.t;
       // the ball reaches him
-      if (p.save.ok && (b.z - p.z) * end > -0.4 && Math.abs(b.x - p.x) < KEEPER.reach + 0.4 && b.y < KEEPER.reachUp + 0.3) saveIt(w, p, ev, rnd);
-      return { x: clamp(c.x, -GOAL2.halfW, GOAL2.halfW), z: line + dir * KEEPER.line * 0.5, speed: KEEPER.dive };
+      if (p.save.ok && (b.z - p.z) * end > -0.4 && Math.abs(b.x - p.x) < KEEPER.reach + 0.4 && b.y < KEEPER.reachUp + 0.3) saveIt(w, p, ev, rnd, dir);
+      // (a penalty: he's already gone the way he guessed)
+      return { x: p.save.pen ? p.save.x : clamp(c.x, -GOAL2.halfW, GOAL2.halfW), z: line + dir * KEEPER.line * 0.5, speed: KEEPER.dive };
     }
   }
   // a loose ball near him that he gets to first
@@ -37,7 +39,7 @@ export function keeperStep(w, p, dt, ev, rnd = Math.random) {
     const d = Math.hypot(b.x - p.x, b.z - p.z), inBox = Math.abs(b.x) < 20 && (b.z - line) * dir < 16.5;
     const nearest = w.players.every(q => q === p || !isUp(q) || Math.hypot(b.x - q.x, b.z - q.z) > d - 0.5);
     if ((inBox || (w.pass && w.pass.to === p.id)) && d < KEEPER.claim && nearest) {
-      if (d < 1.1) { p.holding = true; w.owner = p.id; w.lastTeam = p.team; p.holdT = 0; p.save = null; ev.push({ type: 'claim', id: p.id }); }
+      if (d < 1.1) { if (w.offside && w.offside.team !== p.team) w.offside = null; p.holding = true; w.owner = p.id; w.lastTeam = p.team; p.holdT = 0; p.save = null; ev.push({ type: 'claim', id: p.id }); }
       return { x: b.x, z: b.z, speed: RUN.sprint };
     }
   }
@@ -46,8 +48,9 @@ export function keeperStep(w, p, dt, ev, rnd = Math.random) {
   return { x: tx, z: line + dir * KEEPER.line, speed: RUN.gk };
 }
 
-function saveIt(w, p, ev, rnd) {
-  const b = w.ball, dir = dirOf(p.team);
+function saveIt(w, p, ev, rnd, dir) {
+  const b = w.ball;
+  if (w.offside && w.offside.team !== p.team) w.offside = null;
   if (p.save.kind === 'catch') {
     p.holding = true; w.owner = p.id; w.lastTeam = p.team; p.holdT = 0;
     b.vx = b.vy = b.vz = 0;

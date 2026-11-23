@@ -89,10 +89,12 @@ export function table(g) {
   return Object.values(rows).sort((x, y) => y.pts - x.pts || (y.gf - y.ga) - (x.gf - x.ga) || y.gf - x.gf || byId(y.id).s - byId(x.id).s);
 }
 
-// Record your result (your goals, theirs) and move the cup on.
+// Record your result (your goals, theirs) and move the cup on. pens: a knockout level after 90 minutes
+// went to penalties and you won them (true) or lost them (false) (the flat-screen game; the VR game's
+// knockouts never end level).
 // Returns { result: 'win' | 'draw' | 'loss', retry, out, champion, advanced }.
-export function playUser(cup, us, them, rnd = Math.random) {
-  const result = us > them ? 'win' : us < them ? 'loss' : 'draw';
+export function playUser(cup, us, them, rnd = Math.random, pens = null) {
+  const result = us > them || (us === them && pens === true) ? 'win' : us < them || (us === them && pens === false) ? 'loss' : 'draw';
   if (cup.stage === 'group') {
     const md = cup.matchday;
     for (const g of cup.groups) for (const f of g.fixtures) {
@@ -114,13 +116,13 @@ export function playUser(cup, us, them, rnd = Math.random) {
     if (cup.continues > 0) { cup.continues--; return { result, retry: true, out: false, champion: false, advanced: false }; }
     const t = cup.rounds[cup.stage].find(x => x.a === cup.user || x.b === cup.user);
     t.ga = t.a === cup.user ? us : them; t.gb = t.a === cup.user ? them : us;
-    t.winner = t.a === cup.user ? t.b : t.a;
+    t.winner = t.a === cup.user ? t.b : t.a; t.pens = us === them;
     cup.out = true;
     finishWithoutUser(cup, rnd);
     return { result, retry: false, out: true, champion: false, advanced: false };
   }
   const t = cup.rounds[cup.stage].find(x => x.a === cup.user || x.b === cup.user);
-  t.ga = t.a === cup.user ? us : them; t.gb = t.a === cup.user ? them : us; t.winner = cup.user;
+  t.ga = t.a === cup.user ? us : them; t.gb = t.a === cup.user ? them : us; t.winner = cup.user; t.pens = us === them;
   simRound(cup.rounds[cup.stage], rnd);
   const champion = advance(cup);
   return { result, retry: false, out: false, champion, advanced: true };

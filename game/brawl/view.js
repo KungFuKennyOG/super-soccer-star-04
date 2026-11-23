@@ -54,6 +54,9 @@ export function createView(scene, w, models) {
     update(dt, t) {
       for (const p of w.players) {
         const m = models[p.id];
+        // sent off: gone down the tunnel
+        m.root.visible = m.shadow.visible = p.state !== 'off';
+        if (p.state === 'off') continue;
         if (m.rag) {
           stepRagdoll(m, dt, p.state === 'air' || p.state === 'down' ? { x: p.x, z: p.z } : null);
           poseRagdoll(m);
@@ -88,7 +91,7 @@ export function createTvCamera(camera, w, plan) {
   camera.fov = w.n === 6 ? 30 : 27; camera.near = 0.5; camera.far = 600; camera.updateProjectionMatrix();
   return {
     update(dt) {
-      const b = w.ball, reach = w.L - 14;
+      const b = w.ball, reach = w.L - 7;
       lead.set(b.x * 0.35, 0, Math.max(-reach, Math.min(reach, b.z + b.vz * 0.35)));
       at.lerp(lead, Math.min(1, dt * 2.2));
       camera.position.set(x, y, at.z * 0.94);

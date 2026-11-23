@@ -6,6 +6,13 @@ import { createBrawl, side, homeSpot, dirOf } from '../../rules/brawl/world.js';
 import { stepBrawl } from '../../rules/brawl/sim.js';
 import { newBall, stepBall } from '../../rules/brawl/ball.js';
 import { startLunge, launch, stepHits } from '../../rules/brawl/hits.js';
+import { startSetPiece } from '../../rules/brawl/setpiece.js';
+import { referee, sendOff, inBox, judgeTackle } from '../../rules/brawl/fouls.js';
+import { offsideLine } from '../../rules/brawl/offside.js';
+import { passTo } from '../../rules/brawl/kicks.js';
+import { decided } from '../../rules/brawl/shootout.js';
+import { createCup, playUser } from '../../rules/cup.js';
+import { CLUBS } from '../../rules/teams.js';
 import { pickLine } from '../../rules/brawl/caster.js';
 import { rng } from '../../rules/looks.js';
 
@@ -19,7 +26,7 @@ test('6 and 11 a side: a keeper each, everyone in his own half at kick-off', () 
       const s = side(w, team);
       assert.equal(s.length, n);
       assert.equal(s.filter(p => p.line === 'gk').length, 1);
-      for (const p of s) assert.ok(p.z * dirOf(team) <= 1e-9, `${p.id} in his own half (${p.z})`);
+      for (const p of s) assert.ok(p.z * dirOf(w, team) <= 1e-9, `${p.id} in his own half (${p.z})`);
       for (const p of s) { const h = homeSpot(w, p); assert.ok(Math.abs(h.x) < w.W && Math.abs(h.z) < w.L); }
     }
   }
@@ -37,11 +44,17 @@ const fullMatch = (n, chaos, seed) => {
   return seen;
 };
 
-test('plain football (the default): a whole match plays out, tackles win the ball, nobody leaves the ground', () => {
+test('plain football (the default): a whole match plays out, tackles win the ball, the only men down are fouled', () => {
   for (const n of [6, 11]) {
-    const seen = fullMatch(n, 0, 7 + n);
-    assert.ok(seen.tackled > 3, `${n}: ${JSON.stringify(seen)}`);
-    assert.equal(seen.launch || 0, 0);
+    const r = rng(7 + n), w = createBrawl({ n, real: 180 }), seen = {};
+    let steps = 0;
+    while (w.phase !== 'full' && steps++ < 60 * 400) for (const e of stepBrawl(w, { auto: true }, 1 / 60, r)) {
+      seen[e.type] = (seen[e.type] || 0) + 1;
+      if (e.type === 'launch') assert.equal(e.kind, 'foul');
+    }
+    assert.equal(w.phase, 'full');
+    assert.ok(seen.tackled > 3 && seen.halftime === 1, `${n}: ${JSON.stringify(seen)}`);
+    assert.equal(seen.launch || 0, seen.foul || 0);
   }
 });
 
@@ -147,13 +160,111 @@ test('ball physics: the posts, the net, the touchline', () => {
   assert.ok(ev2.some(e => e.type === 'out' && e.where === 'side'));
 });
 
-test('the ball out of play comes back in, and the side that put it out has to wait', () => {
+test("a throw-in: the other side's man walks to the line, picks it up, throws it in", () => {
   const w = createBrawl({ n: 6 }); toPlay(w);
   w.owner = null; w.lastTeam = 'home'; Object.assign(w.ball, { x: w.W - 1, y: 0.12, z: 5, vx: 12, vy: 0, vz: 0 });
-  const ev = play(w, 0.4, {});
-  assert.ok(ev.some(e => e.type === 'out' && e.to === 'away'));
-  assert.equal(w.noTouch.team, 'home');
-  assert.ok(Math.abs(w.ball.x) < w.W);
+  const ev = play(w, 0.4, { auto: true });
+  const sp = ev.find(e => e.type === 'setpiece');
+  assert.equal(sp && sp.kind, 'throw'); assert.equal(sp.team, 'away');
+  const later = play(w, 9, { auto: true });
+  assert.ok(later.some(e => e.type === 'ready' && e.kind === 'throw'), 'he got there');
+  assert.ok(later.some(e => e.type === 'throw'), 'and threw it');
+  assert.ok(later.findIndex(e => e.type === 'ready') < later.findIndex(e => e.type === 'throw'));
+});
+
+test('your set piece waits for you: a free kick goes when you press, a shot aimed where the stick says', () => {
+  const w = createBrawl({ n: 6 }); toPlay(w);
+  const ev = [];
+  startSetPiece(w, 'free', 'home', { x: 0, z: -w.L + 22 }, ev);
+  assert.ok(w.sp.wall.length >= 2, 'a wall in front of goal');
+  ev.push(...play(w, 8, {}));
+  assert.ok(ev.some(e => e.type === 'ready'));
+  assert.equal(w.phase, 'setpiece', 'still waiting for you');
+  assert.equal(w.ctrl, w.sp.taker);
+  for (const p of w.players) if (p.team === 'away' && p.line !== 'gk') assert.ok(Math.hypot(p.x - w.sp.x, p.z - w.sp.z) > 8.5 || w.sp.wall.includes(p.id), `${p.id} ten yards away`);
+  for (let i = 0; i < 30; i++) stepBrawl(w, { move: { x: 1, z: 0 }, shoot: true }, 1 / 60);
+  const go = [...stepBrawl(w, { move: { x: 1, z: 0 } }, 1 / 60), ...play(w, 1.5, {})];
+  assert.ok(go.some(e => e.type === 'shot'));
+  assert.equal(w.phase !== 'setpiece', true);
+});
+
+test('a foul: the man goes down, a free kick (or a penalty in the box), cards; a second yellow sends him off', () => {
+  const w = createBrawl({ n: 6 }); toPlay(w);
+  const car = w.byId[w.owner], foe = side(w, 'away').find(p => p.line === 'fwd') || side(w, 'away')[1];
+  const ev = [];
+  launch(w, car, 2, 0, 1, foe, ev, 'foul');
+  ev.push({ type: 'foul', id: foe.id, on: car.id, big: true, behind: true, x: car.x, z: car.z });
+  const call = referee(w, foe, car, true, true, () => 0.2);
+  assert.equal(call.card, 'yellow'); assert.equal(foe.yellow, 1);
+  const again = referee(w, foe, car, true, true, () => 0.2);
+  assert.equal(again.card, 'red2'); assert.ok(again.off);
+  sendOff(w, foe);
+  assert.equal(foe.state, 'off');
+  const left = play(w, 3, { auto: true });
+  assert.ok(!left.some(e => e.id === foe.id && e.type === 'received'));
+  // home defends the goal at +L in the first half, away the one at -L
+  assert.ok(inBox(w, 'home', 0, w.L - 5) && !inBox(w, 'home', 0, 0) && !inBox(w, 'away', 0, w.L - 5) && inBox(w, 'away', 0, -w.L + 5));
+});
+
+test('a tackle in plain football is clean, a miss, or a foul, and fouls whistle up a free kick', () => {
+  const w = createBrawl({ n: 6 }); toPlay(w);
+  const car = w.byId[w.owner], foe = side(w, 'away').find(p => p.line !== 'gk');
+  foe.x = car.x; foe.z = car.z + 1.2; foe.fx = 0; foe.fz = -1;          // from behind
+  startLunge(foe, { x: 0, z: -1 }, true);
+  let k = 0; const ev = play(w, 0.5, {}, () => [0.9, 0.1][k++ % 2]);    // the dice: no win, then a foul
+  assert.ok(ev.some(e => e.type === 'foul' && e.on === car.id), ev.map(e => e.type).join(','));
+  assert.ok(ev.some(e => e.type === 'setpiece' && e.team === 'home'));
+  assert.equal(judgeTackle({ x: 0, z: -1 }, { x: 0, z: 0, fx: 0, fz: -1 }, false, () => 0.1), 'clean');
+});
+
+test('offside: a pass to a man beyond the second-last defender, and he is caught when he touches it', () => {
+  const w = createBrawl({ n: 6 }); toPlay(w);
+  const you = w.byId[w.owner], mate = side(w, 'home').find(p => p.line === 'fwd' && p !== you) || side(w, 'home').find(p => p.line === 'mid');
+  you.x = 0; you.z = -5;
+  for (const p of side(w, 'away')) if (p.line !== 'gk') { p.x = 15; p.z = -10; }
+  mate.x = 0; mate.z = -25;                                            // home attacks -z: well beyond them
+  assert.ok(mate.z * dirOf(w, 'home') > offsideLine(w, 'home'));
+  passTo(w, you, mate, []);
+  assert.ok(w.offside && w.offside.off[mate.id]);
+  const ev = play(w, 3, {});
+  assert.ok(ev.some(e => e.type === 'offside' && e.id === mate.id), ev.map(e => e.type).join(','));
+  assert.equal(w.sp && w.sp.team, 'away');
+});
+
+test('half time: the clock stops at 45, the sides change ends, the other side kicks off', () => {
+  const w = createBrawl({ n: 6, real: 20 }); toPlay(w);
+  const ev = play(w, 14, { auto: true });
+  assert.ok(ev.some(e => e.type === 'halftime'));
+  assert.equal(w.half, 2);
+  assert.equal(dirOf(w, 'home'), 1);
+  assert.equal(w.kickoffTeam, 'away');
+});
+
+test('a knockout level at full time goes to penalties, and the shoot-out is decided properly', () => {
+  assert.equal(decided({ score: { home: 3, away: 0 }, taken: { home: 3, away: 3 } }), 'home');
+  assert.equal(decided({ score: { home: 3, away: 2 }, taken: { home: 4, away: 3 } }), null);
+  assert.equal(decided({ score: { home: 5, away: 5 }, taken: { home: 5, away: 5 } }), null);
+  assert.equal(decided({ score: { home: 6, away: 5 }, taken: { home: 6, away: 6 } }), 'home');
+  const w = createBrawl({ n: 6, real: 6, knockout: true });
+  let ev = [], steps = 0;
+  while (w.phase !== 'full' && steps++ < 60 * 200) {
+    if (w.phase === 'play' || w.phase === 'kickoff') w.score.home = w.score.away = 0;     // keep it level
+    ev.push(...stepBrawl(w, { auto: true }, 1 / 60));
+  }
+  assert.ok(ev.some(e => e.type === 'shootout'));
+  const pens = ev.filter(e => e.type === 'pen');
+  assert.ok(pens.length >= 6, `${pens.length} kicks`);
+  const end = ev.find(e => e.type === 'fulltime');
+  assert.ok(end.winner === 'home' || end.winner === 'away');
+  assert.equal(w.score.home, w.score.away, 'the shoot-out is not added to the score');
+});
+
+test('a cup tie won on penalties counts as a win', () => {
+  const cup = createCup('champions', CLUBS[0].id, rng(4));
+  cup.continues = 0;
+  const r = playUser(cup, 1, 1, rng(5), true);
+  assert.equal(r.result, 'win');
+  assert.ok(r.advanced);
 });
 
 test('the commentator: clips for the football, dry lines for the hits', () => {

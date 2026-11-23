@@ -8,7 +8,7 @@ import { createBrawl, clockText } from '../../rules/brawl/world.js';
 import { stepBrawl } from '../../rules/brawl/sim.js';
 import { pickLine } from '../../rules/brawl/caster.js';
 import { byId, CLUBS, matchKit } from '../../rules/teams.js';
-import { readSettings, showMenu, panels } from './menu.js';
+import { readSettings, showMenu, panels, cupMatch, cupResult } from './menu.js';
 import { readInput } from './pad.js';
 
 const $ = id => document.getElementById(id);
@@ -19,8 +19,8 @@ else boot();
 async function boot() {
   // the stadium is built round a whole pitch of this size: set it before any of the ground's modules load
   setFullPitch(SIZES[S.n].halfW, SIZES[S.n].halfL);
-  const [{ buildStadium }, { venueFor }, { createWeather }, { dressSides, createView, createTvCamera }, { startAudio, sfx, audioOut }] = await Promise.all([
-    import('../ps2/stadium.js'), import('../grounds.js'), import('../ps2/weather.js'), import('./view.js'), import('../audio.js'),
+  const [{ buildStadium }, { venueFor }, { createWeather }, { dressSides, createView, createTvCamera }, { startAudio, sfx, audioOut }, { createAim }] = await Promise.all([
+    import('../ps2/stadium.js'), import('../grounds.js'), import('../ps2/weather.js'), import('./view.js'), import('../audio.js'), import('./aim.js'),
   ]);
   const home = byId(S.home), away = byId(S.away);
   const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -37,10 +37,12 @@ async function boot() {
   stadium.setWeather(S.wx);
   const weather = createWeather(scene); weather.set(S.wx); weather.bright?.(stadium.weatherBright);
 
-  const w = createBrawl({ n: S.n, chaos: S.chaos, real: S.len });
+  const cm = cupMatch(S);
+  const w = createBrawl({ n: S.n, chaos: S.chaos, real: S.len, knockout: !!(cm && cm.knockout) });
   w.demo = S.demo;
   const models = dressSides(scene, w, home, away);
-  const view = createView(scene, w, models), tv = createTvCamera(camera, w, ground.plan);
+  const view = createView(scene, w, models), tv = createTvCamera(camera, w, ground.plan), aim = createAim(scene, w);
+  if (cm) { $('stage').hidden = false; $('stage').textContent = cm.label; }
   tv.snap();
 
   // HUD
@@ -52,6 +54,16 @@ async function boot() {
   const ui = panels(S, { resume: () => setPause(false) });
   function setPause(on) { paused = on; ui.pause(on, `${home.name} ${w.score.home} - ${w.score.away} ${away.name}`); }
   const banner = (text, secs = 2) => { $('banner').textContent = text; $('banner').classList.add('on'); bannerT = secs; };
+  let cardT = 0;
+  const showCard = color => { $('card').style.background = color === 'red' ? '#d8261e' : '#f2d22e'; $('card').hidden = false; cardT = 2; };
+  const NAMES = { free: 'FREE KICK', corner: 'CORNER', throw: 'THROW-IN', goalkick: 'GOAL KICK', penalty: 'PENALTY!' };
+  // the shoot-out: a dot per kick, green in, red missed
+  function pensHud() {
+    const so = w.so; if (!so) return;
+    const row = team => so.log.filter(k => k.team === team).map(k => `<b class="${k.scored ? 'y' : 'n'}"></b>`).join('') + '<b></b>'.repeat(Math.max(0, 5 - so.taken[team]));
+    $('pens').innerHTML = `${home.id} ${row('home')} ${so.score.home}<br>${away.id} ${row('away')} ${so.score.away}`;
+    $('pens').hidden = false;
+  }
 
   // the commentator: recorded clips for the football, subtitles (and the browser's British voice, if it has
   // one) for everything else
@@ -85,7 +97,15 @@ async function boot() {
     for (const e of ev) {
       say(pickLine(e, w));
       switch (e.type) {
-        case 'kickoff': case 'restart': sfx('whistle'); break;
+        case 'kickoff': sfx('whistle'); if (e.half === 2 && w.clock > 0) banner('SECOND HALF', 1.6); break;
+        case 'whistle': sfx('whistle'); banner(e.kind === 'penalty' ? 'PENALTY!' : 'FOUL', 1.6); break;
+        case 'card': showCard(e.color); banner(e.color === 'red' ? (e.second ? 'SECOND YELLOW' : 'RED CARD') : 'YELLOW CARD', 2); if (e.color === 'red') stadium.ooh(); break;
+        case 'offside': sfx('whistle'); banner('OFFSIDE', 1.6); break;
+        case 'halftime': sfx('whistle'); setTimeout(() => sfx('whistle'), 350); banner(`HALF TIME  ${w.score.home} - ${w.score.away}`, 2.8); break;
+        case 'setpiece': if (e.kind !== 'penalty' && !w.so) banner(NAMES[e.kind], 1.2); break;
+        case 'throw': sfx('pass', 0.3); break;
+        case 'shootout': sfx('whistle'); banner('PENALTIES', 2.4); pensHud(); break;
+        case 'pen': pensHud(); if (e.scored) { sfx('net'); sfx('roar'); stadium.netHit(w.ball.x, w.ball.y); if (e.team === 'home') stadium.cheer(true); else stadium.theirs(); } else { sfx('post'); stadium.ooh(); } break;
         case 'pass': case 'clear': sfx('pass', e.power || 0.5); break;
         case 'shot': sfx('kick', e.power || 0.7); if (e.speed > 24) sfx('rise'); break;
         case 'launch': thud(0.5); if (e.kind === 'big' || e.power > 9) sfx('ooh'); break;
@@ -102,9 +122,12 @@ async function boot() {
         case 'tackled': sfx('touch'); break;
         case 'fulltime': {
           done = true; sfx('whistle');
-          const s = w.stats;
-          ui.full(`${home.name} ${w.score.home} - ${w.score.away} ${away.name}`, !w.brawl ? '' :
-            `Men sent flying: <b>${s.hits}</b><br>Longest flight: <b>${s.longest.toFixed(1)} m</b><br>Total distance flown: <b>${Math.round(s.flown)} m</b><br><i>A competitive game, played in good spirits.</i>`);
+          const s = w.stats, pens = e.pens ? ` (${e.pens.home} - ${e.pens.away} on penalties)` : '';
+          let stats = !w.brawl ? `Fouls: ${w.fouls.home} - ${w.fouls.away}` :
+            `Men sent flying: <b>${s.hits}</b><br>Longest flight: <b>${s.longest.toFixed(1)} m</b><br>Total distance flown: <b>${Math.round(s.flown)} m</b><br><i>A competitive game, played in good spirits.</i>`;
+          const cr = cm && cupResult(w.score.home, w.score.away, e.pens ? e.winner === 'home' : null);
+          if (cr) stats = `${cr.text}<br><br>${stats}`;
+          ui.full(`${home.name} ${w.score.home} - ${w.score.away} ${away.name}${pens}`, stats, cr && cr.next);
           break;
         }
       }
@@ -123,6 +146,7 @@ async function boot() {
       const n = Math.ceil(dt / (1 / 60) - 1e-6), h = dt / n;
       for (let i = 0; i < n; i++) onEvents(stepBrawl(w, inp, h));
       view.update(dt, t);
+      aim.update(inp, camera, t);
       if (!dbgCam) tv.update(dt);
       stadium.update(dt, t, w.ball);
       weather.update(t, camera.position);
@@ -137,6 +161,7 @@ async function boot() {
     $('power').style.display = w.charge > 0 ? 'block' : 'none';
     if (w.charge > 0) $('power').firstChild.style.width = `${Math.min(100, w.charge / 0.9 * 100)}%`;
     if (bannerT > 0 && (bannerT -= dt) <= 0) $('banner').classList.remove('on');
+    if (cardT > 0 && (cardT -= dt) <= 0) $('card').hidden = true;
     if (subT > 0 && (subT -= dt) <= 0) { $('sub').style.opacity = 0; subPri = 0; }
     if (draw) renderer.render(scene, camera);
   }

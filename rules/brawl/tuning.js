@@ -47,8 +47,7 @@ export const KICK = {
 export const HIT = {
   lunge: 9.5, t: 0.34, reach: 1.15, cool: 0.9, miss: 0.55,      // a missed lunge: on the floor this long
   base: 4.5, k: 0.45, big: 1.5, up: [3, 7],
-  jab: 0.38,
-  win: 0.62, slideWin: 0.8,                                      // plain football: how often a tackle comes off                                                     // a lunge that isn't a big one: he's knocked over more than sent flying
+  jab: 0.38,                                                     // a lunge that isn't a big one: he's knocked over more than sent flying
   barge: 1.6,                                                    // the man on the ball shoves anyone inside this
   domino: 6.5, dominoR: 1.0, dominoKeep: 0.62,                    // a flying body flattens whoever it hits faster than this
   shotLaunch: 24,                                                // a shot faster than this sends the man it hits flying
@@ -67,4 +66,23 @@ export const BRAIN = {
 export const KEEPER = { line: 1.2, track: 0.1, reach: 2.4, reachUp: 2.6, react: 0.12, dive: 7.5, claim: 9, catchBelow: 21 };
 
 // The clock: a match lasts `real` seconds and the scoreboard shows 90 minutes over it.
-export const CLOCK = { real: 240, kickoff: 1.2, goal: 3.2, restart: 1.4 };
+export const CLOCK = { real: 240, kickoff: 1.2, goal: 3.2, restart: 1.4, half: 3 };
+
+// Plain football's referee (rules/brawl/fouls.js). A tackle on the man on the ball: win (or slideWin) is
+// how often it comes off, x behindWin from behind; a slide from behind that wins it is still a foul
+// throughBack of the time; one that doesn't come off is a foul slideFoul (standFoul for a standing one).
+// Cards: red for a slide from behind, yellow by kind of tackle; a second yellow is a red.
+export const FOUL = {
+  win: 0.62, slideWin: 0.8, behindWin: 0.6, throughBack: 0.25, slideFoul: 0.4, standFoul: 0.12,
+  red: 0.03, yellowBehind: 0.35, yellowSlide: 0.15, yellowStand: 0.02, boxCare: 0.35, fall: [2.6, 1.4],      // a fouled man goes down: speed along his run, up
+};
+
+// Set pieces (rules/brawl/setpiece.js). The taker walks to the ball (teleported there after walkMax s),
+// waits (the AI for aiWait s, a penalty penWait; you as long as you like, up to humanWait), then runs up
+// from runup m behind it at runSpeed and strikes it. A throw-in is let go throwRelease s after he starts
+// it (game/brawl/throwin.js's wind-up plus release). Free kicks within wallFrom m of goal get a wall.
+export const TAKE = {
+  reach: 0.4, walkMax: 5, aiWait: [0.8, 1.6], penWait: 1.4, humanWait: 12,
+  runup: { free: 2.2, penalty: 3.2, corner: 1.6, goalkick: 2.2 }, runSpeed: 4.2, throwRelease: 0.55,
+  gap: 9.15, wallFrom: 32, wall: { 6: 2, 11: 4 }, spot: 11,
+};

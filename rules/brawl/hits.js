@@ -2,7 +2,8 @@
 // Pure. A man in the air is p.state 'air' with p.air = { x, y, z, vx, vy, vz } (his middle, about hip height);
 // he lands, slides, lies there ('down') and gets up ('getup', then 'up'). The page draws him as a ragdoll
 // (game/brawl/ragdoll.js) and only reads this to know where he ends up.
-import { HIT, BODY } from './tuning.js';
+import { HIT, BODY, FOUL } from './tuning.js';
+import { judgeTackle } from './fouls.js';
 
 const up = p => p.state === 'up';
 let uid = 0;
@@ -57,10 +58,14 @@ export function stepHits(w, dt, ev, rnd = Math.random) {
         // plain football: only the man on the ball can be tackled, and the tackler comes away with it
         if (!w.brawl) {
           if (v.id === w.owner && !v.holding && !L.tried) {
-            // from in front it usually comes off; from behind, or at a man going away at speed, less often
+            // judged by the referee's rules (rules/brawl/fouls.js): clean, a miss, or a foul (he goes down)
             L.tried = true;
-            const front = (p.x - v.x) * v.fx + (p.z - v.z) * v.fz > 0, k = (L.big ? HIT.slideWin : HIT.win) * (front ? 1 : 0.6);
-            if (rnd() < k) { tackle(w, p, v, L.big, ev); L.hit = true; L.t = Math.min(L.t, 0.08); }
+            const call = judgeTackle(p, v, L.big, rnd);
+            if (call === 'clean') { tackle(w, p, v, L.big, ev); L.hit = true; L.t = Math.min(L.t, 0.08); }
+            else if (call === 'foul') { foulOn(w, p, v, L.big, ev); L.hit = true; L.t = Math.min(L.t, 0.08); }
+          } else if (L.big && v.team !== p.team && !L.tried && v.state === 'up') {
+            // a slide that takes a man without the ball
+            L.tried = true; foulOn(w, p, v, true, ev); L.hit = true;
           }
           continue;
         }
@@ -95,6 +100,15 @@ export function stepHits(w, dt, ev, rnd = Math.random) {
       if ((p.getT -= dt) <= 0) { p.state = 'up'; p.stun = 0.15; }
     }
   }
+}
+
+// A foul: he goes down (a trip, not a launch) and the sim blows up (event 'foul').
+function foulOn(w, t, v, big, ev) {
+  const s = Math.hypot(v.vx, v.vz), dx = s > 0.5 ? v.vx / s : t.lunge ? t.lunge.x : v.fx, dz = s > 0.5 ? v.vz / s : t.lunge ? t.lunge.z : v.fz;
+  const behind = (t.x - v.x) * v.fx + (t.z - v.z) * v.fz < 0;
+  const at = { x: v.x, z: v.z };
+  launch(w, v, dx * (FOUL.fall[0] + s * 0.25), dz * (FOUL.fall[0] + s * 0.25), FOUL.fall[1], t, ev, 'foul');
+  ev.push({ type: 'foul', id: t.id, on: v.id, big, behind, x: at.x, z: at.z });
 }
 
 // A clean tackle: the ball is his, and the man who had it stumbles (longer after a slide).

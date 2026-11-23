@@ -2,7 +2,9 @@
 // The side on the ball keeps its shape pushed up, the man on it dribbles at goal, passes when pressed and
 // shoots when he sees it; the other side presses the ball with its nearest two, who go in hard, and
 // everyone else slides across with the ball. A loose ball is chased by the nearest man of each side.
-import { BRAIN, RUN, HIT } from './tuning.js';
+import { BRAIN, RUN, HIT, FOUL } from './tuning.js';
+import { inBox } from './fouls.js';
+import { offsideLine } from './offside.js';
 import { dirOf, shapeSpot } from './world.js';
 import { bestPass, passTo, shoot, shotChance } from './kicks.js';
 import { startLunge, isUp } from './hits.js';
@@ -22,7 +24,7 @@ export function plan(w) {
       jobs[team] = to && to.team === team ? [to.id] : men.slice(0, 1).map(p => p.id);
     } else if (car.team !== team) {
       // one man presses; a second joins once the ball is in our half (always, in the brawl)
-      const inOurHalf = car.z * dirOf(car.team) > 0;
+      const inOurHalf = car.z * dirOf(w, car.team) > 0;
       jobs[team] = men.slice(0, w.brawl || inOurHalf ? BRAIN.press : 1).map(p => p.id);
     }
     else jobs[team] = [];
@@ -32,7 +34,7 @@ export function plan(w) {
 
 // What p wants to do this step: { x, z } a velocity (m/s), plus actions done straight on the world.
 export function think(w, p, dt, ev, rnd = Math.random) {
-  const b = w.ball, dir = dirOf(p.team), jobs = w.brain.jobs[p.team] || [];
+  const b = w.ball, dir = dirOf(w, p.team), jobs = w.brain.jobs[p.team] || [];
   const car = w.owner ? w.byId[w.owner] : null;
   if (car === p) return carry(w, p, dt, ev, rnd);
   // chasing the ball or pressing the man on it
@@ -43,8 +45,10 @@ export function think(w, p, dt, ev, rnd = Math.random) {
     }
     const d = dist(p, car);
     // in range: go in (a big one if he's in the mood), from goal-side if there's time
-    if (d < BRAIN.tackleAt && p.cool <= 0 && rnd() < dt * BRAIN.lungeRate) {
-      const big = rnd() < (w.brawl ? BRAIN.aggro : 0.2);        // (in plain football a big one is a slide)
+    // (in plain football a defender in his own box is careful: fewer tackles, almost no slides)
+    const care = !w.brawl && inBox(w, p.team, car.x, car.z) ? FOUL.boxCare : 1;
+    if (d < BRAIN.tackleAt && p.cool <= 0 && rnd() < dt * BRAIN.lungeRate * care) {
+      const big = rnd() < (w.brawl ? BRAIN.aggro : 0.2 * care);        // (in plain football a big one is a slide)
       startLunge(p, { x: car.x + car.vx * 0.12 - p.x, z: car.z + car.vz * 0.12 - p.z }, big);
       return { x: p.vx, z: p.vz, sprint: big };
     }
@@ -59,12 +63,14 @@ export function think(w, p, dt, ev, rnd = Math.random) {
   // in shape; a forward on his side's ball makes a run beyond the last man
   let s = shapeSpot(w, p);
   if (car && car.team === p.team && p.line === 'fwd') s = { x: s.x, z: s.z + dir * 6 };
+  // stay onside: never further up than the second-last man of theirs (or the ball)
+  if (car && car.team === p.team) { const line = offsideLine(w, p.team) - 0.6; if (s.z * dir > line && s.z * dir > 0) s = { x: s.x, z: line * dir }; }
   return toward(p, s, dist(p, s) > 8 ? RUN.run : RUN.jog, false);
 }
 
 // The man on the ball.
 function carry(w, p, dt, ev, rnd) {
-  const dir = dirOf(p.team), gz = dir * w.L;
+  const dir = dirOf(w, p.team), gz = dir * w.L;
   p.think -= dt;
   const foes = w.players.filter(o => o.team !== p.team && isUp(o));
   // the nearest man in front of him (one behind him isn't stopping him going forward)

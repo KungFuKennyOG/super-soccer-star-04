@@ -35,6 +35,13 @@ try {
     await page.waitForFunction(() => window.brawl, null, { timeout: 180000 });
     console.log(`built in ${((Date.now() - t0) / 1000).toFixed(1)} s`);
     let t = 0;
+    if (process.env.UNTIL) {
+      // run until a condition on the match holds (UNTIL="w.sp && w.sp.kind === 'corner' && w.sp.stage === 'ready'"),
+      // then the times are counted from there
+      const ok = await page.evaluate(cond => { const f = new Function('w', `return (${cond})`), b = window.brawl; for (let i = 0; i < 60 * 600; i++) { if (f(b.w)) return b.w.clock; b.step(1 / 60, false); } return null; }, process.env.UNTIL);
+      console.log(ok === null ? 'UNTIL never happened' : `UNTIL held at ${ok.toFixed(1)} s of match clock`);
+      at.unshift(0);
+    }
     for (const s of at) {
       const ms = await page.evaluate(([from, to]) => { const a = performance.now(); for (let x = from; x < to - 1e-6; x += 1 / 30) window.brawl.step(1 / 30, to - x < 1 / 30 + 1e-6); return performance.now() - a; }, [t, s]);
       t = s;
