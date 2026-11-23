@@ -62,7 +62,63 @@ function spot(kind, c, side, lo, s) {
   if (kind === 'tip' && sd !== s) out.palm.addScaledVector(d, 0.3).y -= 0.25;
   return out;
 }
-export function grip(kind, c, s) { return { L: spot(kind, c, null, 'L', s), R: spot(kind, c, null, 'R', s) }; }
+// q: the grip turned with his trunk (a ball hugged while he lies on his side or gets up: `d` and `f` above are for a
+// man stood up)
+export function grip(kind, c, s, q = null) {
+  const g = { L: spot(kind, c, null, 'L', s), R: spot(kind, c, null, 'R', s) };
+  if (q) for (const lo of ['L', 'R']) { const o = g[lo]; o.palm.sub(c).applyQuaternion(q).add(c); o.N.applyQuaternion(q); o.F.applyQuaternion(q); }
+  return g;
+}
+// Diving: his hands on a ball at c at the end of his reach. u: the way he is stretched (unit, from his hips to the
+// ball); the fingers point on along it, so the hand is in line with the arm (fingers up, as in a standing catch,
+// folded his wrists and elbows double). Across the reach: z toward the shooter, w the top side of him as he lies.
+//   dlow     the bottom hand behind it, the top hand on top: pinned to the grass (coached: "the ball is the third hand")
+//   dw       both palms behind it, thumbs together: a W on its side (a catch off the grass)
+//   dnear    a parry with the bottom hand, the heel of the palm behind the inside of the ball, the top hand short of it
+//   dtop     a parry with the top hand come over (the higher ones: it reaches further), the bottom hand under and short
+//   dboth    a parry with both palms behind it
+// k: for dlow, how far on top the top hand has come (0: beside the other one, as dw); for dnear and dtop, how nearly
+// the other hand gets there too (1: both arms long together; 0: one arm at full stretch, the other left well short)
+const du = new THREE.Vector3(), dz = new THREE.Vector3(), dw = new THREE.Vector3();
+export function diveGrip(kind, c, s, u, k = 1) {
+  const g = {};
+  du.copy(u).normalize(); dw.set(0, 0, 1).cross(du).multiplyScalar(s).normalize(); dz.crossVectors(du, dw).multiplyScalar(s);   // (dz: square to the reach, toward the shooter)
+  for (const lo of ['L', 'R']) {
+    const sd = lo === 'L' ? 1 : -1, bottom = sd === s, t = bottom ? -1 : 1;
+    let a, b, e, fu = 1, fz = 0.12, fw = 0, back = 0, fwd = 0;          // d = a u + b z + e w; f = fu u + fz z + fw w
+    if (kind === 'dlow') { if (bottom) { a = -0.3; b = -0.9; e = -0.28; } else { a = -0.12 - 0.15 * (1 - k); b = -0.3 - 0.55 * (1 - k); e = 0.42 + 0.55 * k; fz = 0.35 * k; } }
+    else if (kind === 'dw') { a = -0.28; b = -0.86; e = t * 0.42; fw = t * 0.2; }
+    else if (kind === 'dboth') { a = -0.42; b = -0.82; e = t * 0.38; fw = t * 0.2; }
+    else if (kind === 'dnear') { if (bottom) { a = -0.5; b = -0.84; e = -0.05; } else { a = -0.45; b = -0.78; e = 0.32 + 0.5 * (1 - k); back = 0.12 + 0.3 * (1 - k); fwd = 0.16 * (1 - k); } }
+    else if (kind === 'dtop') { if (!bottom) { a = -0.5; b = -0.84; e = 0.1; } else { a = -0.45; b = -0.6; e = -0.6; back = 0.2 + 0.25 * (1 - k); } }
+    else throw new Error('grip ' + kind);
+    const d = new THREE.Vector3().addScaledVector(du, a).addScaledVector(dz, b).addScaledVector(dw, e).normalize();
+    const f = new THREE.Vector3().addScaledVector(du, fu).addScaledVector(dz, fz).addScaledVector(dw, fw);
+    const o = g[lo] = { palm: new THREE.Vector3().copy(c).addScaledVector(d, R), N: d.clone().negate(), F: f };
+    o.F.addScaledVector(o.N, -f.dot(o.N)).normalize();
+    if (back) o.palm.addScaledVector(du, -back).addScaledVector(dz, fwd);   // the other hand doesn't get there (and is kept in front of his face)
+  }
+  return g;
+}
+// His chest turns to what he reaches for. An upper arm only comes so far across the chest (about 35 degrees inside
+// straight ahead: REACH.in); asked for more, the trunk turns toward it (spine and chest share it, REACH.turn at
+// most) and the shoulder comes forward with it. Smooth in the target, so nothing can flip. Call before placeHands.
+export const REACH = { in: 0.46, turn: 0.85, share: 1 };
+const rs = new THREE.Vector3(), rc = new THREE.Vector3(), rcq = new THREE.Quaternion(), ry = new THREE.Vector3(0, 1, 0);
+export function turnToReach(bn, g, w = 1) {
+  rcq.copy(bn.hips.quaternion); rc.copy(bn.spine.position).applyQuaternion(rcq).add(bn.hips.position);
+  rcq.multiply(bn.spine.quaternion); rc.add(rs.copy(bn.chest.position).applyQuaternion(rcq)); rcq.multiply(bn.chest.quaternion).invert();
+  let turn = 0;
+  for (const lo of ['L', 'R']) {
+    const sd = lo === 'L' ? 1 : -1;
+    rs.copy(g[lo].palm).sub(rc).applyQuaternion(rcq).sub(bn['clavicle' + lo].position).sub(bn['upperArm' + lo].position);   // shoulder to palm, as the chest sees it
+    const flat = Math.hypot(rs.x, rs.z), inw = Math.atan2(-sd * rs.x, Math.max(rs.z, 0.02 * flat)), ex = Math.max(0, inw - REACH.in);
+    turn += -sd * Math.min(REACH.turn, ex * REACH.share) * sm(0.25, 0.6, flat / (rs.length() || 1));
+  }
+  turn *= w;
+  bn.spine.quaternion.multiply(q2.setFromAxisAngle(ry, turn * 0.45)); bn.chest.quaternion.multiply(q2.setFromAxisAngle(ry, turn * 0.55));
+  return turn;
+}
 
 // The world turn that lays hand `lo`'s palm toward N with the fingers along F (model space).
 function handTurn(lo, N, F, out) {
@@ -103,7 +159,7 @@ function solve(bn, lo, sp, pole, lim) {
 // in each bone's own frame); the arm is sampled at the elbow, down the forearm, the wrist and the hand, and up the
 // upper arm. How far the deepest of those is inside (m, 0 if clear), with the way out of the trunk there in `out`.
 const TRUNK = [['hips', 'spine', 0.165, 0.12], ['spine', 'chest', 0.165, 0.12], ['chest', 'neck', 0.18, 0.125]];
-const fkP = {}, fkQ = {}, tA = new THREE.Vector3(), tB = new THREE.Vector3(), tv = new THREE.Vector3(), tn = new THREE.Vector3(), ti = new THREE.Quaternion();
+const fkP = {}, fkQ = {}, tA = new THREE.Vector3(), tB = new THREE.Vector3(), tv = new THREE.Vector3(), tn = new THREE.Vector3(), ti = new THREE.Quaternion(), hC = new THREE.Vector3();
 function fk(bn, lo) {
   const at = (name, parent) => {
     const b = bn[name], P = fkP[name] ??= new THREE.Vector3(), Q = fkQ[name] ??= new THREE.Quaternion();
@@ -138,8 +194,10 @@ export function armInside(bn, lo, out = null) {
   const pts = ARM_PTS.map(([a, b, k]) => tv.copy(fkP[a + lo]).lerp(fkP[b + lo], k).clone());
   pts.push(tv.set(0, -0.09, 0).applyQuaternion(fkQ['hand' + lo]).add(fkP['hand' + lo]).clone());
   // and his head: a ball 11 cm round, 9 cm up from the top of his neck
-  tA.set(0, 0.09, 0.01).applyQuaternion(fkQ.head).add(fkP.head);
-  const head = p => { const d = 0.115 - tn.copy(p).sub(tA).length(); if (d > worst) { worst = d; insideWhat.part = 'head'; insideWhat.pt = cur; if (out) out.copy(tn).normalize(); } };
+  // (its own vector: tA is the trunk and leg tests' scratch, and until Nov 2026 the head was measured against whatever
+  // they had left in it)
+  hC.set(0, 0.09, 0.01).applyQuaternion(fkQ.head).add(fkP.head);
+  const head = p => { const d = 0.115 - tn.copy(p).sub(hC).length(); if (d > worst) { worst = d; insideWhat.part = 'head'; insideWhat.pt = cur; if (out) out.copy(tn).normalize(); } };
   pts.forEach((p, i) => { cur = i; test(p); if (i >= 2) leg(p); if (i >= 1) head(p); });
   return worst;
 }
@@ -205,12 +263,17 @@ export function underGrass(m) {
 export const ankleFor = pitch => Math.max(0.08 * Math.cos(pitch) + 0.19 * Math.sin(pitch), 0.085 * Math.cos(pitch) - 0.09 * Math.sin(pitch)) + 0.002;
 // Lifts the whole body (the hips) clear of the grass; settle: he is lying or getting up, so whatever is lowest is put
 // down on the grass (lowered as well as lifted: no floating). Returns how far he was moved up (m).
-export function keepAboveGrass(m, settle = false, ball = null) {
+export function keepAboveGrass(m, settle = false, ball = null, dt = 1 / 72) {
   m.root.updateMatrixWorld(true);
   let d = underGrass(m);
   if (ball) d = Math.max(d, BALL_R - ball.y);                         // a ball in his hands (model space) stays on the grass too
-  if (d > 0 || (settle && d < 0)) { m.bone.hips.position.y += d; m.root.updateMatrixWorld(true); return d; }
-  return 0;
+  // (lying or getting up, what he rests on changes from frame to frame: an arm he was lying on is taken away and he
+  // would drop 5 cm in a frame. He is let down, or lifted, at 1.1 m/s at most, and is never left more than 8 mm under)
+  const want = d > 0 || settle ? d : 0, was = m.kOff ?? 0, step = 1.1 * dt;
+  const off = settle || was !== 0 ? Math.max(want - 0.008 * Math.min(1, Math.abs(want - was) / 0.02), Math.min(was + step, Math.max(was - step, want))) : want;
+  m.kOff = settle || Math.abs(off) > 1e-4 ? off : 0;
+  if (off !== 0) { m.bone.hips.position.y += off; m.root.updateMatrixWorld(true); }
+  return off;
 }
 
 // Turns the neck and head toward a point (model space), sharing the turn between them; k: how much.
@@ -273,9 +336,16 @@ export function readyGrip(bn) {
   }
   return out;
 }
+// (the hand turns from one to the other the short way round, as one turn: its two directions blended each on its own
+// could pass through nothing and flip when the grips faced opposite ways)
+const ga = new THREE.Quaternion(), gb = new THREE.Quaternion(), gm = new THREE.Matrix4(), gx = new THREE.Vector3();
+const frameOf = (g, out) => out.setFromRotationMatrix(gm.makeBasis(g.N, gx.copy(g.F).addScaledVector(g.N, -g.F.dot(g.N)).normalize(), v3.crossVectors(g.N, gx)));
 export function lerpGrip(a, b, k) {
   const out = {};
-  for (const lo of ['L', 'R']) out[lo] = { palm: a[lo].palm.clone().lerp(b[lo].palm, k), N: a[lo].N.clone().lerp(b[lo].N, k).normalize(), F: a[lo].F.clone().lerp(b[lo].F, k).normalize() };
+  for (const lo of ['L', 'R']) {
+    frameOf(a[lo], ga).slerp(frameOf(b[lo], gb), k);
+    out[lo] = { palm: a[lo].palm.clone().lerp(b[lo].palm, k), N: new THREE.Vector3(1, 0, 0).applyQuaternion(ga), F: new THREE.Vector3(0, 1, 0).applyQuaternion(ga) };
+  }
   return out;
 }
 // in front of his chest, where a caught ball is held (carried with the trunk)

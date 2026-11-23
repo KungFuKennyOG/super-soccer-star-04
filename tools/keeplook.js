@@ -17,8 +17,10 @@
 import * as THREE from 'three';
 import { createWorld, stepSim } from '../rules/sim.js';
 import { GOAL } from '../rules/tuning.js';
+import { HABIT } from '../game/keeperfeet.js';
+import { FORCE } from '../game/keepersave.js';
 
-const DT = 1 / 72, MZ = 7;
+const DT = 1 / 72, MZ = 7, hipW = new THREE.Vector3();
 const P = (x, z) => [-z, x + MZ];                           // a sim point on the page
 const SETUPS = {
   ready: { secs: 6, walk: { x: 0.25, z: -0.35 }, from: 24, fx: -3 },
@@ -35,13 +37,18 @@ const SETUPS = {
   lrl: { secs: 7, from: 15, fx: 0, sprint: true, move: t => ({ x: t < 1.5 ? 1 : t < 4 ? -1 : t < 6 ? 1 : 0, z: 0 }) },     // a long shuffle left, right, left
   creep: { secs: 6, from: 17, fx: -3, move: t => ({ x: t < 3 ? 0.3 : -0.3, z: 0 }) },                                 // small adjusting steps
   inout: { secs: 6, from: 24, fx: -2, move: t => ({ x: 0.1, z: t < 3 ? -0.7 : 0.7 }) },                               // off his line and back
-  split: { tx: 3.4, ty: 2.2, hold: 1.0, from: 22, secs: 2.5 },                                                         // the split step, then a dive
+  split: { tx: 3.4, ty: 2.2, hold: 1.0, from: 22, secs: 2.5 },
+  // a long way across goal and back, quickly (his spot is scripted: the sim rarely sends him further than a shuffle covers): the crossover step
+  cross: { secs: 6, from: 20, fx: 0, gkPath: t => 3.3 * (Math.min(Math.max(t - 0.6, 0), 1.0) - Math.min(Math.max(t - 2.8, 0), 1.6)) + 1.0 * Math.min(Math.max(t - 4.6, 0), 0.6) },
+  idle: { secs: 10, from: 15, fx: 0 },                                                                                // you stand on the ball 15 m out (&from=): how alive he is as he waits                                                         // the split step, then a dive
 };
 const LET_GO = 1.0;
 
 // One row per sim step: the keeper, the shooter, the ball, who has it, the events.
 export function keeperLog(name, q) {
   const S = { ...SETUPS[name] };
+  if (q.get('gk') !== null) HABIT.seed = +q.get('gk');       // &gk=0..1: which keeper (his habits)
+  if (q.get('var') !== null) FORCE.var = +q.get('var');      // &var=0..59: which version of the save
   for (const k of ['tx', 'ty', 'hold', 'from', 'fx']) if (q.get(k) !== null) S[k] = +q.get(k);
   if (q.get('y') !== null) S.ty = +q.get('y');
   if (q.get('side') === '-1' && S.tx) S.tx = -S.tx;
@@ -66,6 +73,11 @@ export function keeperLog(name, q) {
     const ev = stepSim(w, it, DT, () => 0.5);
     if (w.dead && ev.some(e => e.type === 'goal' || e.type === 'saved' || e.type === 'parried')) w.dead = false;   // play on: no restart on the page
     log.push({ ev, gk: { ...gk, save: gk.save && { ...gk.save } }, you: { ...w.you }, ball: { ...w.ball }, before, owner: w.owner });
+  }
+  // (a scripted keeper: where he is across goal, m, by time; eased so he starts and stops as the sim's does)
+  if (S.gkPath) {
+    let x = S.gkPath(0), v = 0;
+    log.forEach((r, i) => { const want = (S.gkPath((i + 1) * DT) - S.gkPath(i * DT)) / DT; v += Math.max(-24 * DT, Math.min(24 * DT, want - v)); x += v * DT; Object.assign(r.gk, { x, vx: v, vz: 0, save: null, dive: 0, holding: false }); });
   }
   return log;
 }
@@ -96,7 +108,14 @@ const VIEWS = {
 };
 // ...and three that go with him, close: from the front (the striker's side), along the goal line, and three-quarter
 const CLOSE = { cfront: { fov: 26, off: [-5.6, 1.25, 0], y: 1.0 }, cside: { fov: 26, off: [0, 1.15, -5.6], y: 1.0 }, cq: { fov: 26, off: [-4.2, 1.5, 3.6], y: 1.0 }, cup: { fov: 34, off: [-5.6, 1.25, 0], y: 1.35 }, cupside: { fov: 34, off: [0, 1.15, -5.6], y: 1.35 } };
-const VNAMES = ['front', 'side', 'near', 'dive', 'top', 'cfront', 'cside', 'cq', 'chigh', 'chighside'];
+// ...four that go with his hips (a dive leaves his spot behind): front, along the line, three-quarter, from above
+Object.assign(CLOSE, { hfront: { fov: 24, off: [-5.2, 0.5, 0], hips: true }, hside: { fov: 24, off: [0, 0.4, -5.2], hips: true }, hq: { fov: 24, off: [-4, 0.9, 3.4], hips: true }, htop: { fov: 24, off: [-0.6, 5.2, 0], hips: true } });
+// ...and the striker's eyes: 1.7 m up, &eye= m out from the goal line (default 15), level with the middle of the goal.
+// fov 34: at 600 px high that is 17.6 px a degree, about what a Quest 3 shows at framebuffer scale 0.7, so a frame
+// looked at 1:1 is as much of him as the headset draws
+const EYE = typeof location !== 'undefined' ? +(new URLSearchParams(location.search).get('eye') || 15) : 15;
+VIEWS.eye = { fov: 34, cam: [-GOAL.z - EYE, 1.7, MZ], at: [-GOAL.z - 1.2, 1.0, MZ] };
+const VNAMES = ['front', 'side', 'near', 'dive', 'top', 'cfront', 'cside', 'cq', 'chigh', 'chighside', 'hfront', 'hside', 'hq', 'htop', 'eye'];
 CLOSE.chigh = CLOSE.cup; CLOSE.chighside = CLOSE.cupside; delete CLOSE.cup; delete CLOSE.cupside;
 export const KEEP_SHOTS = Object.keys(SETUPS).flatMap(n => ['', ...VNAMES].map(v => 'keep' + n + v));
 export function parseKeepShot(name) {
@@ -108,7 +127,9 @@ export function parseKeepShot(name) {
 // the camera for a view: { fov, cam, at }; root: the keeper's (a close view goes with him)
 export function keepView(view, root) {
   if (!view.close) return view;
-  const c = view.close, p = root.position;
+  const c = view.close;
+  if (c.hips) { const h = (root.userData.hipsBone ??= root.getObjectByName('hips')).getWorldPosition(hipW); return { fov: c.fov, cam: [h.x + c.off[0], h.y + c.off[1], h.z + c.off[2]], at: [h.x, h.y + 0.1, h.z] }; }
+  const p = root.position;
   return { fov: c.fov, cam: [p.x + c.off[0], c.off[1], p.z + c.off[2]], at: [p.x, c.y, p.z] };
 }
 export const toPage = { P, MZ };

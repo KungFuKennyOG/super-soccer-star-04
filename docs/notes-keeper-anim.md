@@ -176,3 +176,128 @@ step (5.5 cm), every timing after the ball is in his hands, the head.
   shoulder itself to come forward (the collarbone), which `placeHand` only does a little.
 - Getting up after a dive (not part of this job): a hand passes 4 to 8 cm into his head's sphere for about ten frames.
 - Nothing has been seen in a headset.
+
+## Dives without arms in the body, the get-up, the crossover, variety, a livelier wait (branch `keeper3`, 23 Nov 2026)
+
+Kenny: "the goalie looks a bit stiff", and before that "his arms go through his body", "the dive looked broken". Rules
+untouched (nothing in `rules/` changed). `game/main.js` and `tools/ps2look.html` untouched.
+
+### Two faults found on the way that were worse than the ones asked about
+
+- **He jumped 1.4 m sideways on the frame every dive ended** and slid back over 0.3 s (0.2 to 0.5 m after a standing
+  save with a side-step). The pose he blended from kept his hips where the dive had left them in the save's own frame
+  after his root had been moved under them, and the last frame of a save was never posed, so his feet were "planted"
+  where a resting skeleton has them. It had not been seen because every close view went with his hips. Fixed in
+  `keeperpose.js` (the remembered pose is moved with the root) and `keepersave.js` / `keeperstand.js` (the last frame is
+  posed). Measured: 97 to 157 m/s change of speed in one frame before, under 5 now (tested).
+- **`armInside` measured his head against the wrong point** (a scratch vector the trunk and leg tests had overwritten),
+  so the "hand in his head for ten frames of the get-up" in the list above was partly an artefact, and an elbow that
+  really was 8 to 10 cm into his head at the ball in every dive went unseen. Fixed; the numbers below are with it right.
+- He also **hopped 15 cm for 0.1 s at take-off** (a boot under the grass lifted the whole body) and was lifted or
+  dropped 5 to 25 cm in single frames lying down and getting up. Now a leg in the air is swung clear from the hip, and
+  on the grass he is let down or lifted at 1.1 m/s at most.
+
+### What changed
+
+| File | What |
+| --- | --- |
+| `game/keepersave.js` | The dive's hands, trunk and take-off leg; the ball secured on the grass; the get-up's arms; versions (`sv.var`, `variantOf`, `FORCE`) |
+| `game/keeperhands.js` | `diveGrip` (hands in line with the reach), `turnToReach` (the chest turns to what he reaches for), `grip(..., q)` (a grip turned with his trunk), `lerpGrip` as one turn, settling on the grass at a limited speed, the head test fixed |
+| `game/keeperfeet.js` | The crossover (`CROSS`), habits (`habitOf`, `HABIT`), the wait scaled up (`LIVE`) |
+| `game/keeperstand.js` | Versions of the standing saves |
+| `tools/keeplook.js` | Views that go with his hips (`...hfront`, `...hside`, `...hq`, `...htop`), the striker's eyes (`...eye`, `&eye=` m out), shots `keepidle`, `keepcross`; `&gk=0..1` which keeper, `&var=0..59` which version |
+| `tests/unit/keeperpose.test.js` | 215 tests (was 60) |
+
+**1. Low dives (and all the others).** What was wrong was not only the far upper arm: the hands were asked to point their
+fingers up at the ball whatever the arm was doing, so in every dive the wrists and elbows folded and the bottom arm
+went through his head. Now (`diveGrip`) the fingers point on along his reach; a ball near the grass has the bottom
+hand behind it and the top hand on top; one off the grass is a W on its side; a parry is the heel of the bottom hand
+(low) or the top hand come over (high). The far arm no longer lies across his chest because the chest turns to the ball
+(`turnToReach`: an upper arm comes only about 26 degrees inside straight ahead, the rest is the trunk turning, up to 49
+degrees, spine and chest sharing it) and the shoulders come up by his ears as the arms go out. He meets the ball 26 cm
+in front of where he stood with his hips 30 cm behind it, so his arms pass in front of his face. Once laid out his
+trunk no longer bends toward the ball (that put his head under his arm and into the grass, and his legs floated).
+The take-off leg keeps its foot where it stepped until his hips have gone further than the leg is long, then trails at
+full stretch, toes pointed (before: the leg snapped from one pose to another in 0.08 s); close to him it never leaves
+the grass and he goes down over it, a collapse dive. After a parry the bottom arm lies long on the grass beyond his
+head and the top hand comes down flat in front of his chest (before: both arms crossed in front of him).
+
+**2. The get-up.** A caught ball went from beyond his head to his chest in a straight line: through his head. Now it
+goes to the grass with him (the ball lands first, top hand on top), stays pinned 0.14 s, then is drawn in round in
+front of his face over 0.42 s into a hug against his chest, and only then does he get up, the ball carried high on
+his chest while his knee comes up under it, the far elbow out over the posted knee. The top leg's swing is a little
+lower (it stood at 60 degrees).
+
+**3. The crossover** (`CROSS`). Coaching: side-steps for short distances, crossover steps for long ones; "turn the hips
+and run in the direction they want to go" with the upper body kept facing the ball; then a few quick shuffles to get
+set (Sport Session Planner "Teaching the crossover step"; FIFA goalkeeping manual; the US youth club points already
+listed above: shuffle under 2 yards). Built: when he has gone across at over 2.5 m/s for 0.2 s (about 0.6 m; it ends
+under 1.8 m/s) his hips turn 46 degrees to the run, spine and chest turn most of it back (chest 6 degrees off the
+ball), the feet take turns on two lines 28 cm apart, the trailing foot's in front, boots pointing into the run, each
+step swung out round the other foot; each step is wholly a side-step or a crossover step from the moment the foot
+lifts. Planted feet are still fixed in the world. Honest: the sim seldom moves him that far that fast (bursts of 0.2
+to 0.4 s at 2.5 to 3.2 m/s; over 4.2 m/s he runs as an outfield player does), so in a match it will mostly be one or
+two crossover steps inside a shuffle; the look shot and the tests script his path. Not captured: nothing in the CMU
+library is a crossover run with the chest held square.
+
+**4. Variety.** A version number from the save's own id and the keeper's seed (`sv.var`; replays get the same one).
+- Dives: a parry with one arm at full stretch and the other left short, or with both arms long (one in two each);
+  with both palms behind it one time in three when it is inside 1.7 m; the bottom hand for low balls, the top hand
+  over 1.25 m and for half of those between 0.7 and 1.25 m; when the hands are thrown (22 to 30% of the way to the
+  ball); how hard the trailing knee is driven up (55 to 100%). By distance, not chance: a collapse dive close in, a
+  full-stretch one far out.
+- Standing: the scoop kneels on either leg for a ball straight at him, and one time in three is a standing scoop
+  (legs together, stooped); the W and the overhead catch have one hand a little higher round the ball (up to 10
+  degrees either way); how far the arms give (70 to 130%).
+- Each keeper (`habitOf`, from his seed): stance 40 to 51 cm wide, hips 2.5 cm lower to 2 cm higher, hands carried 6 cm
+  lower to 9 cm higher and up to 5 cm wider, how bouncy (60 to 130%) and how quick the bounce, how much his weight
+  wanders, how restless his feet are.
+All of these are coached techniques; which one a keeper picks when is my choice, not measured from anything.
+
+**5. The wait** (`LIVE`). Filmed from the striker's eyes at 15 m at the headset's pixels per degree (`keepidleeye`):
+the first version moved his head 6.6 cm side to side and 3.4 cm up and down over 12 s, his hands 6 cm; at 15 m a
+centimetre is two thirds of a pixel, so it read as a statue. Now: weight 7 to 13 cm side to side (5 to 8 px), hands 9
+to 15 cm, a foot re-set by up to 10 cm every 0.8 to 1.9 s, a bounce that comes and goes (4 cm at the hips, head 5 to
+6 cm; I had it at 12 cm at first and took it down: his head bobbed), inside 22 m of the ball (was 17). Nothing quick:
+hips, head and hands under 5.1 m/s2 and 0.36 m/s. It fades as he moves, holds the ball or split-steps.
+
+### Measured (bare skeleton, the real sim; `KEEPER_REPORT=1 node --test tests/unit/keeperpose.test.js`)
+
+| | Before | Now |
+| --- | --- | --- |
+| Arm's middle line inside trunk, head or a leg, on the way to the ball (13 dives x 6 keepers x 6 versions) | 6.3 cm in the chest (low dives, 3 to 4 frames), 8 to 10 cm elbow in the head (every dive, 9 to 19 frames) | 2.0 cm at most (tested under 2) |
+| The same on the grass and getting up | 5.5 cm (hand in the thigh); the ball through his head | 2.2 cm at most (tested under 2.5); the ball clears his head (tested) |
+| Whole body moved in one frame as a dive ends | 1.35 to 2.2 m | under 7 cm |
+| Lifted to keep a boot out of the grass at take-off | 15 cm for 6 frames | 0 |
+| Largest change of speed in a frame, hips | 97 to 157 m/s | 2.2 to 6.2 m/s (the landing) |
+| ... a hand / a foot | 14 / 22 to 31 m/s | 12 / 16 m/s (an arm thrown out at 12 to 14 m/s reaching full stretch; the take-off foot) |
+| Crossover: planted foot / boots at the nearest / hips | - | 0.7 cm/s / 13 cm between middle lines / 27 m/s2 |
+| Shuffle (sim): planted foot | 0.0 cm/s | 1.5 to 2.7 cm/s: the ball of the foot as the heel rides the bounce (tested under 3) |
+| Waiting at 15 m, head side to side / up and down | 6.6 / 3.4 cm | 8.6 to 15.3 / 4.5 to 5.8 cm |
+
+A test that was loosened: wrists in the shuffle were held under 23 degrees; with hands carried higher or lower by
+habit they reach the wrist limit itself (30 degrees), which is what is tested now.
+
+### Real, built, guessed
+
+- From coaching (already listed above, plus the crossover session): hands leading, bottom hand behind and top hand on
+  top, the ball as "the third hand", the top hand for high balls, the collapse dive close in, securing the ball to the
+  chest before getting up, the crossover's hips and chest, the K on either knee, the standing scoop.
+- From anatomy: how far an arm comes across the chest before the trunk turns, the shoulders rising with the arms. The
+  angles are round numbers that kept the arm out of the chest, not measured from a recording.
+- Guessed: every timing after the ball is in his hands, how often each version turns up, the size of each habit, how
+  much he moves while he waits (sized so it shows at 15 m, kept under what looked like bobbing).
+
+### Short of real
+
+- The dive is still squeezed into the sim's few tenths of a second, and there is still no small step away first.
+- A low dive rarely "flies": his near foot mostly stays on the grass until he is down (right for a low ball, but the
+  full-stretch low dive off the ground is not really there).
+- The get-up is one get-up (the pendulum leg); its kneel is set down on whatever is lowest, not placed by design.
+- The top arm in a low catch arches over his head with the elbow high.
+- On the grass after a parry he lies there 0.25 s and looks at the ball; no scramble after a loose rebound.
+- The crossover's arms stay in the set position (a real keeper pumps them a little), and it starts on speed alone: the
+  page doesn't know how far the sim means to send him.
+- A hand at the end of a full-stretch reach stops in one frame (the arm IK has a hard limit).
+- Standing saves were measured across keepers and versions, but only the scoop's versions were looked at large.
+- Nothing has been seen in a headset.

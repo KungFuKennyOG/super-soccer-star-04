@@ -63,6 +63,9 @@ export function animateKeeper(m, p, dt, t, ball) {
     m.off = V(hw.x - p.x, 0, hw.z - p.z); m.offV = 0; m.yawOff = m.sv.Y - Math.atan2(p.fx, p.fz);
     m.yawOff -= Math.round(m.yawOff / (Math.PI * 2)) * Math.PI * 2;
     m.sv = null;
+    // (his root is now under his hips: the pose he blends from is moved with it. Until Nov 2026 it wasn't, and he jumped
+    // as far as the dive had carried him, 1.4 m in one frame, and slid back over the blend)
+    if (m.kLast) { m.kLast[NB * 4] = 0; m.kLast[NB * 4 + 2] = 0; }
     blendFrom(m, 0.3);
     restPose(bn);
   }
@@ -93,8 +96,9 @@ function finish(m, state, dt, p) {
   const bn = m.bone;
   m.kState = state;
   applyBlend(m, dt);
-  const up = keepAboveGrass(m, !!(m.sv && m.sv.ground), m.held);
+  const up = keepAboveGrass(m, !!(m.sv && m.sv.ground), m.held, dt);
   if (m.held) m.held.y += up;                                          // the ball goes with his hands
+  m.kUp = up;                                                          // (for the tests: how far he had to be moved to stay on top of the grass)
   remember(m);
   // his shadow goes where his body is
   const h = bn.hips.getWorldPosition(tmp);

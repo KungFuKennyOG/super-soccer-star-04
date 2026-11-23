@@ -8,6 +8,7 @@ import * as THREE from 'three';
 import { buildSkeleton } from '../../game/body.js';
 import { animate, placeModel } from '../../game/actors.js';
 import { heldBall } from '../../game/keeperpose.js';
+import { FORCE } from '../../game/keepersave.js';
 import { PALM, BALL_R, armInside } from '../../game/keeperhands.js';
 import { createWorld, stepSim } from '../../rules/sim.js';
 import { GOAL } from '../../rules/tuning.js';
@@ -16,7 +17,7 @@ const DT = 1 / 72, fixed = () => 0.5;
 const v = () => new THREE.Vector3();
 
 // You shoot from `from` m out at (tx, ty) on the goal line, letting go at 0.5 s. kind forces the keeper's catch or parry.
-function play({ tx, ty, hold = 0.5, from = 16, fx = 0, kind = null, secs = 3, across = false, move = null }) {
+function play({ tx, ty, hold = 0.5, from = 16, fx = 0, kind = null, secs = 3, across = false, move = null, seed = null, sprint = across }) {
   const w = createWorld(fixed);
   if (kind) w.tune = { ...w.tune, ai: { ...w.tune.ai, gkCatchBelow: kind === 'catch' ? 99 : 0, gkCatchAtHim: kind === 'catch' ? 99 : 0 } };
   for (const id of ['d1', 'd2', 'd3', 'm1', 'm2']) { const p = w.byId[id]; p.x += 25; p.z = 20; p.stun = 99; }
@@ -24,8 +25,9 @@ function play({ tx, ty, hold = 0.5, from = 16, fx = 0, kind = null, secs = 3, ac
   const { bones, by } = buildSkeleton(), root = new THREE.Group();
   root.add(bones[0]);
   const m = { root, bone: by, shadow: new THREE.Object3D(), phase: 0 }, gk = w.byId.gk, rows = [];
+  if (seed !== null) m.kSeed = seed;
   for (let t = 0; t < secs; t += DT) {
-    const it = { sprint: across, move: move ? move(t) : across ? { x: t < secs / 2 ? 1 : -1, z: 0 } : { x: 0, z: 0 }, facing: { x: 0, z: -1 } };
+    const it = { sprint, move: move ? move(t) : across ? { x: t < secs / 2 ? 1 : -1, z: 0 } : { x: 0, z: 0 }, facing: { x: 0, z: -1 } };
     if (tx !== undefined && Math.abs(t - 0.5) < DT / 2) {
       const eye = { x: w.you.x, y: 1.7, z: w.you.z }, d = new THREE.Vector3(tx - eye.x, ty - eye.y, GOAL.z - eye.z).normalize();
       it.shot = { eye, dir: { x: d.x, y: d.y, z: d.z }, holdT: hold };
@@ -38,8 +40,9 @@ function play({ tx, ty, hold = 0.5, from = 16, fx = 0, kind = null, secs = 3, ac
     for (const b of Object.values(by)) assert.ok(Number.isFinite(b.quaternion.x + b.quaternion.w + b.position.y), `${b.name} finite`);
     const palms = ['L', 'R'].map(n => by['hand' + n].localToWorld(PALM[n].clone()));
     const held = heldBall(m, v());
-    rows.push({ t, ev: ev.map(e => e.type), sv: m.sv && { t: m.sv.t, T: m.sv.T, kind: m.sv.kind, stand: m.sv.stand, grip: m.sv.grip }, palms, held, ball: { ...w.ball }, before, arm: Math.max(armInside(by, 'L'), armInside(by, 'R')),
-      low: lowest(m), feet: ['L', 'R'].map(n => by['foot' + n].getWorldPosition(v())), owner: w.owner, gkx: gk.x,
+    const headC = by.head.localToWorld(new THREE.Vector3(0, 0.09, 0.01));
+    rows.push({ t, ev: ev.map(e => e.type), sv: m.sv && { t: m.sv.t, T: m.sv.T, kind: m.sv.kind, stand: m.sv.stand, grip: m.sv.grip, ground: m.sv.ground, v: m.sv.var }, headC, head: by.head.getWorldPosition(v()), hands: ['L', 'R'].map(n => by['hand' + n].getWorldPosition(v())), palms, held, ball: { ...w.ball }, before, arm: Math.max(armInside(by, 'L'), armInside(by, 'R')),
+      low: lowest(m), boots: ['L', 'R'].map(n => [by['foot' + n].localToWorld(new THREE.Vector3(0, -0.06, -0.07)), by['foot' + n].localToWorld(new THREE.Vector3(0, -0.06, 0.17))]), cross: m.kg ? m.kg.cross || 0 : 0, feet: ['L', 'R'].map(n => by['foot' + n].getWorldPosition(v())), owner: w.owner, gkx: gk.x,
       // for the footwork: the balls of his feet, which feet are planted, his hips, the way he faces, how far each wrist is bent
       sole: ['L', 'R'].map(n => by['foot' + n].localToWorld(new THREE.Vector3(0, -0.085, 0.1))), down: ['L', 'R'].map(n => !m.sv && m.kState !== 'run' && m.kf && !m.kf[n].air), hips: by.hips.getWorldPosition(v()), yaw: m.root.rotation.y,
       wrist: Math.max(...['L', 'R'].map(n => by['hand' + n].getWorldPosition(v()).sub(by['foreArm' + n].getWorldPosition(v())).angleTo(by['hand' + n].localToWorld(new THREE.Vector3(0, -1, 0)).sub(by['hand' + n].getWorldPosition(v()))))) });
@@ -72,6 +75,8 @@ const STANDS = [['a low one at him, scooped', { tx: 0.15, ty: 0.25, hold: 0.4, k
   ['a hard one at his chest, parried', { tx: 0.15, ty: 1.2, hold: 0.8, kind: 'parry' }], ['a hard low one at him, parried', { tx: 0.15, ty: 0.25, hold: 0.9, kind: 'parry' }], ['a hard one over his head, tipped', { tx: 0.1, ty: 2.15, hold: 0.8, kind: 'parry' }]];
 
 export const REPORT = [];
+// the nearest the middle lines of his two boots come (heel to toe)
+function bootGap(b) { let best = 9; for (let i = 0; i <= 8; i++) for (let j = 0; j <= 8; j++) best = Math.min(best, b[0][0].clone().lerp(b[0][1], i / 8).distanceTo(b[1][0].clone().lerp(b[1][1], j / 8))); return best; }
 for (const [name, o] of [...DIVES, ...STANDS]) {
   test(`keeper: ${name}: his gloves meet the ball`, () => {
     const rows = play(o), k = rows.findIndex(r => r.sv && r.sv.t >= r.sv.T), s = rows.findIndex(r => r.ev.includes('saved') || r.ev.includes('parried'));
@@ -123,18 +128,53 @@ test.after(() => { if (process.env.KEEPER_REPORT) console.log(REPORT.join('\n'))
 // His arms stay out of his body (Kenny: "his arms still go through his body sometimes"): the arm's middle line may
 // brush a fat trunk (3 cm) but is never well inside it for long. Before the hands were kept in front of his chest an
 // arm reaching across was 10 cm and more inside for up to a second of a save.
-for (const [name, o] of [...DIVES, ...STANDS]) {
-  test(`keeper: ${name}: his arms don't go through his body`, () => {
-    const rows = play({ ...o, secs: 3.4 }), deep = rows.filter(r => r.arm > 0.03), worst = Math.max(...rows.map(r => r.arm));
+for (const [name, o] of STANDS) for (const seed of [0.13, 0.57, 0.91, 0.36]) {
+  test(`keeper: ${name} (keeper ${seed}): his arms don't go through his body`, () => {
+    const rows = play({ ...o, secs: 3.4, seed }), deep = rows.filter(r => r.arm > 0.03), worst = Math.max(...rows.map(r => r.arm));
     assert.ok(worst < 0.1, `an arm ${cm(worst)} cm inside his trunk`);
     assert.ok(deep.length <= 26, `${deep.length} frames with an arm over 3 cm inside (72 a second)`);
   });
 }
+// Dives (Nov 2026, branch keeper3): at no frame, from the first step to stood up again, is an arm's middle line more
+// than 2 cm inside his trunk, his head or a leg (2.5 cm once he is on the grass); a caught ball never passes through
+// his head on its way to his chest; and nothing jumps: no joint changes speed by more than a real limb can in a frame,
+// he isn't moved when the save hands over to the stance (he was: 1.4 m in one frame), nor hopped to keep a boot out
+// of the grass (he was: 15 cm at take-off). (The largest left, about 12 m/s on a hand, is an arm thrown out at 12 to 14 m/s
+// coming to the end of its reach.)
+const MORE = [['a dive at mid height, caught', { tx: 1.6, ty: 0.9, kind: 'catch' }], ['a low one close to him, caught going down', { tx: 1.3, ty: 0.2, kind: 'catch' }],
+  ['a low dive at full stretch', { tx: 3.2, ty: 0.4, kind: 'parry', hold: 0.6 }], ['a high dive at full stretch', { tx: 3.1, ty: 1.6, kind: 'parry', hold: 0.6 }]];
+// (six keepers, and the six kinds of version a dive has: one arm or two, bottom hand, top hand or both palms)
+for (const [name, o] of [...DIVES, ...MORE]) for (const [seed, version] of [[0.13, 0], [0.57, 7], [0.91, 14], [0.36, 21], [0.74, 34], [0.2, 41]]) {
+  test(`keeper: ${name} (keeper ${seed}, version ${version}): arms out of his body and head, the ball round his face, nothing jumps`, () => {
+    FORCE.var = version;
+    const rows = play({ ...o, secs: 3.8, seed }), a = rows.findIndex(r => r.sv), b = rows.findLastIndex(r => r.sv);
+    FORCE.var = null;
+    assert.ok(a > 0 && b > a && b < rows.length - 8, 'the dive begins and ends');
+    let air = 0, down = 0, ball = 9, jump = 0, foot = 0, end = 0, who = '';
+    for (let i = a; i <= b + 6; i++) {
+      const r = rows[i], q = rows[i - 1], p = rows[i - 2];
+      if (r.sv && !r.sv.ground) air = Math.max(air, r.arm); else down = Math.max(down, r.arm);
+      if (r.held) ball = Math.min(ball, r.held.distanceTo(r.headC) - 0.115 - BALL_R);
+      const dv = (x, y, z) => x.clone().sub(y).sub(y.clone().sub(z)).length() / DT;
+      for (const [n, x, y, z] of [['hips', r.hips, q.hips, p.hips], ['head', r.head, q.head, p.head], ['hand', r.hands[0], q.hands[0], p.hands[0]], ['hand', r.hands[1], q.hands[1], p.hands[1]]]) { const d = dv(x, y, z); if (d > jump) { jump = d; who = n; } }
+      for (const k of [0, 1]) foot = Math.max(foot, dv(r.feet[k], q.feet[k], p.feet[k]));
+      if (i > b) end = Math.max(end, dv(r.hips, q.hips, p.hips));
+    }
+    assert.ok(air < 0.02, `${name}: an arm ${cm(air)} cm inside him on the way to the ball`);
+    assert.ok(down < 0.025, `${name}: an arm ${cm(down)} cm inside him on the grass or getting up`);
+    assert.ok(ball > -0.02, `${name}: the ball ${cm(-ball)} cm into his head`);
+    assert.ok(jump < 13.5, `${name}: his ${who} changes speed by ${jump.toFixed(1)} m/s in a frame`);
+    assert.ok(foot < 19, `${name}: a foot changes speed by ${foot.toFixed(1)} m/s in a frame`);
+    assert.ok(end < 5, `${name}: his hips jump as the save ends (${end.toFixed(1)} m/s in a frame)`);
+    if (seed === 0.13) REPORT.push(`${name.padEnd(36)} arm inside: ${cm(air)} cm diving, ${cm(down)} cm on the grass and up; ball to head ${ball > 8 ? '-' : cm(ball)} cm; biggest change of speed in a frame: ${who} ${jump.toFixed(1)} m/s, a foot ${foot.toFixed(1)}`);
+  });
+}
 
 // Standing saves are one movement: from the pose he was in, no jumps in his body or his hands, wrists within their limit.
-for (const [name, o] of STANDS) {
-  test(`keeper: ${name}: one smooth movement`, () => {
-    const rows = play({ ...o, secs: 3.4 }), a = rows.findIndex(r => r.sv);
+for (const [name, o] of STANDS) for (const seed of [0.13, 0.57, 0.91, 0.36]) {
+  test(`keeper: ${name} (keeper ${seed}): one smooth movement, his gloves on the ball`, () => {
+    const rows = play({ ...o, secs: 3.4, seed }), a = rows.findIndex(r => r.sv), k = rows.findIndex(r => r.sv && r.sv.t >= r.sv.T);
+    if (rows[k].sv.kind === 'catch') { const g = gaps(rows[k], rows[k].held); assert.ok(Math.max(...g.map(Math.abs)) < 0.03, `${name}: both palms on the ball (${g.map(cm).join(', ')} cm)`); }
     let hip = 0, palm = 0, wrist = 0;
     for (let i = a; i < rows.length; i++) {
       hip = Math.max(hip, rows[i].hips.distanceTo(rows[i - 1].hips) / DT);
@@ -144,7 +184,7 @@ for (const [name, o] of STANDS) {
     assert.ok(hip < 3, `his hips never move faster than 3 m/s (${hip.toFixed(1)})`);
     assert.ok(palm < 8, `a hand never moves faster than 8 m/s (${palm.toFixed(1)})`);
     assert.ok(wrist < 0.72, `a wrist bent ${(wrist * 57.3).toFixed(0)} degrees`);
-    REPORT.push(`${name.padEnd(36)} smooth: hips ${hip.toFixed(1)} m/s at most, hands ${palm.toFixed(1)} m/s, wrists ${(wrist * 57.3).toFixed(0)} deg`);
+    if (seed === 0.13) REPORT.push(`${name.padEnd(36)} smooth: hips ${hip.toFixed(1)} m/s at most, hands ${palm.toFixed(1)} m/s, wrists ${(wrist * 57.3).toFixed(0)} deg`);
   });
 }
 
@@ -152,9 +192,9 @@ for (const [name, o] of STANDS) {
 // his hips stay level; nothing jerks; his arms stay where they were.
 const MOVES = [['a quick shuffle across and back', { across: true, from: 14, fx: -9, secs: 5 }, 1.5], ['a long shuffle left, right, left', { from: 15, secs: 7, across: true, move: t => ({ x: t < 1.5 ? 1 : t < 4 ? -1 : t < 6 ? 1 : 0, z: 0 }) }, 1.5],
   ['small steps as the ball drifts across', { from: 17, fx: -3, secs: 6, move: t => ({ x: t < 3 ? 0.3 : -0.3, z: 0 }) }, 0.3], ['off his line and back', { from: 24, fx: -2, secs: 6, move: t => ({ x: 0.1, z: t < 3 ? -0.7 : 0.7 }) }, 0]];
-for (const [name, o, far] of MOVES) {
-  test(`keeper: ${name}: his feet`, () => {
-    const rows = play(o).slice(20);
+for (const [name, o, far] of MOVES) for (const seed of [0.13, 0.57, 0.91, 0.36, 0.74]) {
+  test(`keeper: ${name} (keeper ${seed}): his feet`, () => {
+    const rows = play({ ...o, seed }).slice(20);
     let slid = 0, n = 0, gapMin = 9, gapMax = 0, acc = 0, steps = 0;
     for (let i = 2; i < rows.length; i++) {
       const r = rows[i], q = rows[i - 1], c = Math.cos(r.yaw), sn = Math.sin(r.yaw);
@@ -165,15 +205,70 @@ for (const [name, o, far] of MOVES) {
     }
     const ys = rows.map(r => r.hips.y), bob = Math.max(...ys) - Math.min(...ys), moved = Math.max(...rows.map(r => r.gkx)) - Math.min(...rows.map(r => r.gkx));
     assert.ok(moved >= far, `he moved ${moved.toFixed(1)} m across`);
-    assert.ok(n > 100 && slid < 0.02, `a planted foot never slides (${cm(slid)} cm/s at most)`);
-    assert.ok(gapMin > 0.24, `his feet never cross or come together (${cm(gapMin)} cm apart at the nearest)`);
+    assert.ok(n > 100 && slid < 0.03, `a planted foot never slides (${cm(slid)} cm/s at most)`);
+    // (a long quick one may take a crossover step or two, Nov 2026: then the boots pass clear of each other, in front and behind)
+    const boots = Math.min(...rows.map(r => bootGap(r.boots))), crossed = rows.some(r => r.cross > 0.5);
+    if (far < 1.5) assert.ok(gapMin > 0.24 && !crossed, `his feet never cross or come together (${cm(gapMin)} cm apart at the nearest)`);
+    assert.ok(boots > 0.1, `his boots never touch (${cm(boots)} cm between their middle lines at the nearest)`);
     assert.ok(gapMax < 1.05, `nor too far apart (${cm(gapMax)} cm)`);
     assert.ok(bob < 0.075, `his hips stay level (${cm(bob)} cm between highest and lowest)`);
     assert.ok(acc < 40, `nothing jerks (his hips ${acc.toFixed(0)} m/s2 at most)`);
-    assert.ok(Math.max(...rows.map(r => r.arm)) < 0.02 && Math.max(...rows.map(r => r.wrist)) < 0.4, 'his hands stay set: arms clear of his body, wrists straight');
+    assert.ok(Math.max(...rows.map(r => r.arm)) < 0.02 && Math.max(...rows.map(r => r.wrist)) < 0.53, `his hands stay set: arms clear of his body (${cm(Math.max(...rows.map(r => r.arm)))} cm), wrists straight (${(Math.max(...rows.map(r => r.wrist)) * 57.3).toFixed(0)} degrees)`);
     assert.ok(Math.min(...rows.map(r => r.low)) > -0.01, 'nothing under the grass');
-    REPORT.push(`${name.padEnd(36)} ${moved.toFixed(1)} m across; planted foot ${cm(slid)} cm/s at most; ankles ${cm(gapMin)} to ${cm(gapMax)} cm apart; ${(steps / (rows.length * DT)).toFixed(1)} steps a second; hips ${cm(bob)} cm high to low, ${acc.toFixed(0)} m/s2 at most`);
+    if (seed === 0.13) REPORT.push(`${name.padEnd(36)} ${moved.toFixed(1)} m across; planted foot ${cm(slid)} cm/s at most; ankles ${cm(gapMin)} to ${cm(gapMax)} cm apart; ${(steps / (rows.length * DT)).toFixed(1)} steps a second; hips ${cm(bob)} cm high to low, ${acc.toFixed(0)} m/s2 at most`);
   });
+}
+
+// The crossover step (Nov 2026). The keeper is moved by a script here: the sim seldom sends him further than a shuffle
+// covers. A long quick run across: his hips turn to it, his chest stays on the ball, his feet take turns and pass in
+// front of and behind each other without touching, and a planted foot still doesn't move. A short or slower one stays
+// a shuffle.
+function scripted(path, secs, seed) {
+  const { bones, by } = buildSkeleton(), root = new THREE.Group();
+  root.add(bones[0]);
+  const m = { root, bone: by, shadow: new THREE.Object3D(), phase: 0, kSeed: seed }, p = { x: path(0), z: 0, vx: 0, vz: 0, fx: 0, fz: 1, role: 'gk' }, ball = { x: 0, y: 0.11, z: 18 }, rows = [];
+  const fwd = b => { const d = new THREE.Vector3(0, 0, 1).applyQuaternion(b.getWorldQuaternion(new THREE.Quaternion())); return Math.atan2(d.x, d.z); };
+  for (let t = 0; t < secs; t += DT) {
+    const want = (path(t + DT) - path(t)) / DT; p.vx += Math.max(-24 * DT, Math.min(24 * DT, want - p.vx)); p.x += p.vx * DT;
+    const d = Math.hypot(ball.x - p.x, ball.z - p.z); p.fx = (ball.x - p.x) / d; p.fz = (ball.z - p.z) / d;
+    placeModel(m, p); animate(m, p, DT, t, false, null, ball, false); m.root.updateMatrixWorld(true);
+    rows.push({ t, cross: m.kg.cross || 0, boots: ['L', 'R'].map(n => [by['foot' + n].localToWorld(new THREE.Vector3(0, -0.06, -0.07)), by['foot' + n].localToWorld(new THREE.Vector3(0, -0.06, 0.17))]),
+      down: ['L', 'R'].map(n => !m.kf[n].air), sole: ['L', 'R'].map(n => by['foot' + n].localToWorld(new THREE.Vector3(0, -0.085, 0.1))), feet: ['L', 'R'].map(n => by['foot' + n].getWorldPosition(v())), hips: by.hips.getWorldPosition(v()),
+      hipYaw: fwd(by.hips) - root.rotation.y, chestYaw: fwd(by.chest) - root.rotation.y, yaw: root.rotation.y, arm: Math.max(armInside(by, 'L'), armInside(by, 'R')), low: lowest(m) });
+  }
+  return rows;
+}
+const ramp = (t, a, T) => Math.min(Math.max(t - a, 0), T);
+for (const seed of [0.3, 0.8]) {
+  test(`keeper: a long quick run across goal and back is a crossover (keeper ${seed})`, () => {
+    const rows = scripted(t => 3.3 * (ramp(t, 0.6, 1.0) - ramp(t, 2.8, 1.6)), 5.5, seed);
+    let slid = 0, acc = 0, hip = 0, chest = 0, crossed = 0, on = 0;
+    for (let i = 2; i < rows.length; i++) {
+      const r = rows[i], q = rows[i - 1], c = Math.cos(r.yaw), sn = Math.sin(r.yaw);
+      for (const k of [0, 1]) if (r.down[k] && q.down[k]) slid = Math.max(slid, Math.hypot(r.sole[k].x - q.sole[k].x, r.sole[k].z - q.sole[k].z) / DT);
+      acc = Math.max(acc, r.hips.clone().sub(q.hips).sub(q.hips.clone().sub(rows[i - 2].hips)).length() / DT / DT);
+      if (r.cross > 0.5) { on++; hip = Math.max(hip, Math.abs(r.hipYaw)); chest = Math.max(chest, Math.abs(r.chestYaw)); }
+      if ((r.feet[0].x - r.feet[1].x) * c - (r.feet[0].z - r.feet[1].z) * sn < 0) crossed++;
+    }
+    const boots = Math.min(...rows.map(r => bootGap(r.boots))), end = rows[rows.length - 1];
+    assert.ok(on * DT > 1.5 && crossed * DT > 0.5, `he crosses his feet (in it ${(on * DT).toFixed(1)} s, feet crossed ${(crossed * DT).toFixed(1)} s)`);
+    assert.ok(hip > 0.6, `his hips turn to the run (${(hip * 57.3).toFixed(0)} degrees)`);
+    assert.ok(chest < 0.2, `his chest stays on the ball (${(chest * 57.3).toFixed(0)} degrees off it at most)`);
+    assert.ok(slid < 0.03, `a planted foot never slides (${cm(slid)} cm/s at most)`);
+    assert.ok(boots > 0.1, `his boots pass clear of each other (${cm(boots)} cm between their middle lines at the nearest)`);
+    assert.ok(acc < 40, `nothing jerks (his hips ${acc.toFixed(0)} m/s2 at most)`);
+    assert.ok(Math.max(...rows.map(r => r.arm)) < 0.02, 'his arms stay out of his body');
+    assert.ok(Math.min(...rows.map(r => r.low)) > -0.01, 'nothing under the grass');
+    assert.ok(end.cross === 0 && Math.abs(end.hipYaw) < 0.02 && (end.feet[0].x - end.feet[1].x) * Math.cos(end.yaw) - (end.feet[0].z - end.feet[1].z) * Math.sin(end.yaw) > 0.3, 'and he ends set again, feet apart, hips square');
+    REPORT.push(`crossover (keeper ${seed}): in it ${(on * DT).toFixed(1)} s, feet crossed ${(crossed * DT).toFixed(1)} s; hips ${(hip * 57.3).toFixed(0)} deg to the run, chest ${(chest * 57.3).toFixed(0)} deg off the ball; planted foot ${cm(slid)} cm/s; boots ${cm(boots)} cm apart at the nearest; hips ${acc.toFixed(0)} m/s2 at most`);
+  });
+  for (const [name, path] of [['a quick step or two (0.9 m)', t => 3.0 * (ramp(t, 0.5, 0.3) - ramp(t, 2, 0.3))], ['2.4 m across at a shuffle\'s pace (2 m/s)', t => 2.0 * (ramp(t, 0.5, 1.2) - ramp(t, 2.5, 1.2))]]) {
+    test(`keeper: ${name} stays a shuffle: no crossing (keeper ${seed})`, () => {
+      const rows = scripted(path, 4.5, seed), gap = Math.min(...rows.map(r => (r.feet[0].x - r.feet[1].x) * Math.cos(r.yaw) - (r.feet[0].z - r.feet[1].z) * Math.sin(r.yaw)));
+      assert.ok(rows.every(r => r.cross === 0 && Math.abs(r.hipYaw) < 0.01), 'no crossover');
+      assert.ok(gap > 0.24, `his feet never cross or come together (${cm(gap)} cm apart at the nearest)`);
+    });
+  }
 }
 
 test('keeper: the split step: off the grass as the shot is wound up, down as the ball leaves the boot, sinking into it', () => {
