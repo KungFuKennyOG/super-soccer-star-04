@@ -40,9 +40,10 @@ function bellyPoint(bn, out) { belly.copy(bn.hips.quaternion).multiply(bn.spine.
 // Plays a standing save on. sv: the latched save (game/keepersave.js startSave: mode, kind, reach, T, feet, h0, p0).
 // Returns false once he's done with it.
 export function standing(m, sv, dt, ball) {
-  const bn = m.bone, s = sv.s, T = sv.T, r = sv.reach, t = sv.t, mode = sv.mode, held = sv.kind === 'catch', A = held ? STAND.after[mode] : STAND.after.parry;
-  const end = T + A, a = t - T;
-  if (t > end) return false;
+  const bn = m.bone, s = sv.s, T = sv.T, r = sv.reach, mode = sv.mode, held = sv.kind === 'catch', A = held ? STAND.after[mode] : STAND.after.parry;
+  // (posed on the last frame too: what comes next starts from where his hips and feet are, and unposed they were back
+  // where the save began, up to half a metre away)
+  const end = T + A, t = Math.min(sv.t, end), a = t - T;
   const F = sv.f0 ??= feetIn(sv);                                   // where his feet were when it began (the save's frame)
   // feet first: his body goes behind the ball, a side-step if it's wide of him (never more than the sim lets a standing save be)
   const hx = clamp(r.x, -0.5, 0.5) * 0.92, mid = (F.L.x + F.R.x) / 2, shift = hx - mid, stepK = ease((Math.abs(shift) - 0.04) / 0.06);
@@ -155,7 +156,7 @@ export function standing(m, sv, dt, ball) {
   // eyes on it into his hands, then up the pitch
   const eye = (m.held || r).clone().lerp(V(hxNow, 1.55, 8), held ? ease((a - 0.3) / 0.35) : ease((a - 0.2) / 0.3));
   lookAt(bn, eye, 0.9);
-  return true;
+  return sv.t <= end;
 }
 
 // his planted feet in the save's own frame, with the way each points
