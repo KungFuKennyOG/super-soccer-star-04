@@ -18,7 +18,7 @@ import * as THREE from 'three';
 import { createWorld, stepSim } from '../rules/sim.js';
 import { GOAL } from '../rules/tuning.js';
 
-const DT = 1 / 72, MZ = 7;
+const DT = 1 / 72, MZ = 7, hipW = new THREE.Vector3();
 const P = (x, z) => [-z, x + MZ];                           // a sim point on the page
 const SETUPS = {
   ready: { secs: 6, walk: { x: 0.25, z: -0.35 }, from: 24, fx: -3 },
@@ -96,7 +96,14 @@ const VIEWS = {
 };
 // ...and three that go with him, close: from the front (the striker's side), along the goal line, and three-quarter
 const CLOSE = { cfront: { fov: 26, off: [-5.6, 1.25, 0], y: 1.0 }, cside: { fov: 26, off: [0, 1.15, -5.6], y: 1.0 }, cq: { fov: 26, off: [-4.2, 1.5, 3.6], y: 1.0 }, cup: { fov: 34, off: [-5.6, 1.25, 0], y: 1.35 }, cupside: { fov: 34, off: [0, 1.15, -5.6], y: 1.35 } };
-const VNAMES = ['front', 'side', 'near', 'dive', 'top', 'cfront', 'cside', 'cq', 'chigh', 'chighside'];
+// ...four that go with his hips (a dive leaves his spot behind): front, along the line, three-quarter, from above
+Object.assign(CLOSE, { hfront: { fov: 24, off: [-5.2, 0.5, 0], hips: true }, hside: { fov: 24, off: [0, 0.4, -5.2], hips: true }, hq: { fov: 24, off: [-4, 0.9, 3.4], hips: true }, htop: { fov: 24, off: [-0.6, 5.2, 0], hips: true } });
+// ...and the striker's eyes: 1.7 m up, &eye= m out from the goal line (default 15), level with the middle of the goal.
+// fov 34: at 600 px high that is 17.6 px a degree, about what a Quest 3 shows at framebuffer scale 0.7, so a frame
+// looked at 1:1 is as much of him as the headset draws
+const EYE = typeof location !== 'undefined' ? +(new URLSearchParams(location.search).get('eye') || 15) : 15;
+VIEWS.eye = { fov: 34, cam: [-GOAL.z - EYE, 1.7, MZ], at: [-GOAL.z - 1.2, 1.0, MZ] };
+const VNAMES = ['front', 'side', 'near', 'dive', 'top', 'cfront', 'cside', 'cq', 'chigh', 'chighside', 'hfront', 'hside', 'hq', 'htop', 'eye'];
 CLOSE.chigh = CLOSE.cup; CLOSE.chighside = CLOSE.cupside; delete CLOSE.cup; delete CLOSE.cupside;
 export const KEEP_SHOTS = Object.keys(SETUPS).flatMap(n => ['', ...VNAMES].map(v => 'keep' + n + v));
 export function parseKeepShot(name) {
@@ -108,7 +115,9 @@ export function parseKeepShot(name) {
 // the camera for a view: { fov, cam, at }; root: the keeper's (a close view goes with him)
 export function keepView(view, root) {
   if (!view.close) return view;
-  const c = view.close, p = root.position;
+  const c = view.close;
+  if (c.hips) { const h = (root.userData.hipsBone ??= root.getObjectByName('hips')).getWorldPosition(hipW); return { fov: c.fov, cam: [h.x + c.off[0], h.y + c.off[1], h.z + c.off[2]], at: [h.x, h.y + 0.1, h.z] }; }
+  const p = root.position;
   return { fov: c.fov, cam: [p.x + c.off[0], c.off[1], p.z + c.off[2]], at: [p.x, c.y, p.z] };
 }
 export const toPage = { P, MZ };

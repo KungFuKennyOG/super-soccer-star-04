@@ -103,7 +103,7 @@ function solve(bn, lo, sp, pole, lim) {
 // in each bone's own frame); the arm is sampled at the elbow, down the forearm, the wrist and the hand, and up the
 // upper arm. How far the deepest of those is inside (m, 0 if clear), with the way out of the trunk there in `out`.
 const TRUNK = [['hips', 'spine', 0.165, 0.12], ['spine', 'chest', 0.165, 0.12], ['chest', 'neck', 0.18, 0.125]];
-const fkP = {}, fkQ = {}, tA = new THREE.Vector3(), tB = new THREE.Vector3(), tv = new THREE.Vector3(), tn = new THREE.Vector3(), ti = new THREE.Quaternion();
+const fkP = {}, fkQ = {}, tA = new THREE.Vector3(), tB = new THREE.Vector3(), tv = new THREE.Vector3(), tn = new THREE.Vector3(), ti = new THREE.Quaternion(), hC = new THREE.Vector3();
 function fk(bn, lo) {
   const at = (name, parent) => {
     const b = bn[name], P = fkP[name] ??= new THREE.Vector3(), Q = fkQ[name] ??= new THREE.Quaternion();
@@ -138,8 +138,10 @@ export function armInside(bn, lo, out = null) {
   const pts = ARM_PTS.map(([a, b, k]) => tv.copy(fkP[a + lo]).lerp(fkP[b + lo], k).clone());
   pts.push(tv.set(0, -0.09, 0).applyQuaternion(fkQ['hand' + lo]).add(fkP['hand' + lo]).clone());
   // and his head: a ball 11 cm round, 9 cm up from the top of his neck
-  tA.set(0, 0.09, 0.01).applyQuaternion(fkQ.head).add(fkP.head);
-  const head = p => { const d = 0.115 - tn.copy(p).sub(tA).length(); if (d > worst) { worst = d; insideWhat.part = 'head'; insideWhat.pt = cur; if (out) out.copy(tn).normalize(); } };
+  // (its own vector: tA is the trunk and leg tests' scratch, and until Nov 2026 the head was measured against whatever
+  // they had left in it)
+  hC.set(0, 0.09, 0.01).applyQuaternion(fkQ.head).add(fkP.head);
+  const head = p => { const d = 0.115 - tn.copy(p).sub(hC).length(); if (d > worst) { worst = d; insideWhat.part = 'head'; insideWhat.pt = cur; if (out) out.copy(tn).normalize(); } };
   pts.forEach((p, i) => { cur = i; test(p); if (i >= 2) leg(p); if (i >= 1) head(p); });
   return worst;
 }
