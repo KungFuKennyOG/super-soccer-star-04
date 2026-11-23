@@ -9,6 +9,7 @@ import { ATLAS, HEAD_SHEET, R, paintKit } from './kit.js';
 import { paintHead } from './face.js';
 import { HAIR2 } from './headgeo.js';
 import { figureGeometry } from './figure.js';
+import { skullOf, skullGeometry } from './skull.js';
 import { paintGloves } from './gloves.js';
 import { toneOf, HAIRS as LHAIRS, STYLE_PS2 } from '../../rules/looks.js';
 import { canvas, hex, smoothTex } from './paint.js';
@@ -108,12 +109,15 @@ function looseness(geo) {
 
 // kit: a kit spec from rules/teams.js. look picks skin, hair color and (unless given) the hairstyle.
 // ap: a look from rules/looks.js (pickSquad) in place of all that: its tone, hair, style, stubble, face paint.
-export function buildPlayer2(kit, num, look = 0, { ap = null, style = [0, 2, 1, 0, 4, 0, 3, 2][look % 8], boots = 0, skinI = look, hairI = look * 3 + 1 } = {}) {
+// skull: his head's shape (skull.js); by default his own, from his look (null: the shared skull, as the boots use).
+export function buildPlayer2(kit, num, look = 0, { ap = null, style = [0, 2, 1, 0, 4, 0, 3, 2][look % 8], boots = 0, skinI = look, hairI = look * 3 + 1, skull } = {}) {
   let head = { look, style, skinI, hairI };
   if (ap) { head = { look: ap.face, style: STYLE_PS2[ap.style], skinI: toneOf(ap), hairI: LHAIRS[ap.hair], stubble: ap.stubble, feat: { ...ap.feat, eyes: ap.eyes } }; style = head.style; skinI = head.skinI; }
   const mats = [kitSheet({ kit, num, skinI, boots }), headSheet(head)];
-  const { bones, by } = buildSkeleton(), geo = figureGeometry(style, !!kit.gloves);
-  if (!geo.attributes.aLoose) geo.setAttribute('aLoose', looseness(geo));
+  if (skull === undefined) skull = ap ? skullOf(ap.face, ap.feat?.nose || 0) : skullOf(look * 7919 + 3);
+  const base = figureGeometry(style, !!kit.gloves);
+  if (!base.attributes.aLoose) base.setAttribute('aLoose', looseness(base));   // (before the skull's copy, which shares it)
+  const { bones, by } = buildSkeleton(), geo = skullGeometry(base, skull);
   const mesh = new THREE.SkinnedMesh(geo, mats);
   mesh.add(bones[0]); mesh.updateMatrixWorld(true); mesh.bind(new THREE.Skeleton(bones)); mesh.frustumCulled = false;
   const cast = new THREE.SkinnedMesh(geo, flatShadow());
@@ -140,7 +144,7 @@ function feetGeometry(geo) {
   return g;
 }
 export function buildFeet2(kit, boots = 0) {
-  const m = buildPlayer2(kit, 7, 1, { boots, style: 0 });
+  const m = buildPlayer2(kit, 7, 1, { boots, style: 0, skull: null });
   const g = feetGeometry(m.mesh.geometry);
   m.mesh.geometry = g; m.root.children[1].geometry = g;   // the body and its flat shadow: feet only
   // the sock is open at the cut, so looking down you see inside it: lit like the outside (the body's
