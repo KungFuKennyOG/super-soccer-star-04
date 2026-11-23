@@ -58,6 +58,23 @@ export const CLIPS = {
   // an aeroplane run, a pile-on, or anyone cupping an ear.
   joy: ['79_69', 'once', { from: 0.85, to: 4.25, face: 'start' }], flip: ['88_01', 'once', { from: 0.13, to: 1.3, face: 'start' }],
   sad: ['91_13', 'stride'], sadB: ['82_10', 'stride'],
+  // going sideways and backwards (game/shuffle.js). `keep`: the stride is turned to the way his pelvis faces, not the way he
+  // goes (the clip's `go` says which way that is: x to his left, z ahead). shuffle: 78_30, a basketball defender's slide
+  // ('DefensiveMoveSideToSide'), one turn of it going to his left at 2.9 m/s (0.47 s: the trailing foot lands, then the lead foot, then both are off the floor): the lead foot reaches out, the trailing foot closes,
+  // they never cross, hips 12 to 20 cm under standing. back: 141_31 'Walk Backwards' (1.2 m/s, upright, toe first). Looked at and
+  // not used: 141_33 / 143_40 (single slow side steps, a stand between each), 143_39 and 136_25 (backward walks at 0.5 to
+  // 0.8 m/s), 76_11 'quick large steps backwards' (three steps, turning), 78_24 'DefensiveStraightNoStop' (a forward run at an
+  // angle, not a backpedal), 78_28 'DefensiveMoveZigZag' (drop steps on a diagonal, never two alike). Nobody recorded a backpedal at pace.
+  shuffle: ['78_30', 'stride', { keep: true, cycle: [4.80, 5.27] }], back: ['141_31', 'stride', { keep: true, from: 6.0, to: 9.8 }],
+  // a cut and an ordinary stop (game/footwork.js). cutA: 127_13 'Run Side Step Left', the step where he plants his right foot
+  // 33 cm wide of his hips and pushes off it to his left (the pelvis, trunk and arms are used; where the foot goes is the game's).
+  // stopC: 127_17 'Run Stop Run': 3.1 m/s to standing in two braking steps, feet landing 0.4 to 0.5 m ahead of his hips, trunk
+  // coming upright, up tall again by 0.9 s. Looked at and not used: 127_15 / 127_16 'Run Turn' (an arc of 60 degrees over half a
+  // second, no plant), 16_51 to 16_54 and 78_15 / 78_16 (not fetched as cuts: see docs/notes-moves3.md).
+  cutA: ['127_13', 'once', { from: 0.2, to: 0.8, face: 'start', floor: 'low' }], stopC: ['127_17', 'once', { from: 0.2, to: 1.4, face: 'start' }],
+  // more kicks (game/kickcap.js): 10_06, the hardest of subject 10's side-foot kicks (11.3 m/s at the ankle, moving through the
+  // ball at 1.5 m/s): the placed finish; 10_05 (10.7 m/s): a second pass.
+  kickShotB: ['10_06', 'kick'], kickPassB: ['10_05', 'kick'],
   // a 'loop' is [from, to] seconds of a capture played round and round, e.g. stand: ['137_28', 'loop', { from: 2, to: 12 }].
   // None is baked: the library's standing takes (113_21, 77_02, 141_20, 137_28) have a tilted or bowed head, fidgeting or hands on hips.
 };
@@ -178,13 +195,15 @@ function plants(pos, floor, dt, speed) {
   return out;
 }
 
-function stride(name, bvh, want, flip = false) {
+function stride(name, bvh, opt = {}, flip = false) {
+  const { want, keep, from = 0, to = 1e9, cycle } = opt;      // cycle: [from, to] seconds, one turn of a gait given outright (played evenly, no plant moved to half way)
   const R = rig(bvh), src = newPose(bvh), all = [];
-  for (let f = 0; f < bvh.frames; f++) { pose(bvh, f, src); all.push({ hip: src.p[R.id.Hips].clone(), l: src.p[R.id.LeftFoot].clone(), r: src.p[R.id.RightFoot].clone() }); }
+  for (let f = 0; f < bvh.frames; f++) { pose(bvh, f, src); const fw = new THREE.Vector3(0, 0, 1).applyQuaternion(src.q[R.id.Hips]); all.push({ hip: src.p[R.id.Hips].clone(), l: src.p[R.id.LeftFoot].clone(), r: src.p[R.id.RightFoot].clone(), fx: fw.x, fz: fw.z }); }
   R.floor = median(all.flatMap(a => [a.l.y, a.r.y]).sort((x, y) => x - y).slice(0, all.length >> 1));     // ankle height with the foot down (capture units)
   const m = a => a.clone().multiplyScalar(R.scale), floor = R.floor * R.scale;
   const path = all.map(a => m(a.hip)), total = path[path.length - 1].clone().sub(path[0]), speed = Math.hypot(total.x, total.z) / ((bvh.frames - 1) * bvh.dt);
   let pr = plants(all.map(a => m(a.r)), floor, bvh.dt, speed), pl = plants(all.map(a => m(a.l)), floor, bvh.dt, speed);
+  pr = pr.filter(p => p.mid * bvh.dt >= from && p.mid * bvh.dt <= to); pl = pl.filter(p => p.mid * bvh.dt >= from && p.mid * bvh.dt <= to);
   if (flip) [pr, pl] = [pl, pr];
   // the steadiest two successive strides: right plant to right plant to right plant, a left plant inside each
   // (a short capture may only hold one: then that one, eased shut at its end)
@@ -197,9 +216,15 @@ function stride(name, bvh, want, flip = false) {
     const score = (lb ? Math.abs(va - vb) / (va + vb) + Math.abs((b - a) - (c - b)) / (c - a) : 1) - (want ? -Math.abs((va + vb) / 2 - want) : 0);
     if (!best || score < best.score) best = { score, a, b, c: lb ? c : null, la: la.mid, lb: lb?.mid, v: (va + vb) / 2, duty: (pr[k + 1].to - pr[k + 1].from) / (b - a) };
   }
-  if (!best && !flip) return stride(name, bvh, want, true);      // no stride between two right plants: take one between two left plants and start it half way round
+  if (cycle) { const a = cycle[0] / bvh.dt, b = cycle[1] / bvh.dt; best = { score: 0, a, b, c: null, la: (a + b) / 2, v: dist(a, b), duty: 0 }; }
+  if (!best && !flip) return stride(name, bvh, opt, true);      // no stride between two right plants: take one between two left plants and start it half way round
   if (!best) throw new Error(`${name}: no clean stride (right plants ${pr.length}, left ${pl.length})`);
-  const { a, b } = best, c = best.c ?? b, go = path[Math.round(c)].clone().sub(path[Math.round(a)]), yaw = Math.atan2(go.x, go.z);
+  const { a, b } = best, c = best.c ?? b, go = path[Math.round(c)].clone().sub(path[Math.round(a)]);
+  let yaw = Math.atan2(go.x, go.z), dir = null;
+  if (keep) {      // faced the way his pelvis faces (its mean over the stride); go: the way he travels then
+    let sx = 0, sz = 0; for (let f = Math.round(a); f <= Math.round(c); f++) { sx += all[f].fx; sz += all[f].fz; }
+    const tr = Math.atan2(go.x, go.z) - (yaw = Math.atan2(sx, sz)); dir = [+Math.sin(tr).toFixed(3), +Math.cos(tr).toFixed(3)];
+  }
   // phase → frame within a stride [t0, t1] whose left plant is at tl: the left plant lands on half way
   const frameAt = (ph, t0, tl, t1) => (ph < 0.5 ? t0 + (tl - t0) * ph * 2 : tl + (t1 - tl) * (ph - 0.5) * 2);
   const A = newOut(), B = newOut(), E = newOut(), s0 = newPose(bvh), s1 = newPose(bvh), o0 = newOut(), o1 = newOut();
@@ -233,8 +258,8 @@ function stride(name, bvh, want, flip = false) {
     lo = Math.min(lo, B.hips.y); hi = Math.max(hi, B.hips.y);
   }
   const period = (c - a) / (best.c ? 2 : 1) * bvh.dt;
-  if (REPORT) console.log(`${name.padEnd(8)} ${best.v.toFixed(2)} m/s  stride ${period.toFixed(3)} s (${(best.v * period).toFixed(2)} m)  planted ${(best.duty * 100).toFixed(0)}%  ${best.c ? 'two strides' : 'ONE stride'}  hips ${lo.toFixed(3)}..${hi.toFixed(3)}  scale ${R.scale.toFixed(4)}  plants R${pr.length} L${pl.length}`);
-  return { kind: 'stride', speed: +best.v.toFixed(3), period: +period.toFixed(4), n: N, q, h };
+  if (REPORT) console.log(`${name.padEnd(8)} ${best.v.toFixed(2)} m/s  stride ${period.toFixed(3)} s (${(best.v * period).toFixed(2)} m)  planted ${(best.duty * 100).toFixed(0)}%  ${best.c ? 'two strides' : 'ONE stride'}  hips ${lo.toFixed(3)}..${hi.toFixed(3)}  scale ${R.scale.toFixed(4)}  plants R${pr.length} L${pl.length}${dir ? '  goes ' + dir : ''}  frames ${(a * bvh.dt).toFixed(2)}..${(c * bvh.dt).toFixed(2)} s`);
+  return { kind: 'stride', speed: +best.v.toFixed(3), period: +period.toFixed(4), n: N, go: dir, q, h };
 }
 
 /* ---------- a loop: a stretch of someone standing ---------- */
@@ -269,7 +294,8 @@ function once(name, bvh, { from, to, face = 'end', floor }) {
   const R = rig(bvh), src = newPose(bvh), f0 = Math.round(from / bvh.dt), f1 = Math.min(bvh.frames - 1, Math.round(to / bvh.dt)), fk = face === 'end' ? f1 : f0;
   let lo = Infinity;
   for (let f = Math.max(f0, f1 - Math.round(0.25 / bvh.dt)); f <= f1; f++) { pose(bvh, f, src); lo = Math.min(lo, src.p[R.id.LeftFoot].y, src.p[R.id.RightFoot].y); }
-  R.floor = floor ?? lo;
+  if (floor === 'low') { lo = Infinity; for (let f = f0; f <= f1; f++) { pose(bvh, f, src); lo = Math.min(lo, src.p[R.id.LeftFoot].y, src.p[R.id.RightFoot].y); } }
+  R.floor = typeof floor === 'number' ? floor : lo;
   pose(bvh, fk, src);
   const fwd = new THREE.Vector3(0, 0, 1).applyQuaternion(src.q[R.id.Hips]), yaw = Math.atan2(fwd.x, fwd.z), org = src.p[R.id.Hips].clone().setY(0);
   const n = Math.round((f1 - f0) * bvh.dt * OHZ) + 1, A = newOut(), q = [], h = [], a = [];
@@ -341,10 +367,10 @@ const clips = {};
 for (const [name, [file, kind, opt]] of Object.entries(SET === 'cheer' ? CHEER : CLIPS)) {
   // (subjects 141 and 143 were captured at 60 Hz though their files say 120: checked against gravity in their runs' flight)
   const bvh = parseBVH(await readFile(`${dir}/${file}.bvh`, 'utf8'), /^14[13]_/.test(file) ? 60 : 0);
-  try { clips[name] = kind === 'kick' ? kick(name, bvh, opt) : kind === 'once' ? once(name, bvh, opt) : kind === 'loop' ? loop(name, bvh, opt) : stride(name, bvh, opt?.want); } catch (e) { console.log(String(e.message)); }
+  try { clips[name] = kind === 'kick' ? kick(name, bvh, opt) : kind === 'once' ? once(name, bvh, opt) : kind === 'loop' ? loop(name, bvh, opt) : stride(name, bvh, opt); } catch (e) { console.log(String(e.message)); }
 }
 const r = v => +v.toFixed(4);
-const head = c => (c.kind === 'kick' ? `hz: ${c.hz}, n: ${c.n}, c: ${c.c}, top: ${c.top}, plant: ${c.plant}` : c.kind === 'once' ? `hz: ${c.hz}, n: ${c.n}` : `period: ${c.period}, n: ${c.n}`);
+const head = c => (c.kind === 'kick' ? `hz: ${c.hz}, n: ${c.n}, c: ${c.c}, top: ${c.top}, plant: ${c.plant}` : c.kind === 'once' ? `hz: ${c.hz}, n: ${c.n}` : `period: ${c.period}, n: ${c.n}${c.go ? `, go: [${c.go}]` : ''}`);
 const body = Object.entries(clips).map(([name, c]) => `  ${name}: { kind: '${c.kind}', speed: ${c.speed}, ${head(c)},\n    q: [${c.q.map(r).join(',')}],\n    h: [${c.h.map(r).join(',')}]${c.a ? `,\n    a: [${c.a.map(r).join(',')}]` : ''} },`).join('\n');
 await mkdir(fileURLToPath(new URL('../game/assets/anim/', import.meta.url)), { recursive: true });
 await writeFile(OUT, `// Motion-capture clips for the players, baked by tools/build-anim.mjs. Do not edit by hand.\n// The data used in this project was obtained from mocap.cs.cmu.edu. The database was created with funding\n// from NSF EIA-0196217.\n// q: one quaternion (x, y, z, w) per bone per sample, bones in BONES order; h: the hips' place per sample (m).\n// A kick is sampled hz times a second; sample c is the contact; a: the right (kicking) and left ankles per sample;\n// h and a are measured from the kicking ankle at the contact (x, z) and the grass (y).\nexport const BONES = ${JSON.stringify(NAMES)};\nexport const CLIPS = {\n${body}\n};\n`);

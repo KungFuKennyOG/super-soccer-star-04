@@ -57,6 +57,7 @@ import { anim2Look } from './anim2look.js';
 import { trophyShots } from './trophylook.js';
 import { groundLook } from './groundlook.js';
 import { trailerLook } from './trailerlook.js';
+import { moves3Look } from './moves3look.js';
 
 const q = new URLSearchParams(location.search);
 let shot = q.get('shot') || 'duel';
@@ -252,6 +253,7 @@ function keepPose(s, t, dt) {
 const val = (v, t) => (typeof v === 'function' ? v(t) : v);
 const TROPHY = trophyShots(scene, q); Object.assign(SHOTS, TROPHY.shots);   // the trophies (tools/trophylook.js lists the shots)
 const GL = groundLook(q, players, ball); Object.assign(SHOTS, GL.shots);     // the grounds (tools/groundlook.js lists the shots)
+const M3 = moves3Look(q, { players, ball, bp, camera, shadowOf: (m, p) => m.shadow.position.set(p.x - LIGHT_DIR.x * 0.12, 0.01, p.z - LIGHT_DIR.z * 0.12) });
 const TR = trailerLook(q, scene, { players, ball, camera, keeper: () => keeper });   // &arena=: any shot in a real ground, moving cameras (tools/trailerlook.js)
 // the carrier's stride and his touches are the sim's own (strides: a 'dribble' event on the touch frame); the ball is where the sim's carry puts it
 const DW = { players: [], owner: 'you', dead: false, wind: null }, rollQ = new THREE.Quaternion(), rollAxis = new THREE.Vector3();
@@ -287,6 +289,7 @@ const bX = t => reelX(t, BURST, -9);
 let time = +(q.get('t') || 0);
 const RAW = CLIPS[q.get('raw')], rawPose = Object.assign(newPose(), { a: new Float32Array(6) });
 function pose(t, dt) {
+  if (M3.active(shot)) { HL.hide(); A2.hide(); ball.visible = true; M3.pose(shot, t); return; }      // cuts, stops, side-steps: shots named m3... (tools/moves3look.js)
   if (A2.active(shot)) { HL.hide(); ball.visible = true; A2.pose(shot, t, dt); return; } A2.hide();
   if (HL.active(shot)) { for (const { m } of players) m.root.visible = m.shadow.visible = false; ball.visible = false; HL.pose(shot, t, dt); return; }
   HL.hide(); ball.visible = true;
@@ -336,7 +339,7 @@ function pose(t, dt) {
   camera.position.set(...val(s.cam, t)); camera.lookAt(...val(s.at, t));
 }
 // poses ease in over time (speed, lean, the head's turn), so a still is run up to, not jumped to (a shot's `warm`: for how many seconds)
-function warm() { if (!SHOTS[shot] && !HL.active(shot) && !A2.active(shot)) { console.warn(`no shot '${shot}', showing duel`); shot = 'duel'; } for (const pl of players) { pl.p.stride = null; pl.m.gait = pl.m.strike = pl.m.special = pl.m.trick = null; pl.m.sway = null; pl.m.kickK = pl.m.onBallK = pl.m.cheerK = pl.m.driveT = 0; } played = 1e9; for (let k = Math.round(((SHOTS[shot] || {}).warm || 1.5) * 60); k >= 0; k--) pose(time - k / 60, 1 / 60); }   // (the last step is the moment itself: a still of the frame a ball is struck on is that frame)
+function warm() { if (!SHOTS[shot] && !HL.active(shot) && !A2.active(shot) && !M3.active(shot)) { console.warn(`no shot '${shot}', showing duel`); shot = 'duel'; } for (const pl of players) { pl.p.stride = null; pl.m.gait = pl.m.strike = pl.m.special = pl.m.trick = null; pl.m.sway = null; pl.m.kickK = pl.m.onBallK = pl.m.cheerK = pl.m.driveT = 0; } played = 1e9; for (let k = Math.round(((SHOTS[shot] || {}).warm || 1.5) * 60); k >= 0; k--) pose(time - k / 60, 1 / 60); }   // (the last step is the moment itself: a still of the frame a ball is struck on is that frame)
 function frame(dt) {
   time += dt; pose(time, dt); if (TR.on) TR.render(renderer, time); else if (HL.active(shot)) HL.render(renderer, camera, W, H); else if (GL.active(shot)) GL.render(renderer, camera, shot, time); else renderer.render(scene, camera);
   document.getElementById('i').textContent = q.get('info') ? `${shot}  calls ${renderer.info.render.calls}  tris ${renderer.info.render.triangles}` : '';
