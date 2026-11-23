@@ -8,7 +8,7 @@ rule: animation "based on real stuff". Nothing here has been seen in a headset.
 | File | What |
 | --- | --- |
 | `game/footwork.js` (new) | A cut's plant on the outside foot; a stop's braking steps and settling step. Feet held in the pitch's space |
-| `game/shuffle.js` (new) | Recorded strides under side-steps and backing off |
+| `game/shuffle.js` (new), `game/gait.js` | The recorded pelvis over side-steps and backing off; the gait's side-step is quicker and wider, its feet never together |
 | `game/kickcap.js` | A second recorded take for shots and for passes, picked per strike (`kickOf`, `strikeDice`) |
 | `game/beaten.js` | A guard that keeps a thrown arm clear of his own head (`handToHead`) |
 | `game/cheers.js` | The pile-on's two teammates rebuilt as a hug |
@@ -62,23 +62,29 @@ off-balance stops.
 
 ## Job 3: side-steps and backing off
 
-**Recorded:** `shuffle` = 78_30 "DefensiveMoveSideToSide", one turn of a basketball defender's slide to his left
-at 2.9 m/s (0.47 s: trailing foot lands, lead foot lands, both off the floor); to the right is its mirror.
-`back` = 141_31 "Walk Backwards" (1.3 m/s). Pelvis and legs only, played at the gait's own phase, reached to the
-ground the gait covers, the weight-bearing foot pinned to the pitch.
-**Built:** the trunk and arms stay the game's (the basketball stance is bent double with hands up); under 3.2 m/s
-the hop is scaled down (to 45% at a walk) and the ankles are kept 27 cm apart across his way (retargeted, they
-touched in the air); backing off is that walk turned over about twice as fast as recorded with the hips 3 cm
-lower and the carried foot lifted 3.5 cm (the recording skims the floor). **Nobody in the library backpedals at a
-defender's pace: this is a quickened walk, not a recorded backpedal.**
+Second version (the orchestrator sent the first back: its feet slid and floated).
+
+**Recorded:** the pelvis and how the legs hang from it: `shuffle` = 78_30 "DefensiveMoveSideToSide" (one turn of a
+basketball defender's slide to his left at 2.9 m/s; to the right is its mirror) and `back` = 141_31 "Walk Backwards".
+How low he sits (hips 79 to 89 cm in the slide, 95 standing), the pelvis's turn and tip through the push.
+**Built:** the feet. They are the gait's own again (`game/gait.js`), which grip, changed in three ways: side-stepping
+he steps 15% quicker and reaches 13 cm further, and the closing foot stops 30 cm short of the other (they came to
+20 cm); backing off he reaches 12 cm further. So a foot is nearly always on the grass. The legs are bent from the
+recorded pelvis to those feet, and the hips keep the recording's sit and a third of its rise and fall. Trunk and
+arms are the game's. Nobody in the library backpedals at a defender's pace: backing off is not a recorded backpedal.
+**Tried first and dropped:** the recording's own feet, pinned. The slide has both feet off the floor between steps;
+at the sim's speeds a pinned copy slipped a frame in ten (1.57 m/s nine frames in ten against the gait's 0.06), had
+neither foot down for much of the cycle, and the retargeted boots nearly touched in the air.
 **Takes looked at and not used:** 141_33 / 143_40 (single slow side steps with a stand between), 143_39 / 136_25
 (backward walks at 0.5 to 0.8 m/s), 76_11 (three big backward steps, turning).
 
-**Measured**, honestly: by the numbers the old procedural feet gripped better.
-- side-step at 2.4 m/s: planted feet median 0.01 → 0.00 m/s, but nine in ten 0.06 → 1.57 (a foot is let go and
-  caught again for a frame as it rolls off). What changed is the look: before, he stood tall and skated; now he
-  sits and pushes off (films).
-- backing off: median 0.01 → 0.00, nine in ten 0.09 → 0.00, worst 0.27 → 1.60 (one frame).
+**Measured** (`tests/unit/moves3.test.js`, before → after, planted feet over the grass):
+- side-step at 2.4 m/s: nine frames in ten 0.06 → 0.03 m/s, worst frame 1.04 → 0.06; at 1.2 m/s 0.02 and 0.26; at
+  3 m/s 0.03 and 0.08. Ankles never nearer than 31 cm. Neither foot down: 0% of frames at 1.2 and 2.4 m/s, 7% at 3
+  (before: 28% at 2.4). Hips 74 to 88 cm.
+- backing off at 2.4 m/s: nine in ten 0.09 → 0.08, worst 0.27 → 0.28; at 2.7 m/s 0.08 and 0.47. Neither foot down:
+  15% → 0%. Ankles never nearer than 21 cm (one passes the other, as walking).
+- worst joint jump 5.0 cm.
 
 ## Job 4: beaten defenders' arms
 
@@ -125,7 +131,7 @@ clipping is a headset question.
 - The cut and the stop begin when the page sees the velocity change, so the plant is a reaction, 0.08 s late.
 - Footwork is off for a man on the ball, for your own boots, the keeper and beaten defenders. So you, cutting
   with the ball in a replay, still run round the corner.
-- Side-steps: one recorded cycle, at one pace, from basketball. Reversing direction goes through the stop.
+- Side-steps: the sit is recorded (basketball), the feet are built. Reversing direction goes through the stop.
 - Teammates' and defenders' arrivals at a spot (the sim slows them gently) rarely reach 8 m/s2, so most of their
   stops are still the gait's own easing; the hard stop is yours in a replay and anyone the sim halts.
 
@@ -139,5 +145,5 @@ quaternion operations more per player per frame, and 124 KB more clip data); def
 
 `tools/ps2look.html?shot=m3cut` (`m3cutfront`, `m3cuttop`, `&ang=`, `&old=1`), `m3stop`, `m3arrive`, `m3zig`,
 `m3side`, `m3back`; `?shot=strike&power=0.4` (placed) against `&power=0.95` (driven).
-Films and strips from this session: `/home/claude/moves3-shots/` (`final/*-before-after.png`: before on top;
+Films and strips from this session: `/home/claude/moves3-shots/` (side-steps and backing off: `final2/*-before-after.png` and `final2/before|after/*.mp4`; the rest: `final/*-before-after.png`: before on top;
 `final/before|after/*.mp4`; `pile-before-front.png`, `pile-after-front.png` and the `.mp4`s; `a1/strikes.png`).

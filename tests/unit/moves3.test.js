@@ -76,13 +76,25 @@ test('a cut: the outside foot is planted wide and held while he is turned, hips 
   assert.ok(run('m3cut', { ang: 12 }).every(r => !r.fw || r.fw.mode !== 'cut'), 'a gentle change of direction is not a cut');
 });
 
-test('side-steps and backing off are on recorded strides, a foot that bears weight held to the pitch', () => {
-  for (const k of ['m3side', 'm3back', 'm3zig']) {
-    const now = M(k), was = M(k, true);
-    console.log(show(k, now)); console.log(show(k + ' before', was));
-    assert.ok(now.slide < 0.05, `${k}: planted feet ${now.slide.toFixed(2)} m/s (median)`);
-    assert.ok(now.jump < 0.3 && now.low > -0.012, `${k}: nothing jumps (${(now.jump * 100).toFixed(1)} cm), nothing under the grass (${(now.low * 100).toFixed(1)} cm)`);
+// how near his ankles come to each other, and how many frames in a hundred have neither foot on the grass
+function feet(rows, t0, t1) {
+  let gap = 9, air = 0, n = 0;
+  for (const r of rows) { if (r.t < t0 || r.t > t1) continue; n++; gap = Math.min(gap, Math.hypot(r.W.footL.ankle.x - r.W.footR.ankle.x, r.W.footL.ankle.z - r.W.footR.ankle.z)); if (r.W.footL.low > 0.02 && r.W.footR.low > 0.02) air++; }
+  return { gap, air: 100 * air / n };
+}
+test('side-steps and backing off: the recorded pelvis over feet that grip, never floating, never together', () => {
+  for (const k of ['m3side', 'm3back']) for (const v of k === 'm3side' ? [1.2, 2.4, 3] : [1.2, 2.4, 2.7]) {      // (a defender backs off at up to 2.7 m/s; faster, he turns and runs)
+    const rows = run(k, { v }), now = measure(rows, ...WIN[k]), was = measure(run(k, { v, old: 1 }), ...WIN[k]), f = feet(rows, ...WIN[k]), name = `${k} at ${v} m/s`;
+    console.log(show(name, now), `| ankles never nearer than ${(f.gap * 100).toFixed(0)} cm, both feet off the grass ${f.air.toFixed(0)}% of frames`); if (v === 2.4) console.log(show(name + ' before', was));
+    assert.ok(now.p90 < 0.1 && now.worst < 0.5, `${name}: planted feet ${now.p90.toFixed(2)} m/s nine frames in ten, ${now.worst.toFixed(2)} at worst`);
+    assert.ok(f.air < 10, `${name}: he is not floating (neither foot down on ${f.air.toFixed(0)}% of frames)`);
+    assert.ok(f.gap > (k === 'm3side' ? 0.27 : 0.14), `${name}: his ankles are never nearer than ${(f.gap * 100).toFixed(0)} cm`);
+    assert.ok(now.jump < 0.15 && now.low > -0.012, `${name}: nothing jumps (${(now.jump * 100).toFixed(1)} cm), nothing under the grass`);
+    // and he does sit: lower than the same man standing tall
+    if (k === 'm3side') { const mid = rows.filter(r => r.t > 1 && r.t < 1.9), y = mid.reduce((a, r) => a + r.hipY, 0) / mid.length; assert.ok(y < 0.88 && y > 0.74, `${name}: hips at ${(y * 100).toFixed(0)} cm (standing 95)`); }
   }
+  const z = M('m3zig'); console.log(show('m3zig', z));
+  assert.ok(z.slide < 0.05 && z.jump < 0.3 && z.low > -0.012);
 });
 
 test('a left-footed man, and your own first-person legs', () => {
