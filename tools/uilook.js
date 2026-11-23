@@ -17,7 +17,7 @@ const deg = (w, d) => 2 * Math.atan(w / 2 / d) * 180 / Math.PI;
 const PPD = 11, px = (w, d) => Math.round(deg(w, d) * PPD);
 // seeded random so the cup tables are the same every run
 let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
-const settings = { difficulty: 1, length: 1, wobble: 1, commentary: 2, replays: 1, juice: 1, skills: 1, weather: 0, ball: 0, boots: 0, heads: 0 };
+const settings = { difficulty: 1, length: 1, commentary: 2, replays: 1, juice: 1, skills: 1, weather: 0, ball: 0, boots: 0, heads: 0 };
 const world = createCup('world', 'BRA', rnd);
 playUser(world, 2, 1, rnd);
 const ko = createCup('world', 'ENG', rnd);
