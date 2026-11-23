@@ -48,7 +48,9 @@ const SL = [[0.15, 1.522, 0.15, 1.38, 0.06, 0.064], [0.19, 1.505, 0.163, 1.356, 
   [0.264, 1.212, 0.156, 1.208, 0.064, 0.064]];                                                             // the hem, turned up inside to the arm
 export const TURN = 0.4;                                        // how far the hanging hand is turned, its back coming round to the front (radians)
 
-export function arm(b, s, n, gloves = false) {   // gloves: a keeper's (gloves.js) in place of the bare hand
+// o (a figure that isn't a footballer, see pressfigure.js): long: the sleeve runs on to a cuff at the wrist and only
+// the hand is bare; shut: { L, R } how far that hand's fingers are closed (1 = as it hangs; more: round something)
+export function arm(b, s, n, gloves = false, o = {}) {   // gloves: a keeper's (gloves.js) in place of the bare hand
   const ua = 'upperArm' + n, fa = 'foreArm' + n, hd = 'hand' + n, cl = 'clavicle' + n, ax = s * P.shoulderX, ay = P.shoulderY, mirror = s < 0;
   const io = (o, i) => (s > 0 ? [o, i] : [i, o]);
   // The cap stays with the shoulder, the tube goes with the arm, the armpit is shared between them.
@@ -57,12 +59,12 @@ export function arm(b, s, n, gloves = false) {   // gloves: a keeper's (gloves.j
     return { [ua]: k, [cl]: 0.6 * (1 - k), chest: 0.4 * (1 - k) };
   };
   const hangs = (a, r) => (r.lip ? null : out(a, 0.004 * sstep(1.36, 1.18, r.c[1]) * Math.max(0, 0.4 + 0.6 * Math.sin(a * 2 + 1 + s) + 0.3 * Math.sin(a * 3 + 2.3)), r));
-  b.loft(SL.map(([tx, ty, bx, by, f, bk], i) => {
+  const SLv = o.long ? SL.slice(0, -2) : SL, cap = SLv.map(([tx, ty, bx, by, f, bk], i) => {
     const dx = tx - bx, dy = ty - by, l = Math.hypot(dx, dy);
     const droop = 0.14 * sstep(1.3, 1.18, ty);             // the cloth lies on the arm in front and hangs off it behind, so the hem is lower at the back
     return { c: [s * (tx + bx) / 2, (ty + by) / 2, 0], rx: l / 2, rz: [f, bk], n: 2.1, ax: [dx / l, s * dy / l, 0], az: [0, Math.sin(droop), Math.cos(droop)],
-      v: i === SL.length - 1 ? 0.995 : i / (SL.length - 2), w: sw, lip: i === SL.length - 1 };
-  }), R.sleeve, { seg: 12, a0: Math.PI, mirror, shape: hangs });
+      v: o.long ? 0.42 * i / (SLv.length - 1) : i === SL.length - 1 ? 0.995 : i / (SL.length - 2), w: sw, lip: !o.long && i === SL.length - 1 };
+  });
 
   // arm: [down from the shoulder, outer, inner, front, back, forward]. It starts up inside the sleeve, a little
   // slimmer than it shows below the hem so it never comes through the cloth. From the elbow down the forearm
@@ -81,14 +83,19 @@ export function arm(b, s, n, gloves = false) {   // gloves: a keeper's (gloves.j
   // rounding in to the knuckles. [down from the wrist, half thickness, half width toward the thumb, toward the little finger, squareness, toward the palm]
   const HS = 1.12, hy = d => ay + P.wristDY + d * HS;
   const PALM = [[-0.018, 0.019, 0.037, 0.035, 2.5, 0], [-0.045, 0.021, 0.047, 0.044, 2.6, 0.001], [-0.075, 0.019, 0.048, 0.045, 2.5, 0.004], [-0.093, 0.0125, 0.044, 0.042, 2.2, 0.008]];
-  const rings = [...AR.map(([dy, o, i, f, bk, z]) => ({ ...turned(TURN * sstep(-0.34, P.wristDY, dy), [ax, ay + dy, z]), rx: io(o, i), rz: [f, bk], v: vOf(SPAN.arm, dy), w: armW(dy) })),
+  // a long sleeve: on down the arm, a little off it, to a cuff at the wrist (turned in to the arm)
+  if (o.long) for (const [dy, r, z, lip] of [[-0.25, 0.066, 0], [-0.3, 0.062, -0.003], [-0.345, 0.062, -0.003], [-0.4, 0.058, 0], [-0.46, 0.051, 0.003], [-0.515, 0.045, 0.006], [-0.548, 0.043, 0.008], [-0.55, 0.031, 0.008, 1]])
+    cap.push({ ...turned(TURN * sstep(-0.34, P.wristDY, dy), [ax, ay + dy, z]), rx: r, rz: r * 1.04, n: 2.1, v: lip ? 0.995 : 0.42 + 0.56 * (dy + 0.25) / -0.3, w: armW(dy), lip: !!lip });
+  b.loft(cap, R.sleeve, { seg: 12, a0: Math.PI, mirror, shape: hangs });
+  const rings = [...(o.long ? AR.slice(-2) : AR).map(([dy, o, i, f, bk, z]) => ({ ...turned(TURN * sstep(-0.34, P.wristDY, dy), [ax, ay + dy, z]), rx: io(o, i), rz: [f, bk], v: vOf(SPAN.arm, dy), w: armW(dy) })),
     ...(gloves ? [] : PALM).map(([d, t, f, bk, sq, inx]) => ({ ...turned(TURN, [ax - s * inx, hy(d), 0.01], 0.25 * d / -0.093), rx: t, rz: [f, bk], n: sq, v: vOf(SPAN.arm, P.wristDY + d), w: armW(P.wristDY + d) }))];
   b.loft(rings, R.arm, { seg: 12, a0: Math.PI, mirror, capEnd: true, shape: (a, r) => out(a, muscle(a, r), r) });
   if (gloves) { glove(b, s, n); return; }
   // Fingers: four, lying side by side, each bent at its three joints: a hand half closed, as it hangs or
   // as he runs, the little finger closed most. [across the palm, length, how far it is closed]
-  const f0 = b.pos.length / 3, H = { [hd]: 1 }, FG = [[0.0435, 0.074, 0.82], [0.0215, 0.084, 1], [-0.0005, 0.078, 1.14], [-0.022, 0.063, 1.26]];
-  for (const [z, len, shut] of FG) {
+  const f0 = b.pos.length / 3, H = { [hd]: 1 }, FG = [[0.0435, 0.074, 0.82], [0.0215, 0.084, 1], [-0.0005, 0.078, 1.14], [-0.022, 0.063, 1.26]], grip = (o.shut && o.shut[n]) || 1;
+  for (const [z, len, shut0] of FG) {
+    const shut = grip === 1 ? shut0 : grip * (0.8 + 0.2 * shut0);
     const r = len < 0.07 ? 0.0102 : 0.0112, at = [0.008, hy(-0.089)], ring = [];
     let t = 0;
     [[0.6, 0], [0.82, 0.46], [0.42, 0.3], [0, 0.24]].forEach(([bend, part], k) => {         // the knuckle, two joints, the tip: how far each bends, the bone before it

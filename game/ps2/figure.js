@@ -16,12 +16,14 @@ import { sstep, gauss } from './paint.js';
 import { leg, arm } from './limbs.js';
 
 const cache = new Map();
-export function figureGeometry(style = 0, gloves = false) {   // gloves: a keeper's hands (gloves.js)
-  const key = style + (gloves ? 'g' : '');
+// dress (someone who isn't a footballer, see pressfigure.js): { key, lower(b, s, n): his legs in place of shorts,
+// legs and boots, arm: options for limbs.js arm() }
+export function figureGeometry(style = 0, gloves = false, dress = null) {   // gloves: a keeper's hands (gloves.js)
+  const key = style + (gloves ? 'g' : '') + (dress ? dress.key : '');
   if (cache.has(key)) return cache.get(key);
   const b = new Builder();
   torso(b);
-  for (const [s, n] of [[1, 'L'], [-1, 'R']]) { shorts(b, s, n); leg(b, s, n); arm(b, s, n, gloves); }
+  for (const [s, n] of [[1, 'L'], [-1, 'R']]) { if (dress) dress.lower(b, s, n); else { shorts(b, s, n); leg(b, s, n); } arm(b, s, n, gloves, dress ? dress.arm : undefined); }
   b.part(HEAD_SHEET);                                   // the head and hair: second material, their own sheet
   addHead(b, style);
   const g = b.geometry();

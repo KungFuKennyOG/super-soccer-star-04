@@ -161,3 +161,98 @@ holding the camera up over their heads.
 - The exit back to the menu was re-checked on the World Cup night run only.
 - `tools/ceremonylook.html` (LOOK=1 in `tools/ceremonyshots.mjs`) is a quick page without the stadium for
   looking at the squad, medals and press; its lighting is the day or night lights but not the stadium's.
+
+## Third pass (branch `ceremony3`): photographers' clothes and life, the silver cup's reflection, claps and medals, the celebration prompt
+
+No rules changes. Shots and films: `docs/ceremony-shots/c3-*`.
+
+### Photographers (`game/ps2/pressfigure.js`, `game/ps2/press.js`, `game/pressact.js`, `game/presscast.js`, `game/pressfeet.js`)
+
+Kenny: built on the footballer, so shorts hems, sock tops, football boots and black hands (gloves).
+- Clothes: the body builder takes a `dress` (`figureGeometry(style, gloves, dress)`, a few lines in `figure.js`; `arm()` in
+  `limbs.js` takes `{ long, shut }`). A photographer's is `PRESS_DRESS`: trousers as one garment from the waist to a hem on
+  the shoe (no hem at the knee, no sock top), plain shoes (the boot's loft with a rounder toe; painted with a flat dark sole
+  and a welt, no studs), a jacket whose sleeves run to a cuff at the wrist, bare hands in his own skin tone. The right
+  hand's fingers are closed 1.4x (round the grip), the left's opened to 0.6x (cupped under the lens). Trousers in five
+  cloths (charcoal, khaki, black, stone, denim), three shoe leathers. Footballers are untouched (same geometry cache keys).
+- Hands on the camera: each hand is turned so its palm lies on its place (right: flat on the outside of the grip, fingers
+  forward round its front, thumb up behind; left: palm up under the barrel, fingers along it and up the far side) and the
+  arm is bent to that wrist; the fingers are then swung on the palm toward the line of the forearm so the wrist isn't bent
+  sideways past what a wrist does. Both hands stay on the camera in everything he does.
+- Alive (`pressact.js`, pure, `tests/unit/pressact.test.js`): each shoots for 2.5 to 6 s, then one of: drops the camera to
+  his chest and looks down at the screen for 1.3 to 2.4 s; swings off the cup to one of the squad and back; leans out to one
+  side for a few seconds (standing men); the two overhead men come down to the eye or go back up. All the time: a small
+  quick re-framing every 1 to 3 s, weight from one leg to the other every 3 to 8 s. The right-hand kneeler gets up (1.15 s,
+  over his front foot, the back foot brought through, camera down while he does) for the lift and now and then on his own,
+  and goes down again. Two of the back row change places every 26 s (first after 5 s): cameras down, side-stepping, one
+  going round behind the other; a standing man's feet stay where they were put down and step after him (`pressfeet.js`).
+  When the cup goes up everyone is back on it 0.1 to 0.5 s later and nobody checks a screen for 3.5 to 6 s.
+- The boards behind them moved back 0.6 m (z -3.9) to give the back row room to pass.
+- Built, not captured (the library has no photographer). From: camera makers' how-to-hold guides (Nikon: left hand cradles
+  the lens from underneath, never over the top; elbows propped against the torso; one foot half a pace ahead), a press
+  photographer's account of working in a pack (waiting, competing for a clear view, reviewing on the camera's screen), and
+  general knowledge of photocalls (front row low, back row over the top, "Hail Mary" overhead). Timings are guesses.
+- Measured (`LOOK=1 MEASURE=40 node tools/ceremonyshots.mjs out club MAD day`, 40 s with a lift in it, every frame): arms
+  inside the trunk (as an oval column) at most 0.2 to 2.4 cm for six of them (elbows against the ribs while the camera is at
+  the chest: the sleeve is 6.6 cm thick there and the measure counts it) and 4.9 cm for the man getting up, for a few frames
+  as he goes back down with the camera coming up; inside the head 0.2 cm; inside the camera 0.1 cm (forearm against the
+  barrel). Nearest two men: 0.55 m apart (the two passing).
+- Short: a photographer still has the footballer's tucked-in waist under the tabard; trouser knees are a bent tube (they
+  pinch on the kneelers); the hand on the grip has its wrist bent back about as far as a wrist goes; fingers are closed in
+  the mesh, so they don't open when the camera comes down; side-steps are a shuffle with the knees apart, not a recorded
+  walk; the man getting up has no hand to push off with; nobody turns his head to talk or looks at you; no straps, bags or
+  second camera bodies; soft blob shadows only.
+
+### The silver cup's blotch (`game/ps2/trophymat.js`)
+
+It was the painted stadium the metal reflects: near-black stands with a thin pale line of ad boards through them. The
+cup's belly is a convex mirror, so everything behind you came out a few centimetres across: a black patch with a ring in it
+(`c3-silver-before-look.png`, Kenny's "lips"). Now the stands and the far pitch are one soft mid tone (0.33 by day), the roof edge is
+a glow not a line, the crowd has almost no grain and the pitch no mown stripes (squeezed small they were a row of teeth).
+The sky is still three times brighter than the stands, which is what reads as metal. A second picture for floodlit nights
+(dark sky with haze over the roofs, hotter lamp banks, lit stands and pitch): `trophyTime(night)`, called as the ceremony
+starts; the night picture is painted and filtered the first time it's needed (a hitch of its own, unmeasured on a Quest).
+Looked at from your eyes before and after the lift, from the stands and on the quick page, both cups, day and night: no
+blotch; the gold cup is as it was by day and a little deeper at night. Honest: the silver's belly is now a soft pale grey
+with a faint darker oval where the stands are; it is less mirror-like than the lid. Only real reflections (a cube camera
+at the ceremony) would put the squad and the carpet in it; not built.
+
+### Claps and medals (`game/ceremonycast.js` `clearMedal`, `medalGap`)
+
+A wrist the take puts in front of the ribbon or the disc is moved straight out from the chest (11.5 cm clear of the
+ribbon), and one level with the disc also down under it (to 1.165 m, a clap at the belt), eased in by where the hand is,
+the arm bent again to it. Nearest a hand (wrist, palm, fingertips) comes to the medal over 18 s, per man: 1.7 to 9.5 cm
+before, 8.8 to 12.7 cm after. `c3-claps-before-after.png`: the disc is in plain sight in every frame after. Honest: the
+low clap is a little formal (arms straighter); `CLEAR` in `ceremonycast.js` has the numbers.
+
+### The celebration prompt (`game/celebration.js`, `game/hudslot.js`)
+
+It was a metre-wide panel 2.1 m away, 24 degrees to the right of where you look, level with the horizon; the banner
+(46 degrees wide at 3 m, trailing your head) and the subtitle (48 degrees wide, on your head) are both wider than that
+gap, so their panels overlapped it (how much of the paint overlapped depended on the words). Now the prompt and the
+arm-pose caption ride on your head like the subtitle and the bug (22 degrees wide, a metre away), and each frame they take
+the highest free place straight ahead under the middle of the view that touches nothing showing: the outlines of the
+banner (passed in from `main.js`, one line), the subtitle, the bug and anything else on the camera, with 2.5 degrees
+clear. Nothing showing: its top 3 degrees under the middle. A subtitle up: under it (top at -15.6 degrees). No room below
+(you are looking far up and the banner has come down): out to the right of everything. It moves away at once and comes
+back eased. `tests/unit/hudslot.test.js` sweeps every head pitch with and without a subtitle;
+`node tools/promptshots.mjs out` shoots six cases in the real game and prints the outlines (0 overlaps).
+Honest: it is smaller than it was (22 degrees wide, was 27) and with a subtitle up it sits 16 to 32 degrees under the
+middle of your view, which is a long way to drop your eyes in a headset; looking far up, the banner itself comes down onto
+the subtitle (that is `game/hud.js`, not changed here). In the browser the bug is a DOM element at the top left, nowhere
+near.
+
+### Numbers (headless Chrome, no fps)
+
+- Photographers: 17 draws as before (7 x clothes + head, cameras, caps, shadows now one instanced draw), 42,680 triangles
+  (was 46,082: 3,400 saved, the trousers and long sleeves are fewer rings than shorts, thighs, socks and arms).
+- Whole ceremony frame: 76 to 84 draws, 201,000 to 209,000 triangles (as before within the stadium's own variation).
+- Nothing added for the cup (same materials; one more 1024 x 512 half-float picture and its filtered copy at night), the
+  claps (arm IK on up to 16 hands a frame) or the prompt (same two planes).
+
+### Not seen in a headset
+
+- The photographers 2.5 to 3 m in front of you in stereo: hands on the cameras, the trousers at the knee, whether seven
+  people fidgeting is too busy or about right; fps (unchanged triangle count, more IK per frame).
+- The silver at arm's length and over your head; the night picture's first-use hitch.
+- The prompt's size and place under the subtitle, and whether it should sit on the right instead.

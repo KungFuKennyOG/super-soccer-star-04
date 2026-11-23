@@ -7,18 +7,28 @@ import { CELEBRATIONS, CELEBRATE, createPick, stepPick, gestureFromHands, celebr
 import { startCelebration, pickCelebration } from '../rules/sim.js';
 import { uiPlane, PAL, text, box, maroon, stack, glyph } from './ps2/ui.js';
 import { viewDrop } from './cheers.js';
+import { slot } from './hudslot.js';
 
 const W = 512, RH = 46, TOP = 50, H = TOP + CELEBRATIONS.length * (RH + 2) + 52;
 const HINT = { wide: 'or arms out wide', ears: 'or hands to ears', sky: 'or one arm up' };
 
-export function createCelebration(scene, camera) {
-  const { ctx, t: tex, m: panel } = uiPlane(W, H, 1.02, 1.02 * H / W, { mat: { depthTest: false } });
-  panel.renderOrder = 12; panel.visible = false; scene.add(panel);
-  const cap = uiPlane(512, 64, 1.3, 0.1625, { mat: { depthTest: false } });
-  cap.m.renderOrder = 12; cap.m.visible = false; scene.add(cap.m);
+// The prompt and the caption ride on your head like the scoreboard bug and the subtitle do, a metre away:
+// PANEL_W x its height and CAP_W x its height, in degrees of your view.
+const DIST = 1, DEG = Math.PI / 180, PANEL_W = 22, CAP_W = 26;
+const sizeOf = (deg, aspect) => { const w = 2 * DIST * Math.tan(deg / 2 * DEG); return [w, w * aspect]; };
+
+// o.avoid: () => meshes floating in the world that the prompt must not cover (the HUD's event banner). What rides
+// on your head (the subtitle, the scoreboard bug, the training card) it finds for itself: the camera's children.
+export function createCelebration(scene, camera, o = {}) {
+  const { ctx, t: tex, m: panel } = uiPlane(W, H, ...sizeOf(PANEL_W, H / W), { mat: { depthTest: false } });
+  panel.renderOrder = 12; panel.visible = false; camera.add(panel);
+  const cap = uiPlane(512, 64, ...sizeOf(CAP_W, 64 / 512), { mat: { depthTest: false } });
+  cap.m.renderOrder = 12; cap.m.visible = false; camera.add(cap.m);
+  for (const m of [panel, cap.m]) { m.rotation.order = 'YXZ'; m.userData.at = null; }
 
   let wait = 0, pk = null, on = null, last = -1, hat = false, drawn = '', capT = 0;
   const head = new THREE.Vector3(), dir = new THREE.Vector3(), hand = new THREE.Vector3();
+  let lastRect = null;
 
   function gesture(raw) {
     if (!raw.vr || !raw.leftHand || !raw.rightHand) return null;
@@ -44,12 +54,45 @@ export function createCelebration(scene, camera) {
     text(ctx, 'Stick: choose', W - 12, bottom + 28, { size: 19, align: 'right', color: PAL.muted });
     tex.needsUpdate = true;
   }
-  // the prompt to the right of where you look, clear of the goal banner and the commentator's subtitle; the caption low in front
-  function place(m, dist, down, turn = 0) {
-    camera.getWorldPosition(head); camera.getWorldDirection(dir);
-    const yaw = Math.atan2(dir.x, dir.z) + turn;
-    m.position.set(head.x + Math.sin(yaw) * dist, head.y - down, head.z + Math.cos(yaw) * dist);
-    m.lookAt(head.x, head.y - down * 0.5, head.z);
+  // Where it goes: straight ahead under the middle of your view, as high as it can be without touching anything
+  // else that is showing (game/hudslot.js): under the subtitle while one is up, lower still if the banner has come
+  // down that far, off to one side if there is no room below. It drops out of the way at once and comes back up
+  // gently, so it is never on top of the banner, the subtitle or the bug even for a frame.
+  const inv = new THREE.Matrix4(), corner = new THREE.Vector3();
+  function rectOf(m) {                                   // a plane's outline in your view, degrees
+    const g = m.geometry.parameters, r = { y0: 999, y1: -999, e0: 999, e1: -999 };
+    m.updateWorldMatrix(true, false);
+    for (const sx of [-0.5, 0.5]) for (const sy of [-0.5, 0.5]) {
+      corner.set(sx * g.width, sy * g.height, 0).applyMatrix4(m.matrixWorld).applyMatrix4(inv);
+      if (corner.z > -0.05) return null;                 // (behind you: not in view)
+      const y = Math.atan2(corner.x, -corner.z) / DEG, e = Math.atan2(corner.y, -corner.z) / DEG;
+      r.y0 = Math.min(r.y0, y); r.y1 = Math.max(r.y1, y); r.e0 = Math.min(r.e0, e); r.e1 = Math.max(r.e1, e);
+    }
+    return r;
+  }
+  function showing() {
+    camera.updateWorldMatrix(true, false); inv.copy(camera.matrixWorld).invert();
+    const out = [];
+    for (const m of [...camera.children, ...(o.avoid ? o.avoid() : [])]) {
+      if (!m || !m.visible || m === panel || m === cap.m || !m.geometry || !m.geometry.parameters || !m.geometry.parameters.width) continue;
+      const r = rectOf(m); if (r) out.push(r);
+    }
+    return out;
+  }
+  function place(m, deg, dt, vr) {
+    const h = deg * m.geometry.parameters.height / m.geometry.parameters.width, lim = vr ? 44 : camera.fov / 2 - 1.5;
+    const want = slot(showing(), deg, h, { top: -3, gap: 2.5, low: -lim, side: vr ? 50 : Math.atan(Math.tan(lim * DEG) * camera.aspect) / DEG });
+    let at = m.userData.at;
+    if (!at) at = m.userData.at = { yaw: want.yaw, top: want.top };
+    // away from something at once (down, or out sideways); back toward the middle eased
+    const e = Math.min(1, dt * 6);
+    at.top = want.top < at.top ? want.top : at.top + (want.top - at.top) * e;
+    at.yaw = Math.abs(want.yaw) > Math.abs(at.yaw) ? want.yaw : at.yaw + (want.yaw - at.yaw) * e;
+    const el = (at.top - h / 2) * DEG, yaw = at.yaw * DEG;
+    m.position.set(DIST * Math.tan(yaw), DIST * Math.tan(el) / Math.cos(yaw), -DIST);
+    m.rotation.set(el, -yaw, 0);
+    m.visible = want.ok;
+    return { y0: at.yaw - deg / 2, y1: at.yaw + deg / 2, e0: at.top - h, e1: at.top };
   }
   function caption(s) {
     cap.ctx.clearRect(0, 0, 512, 64);
@@ -57,12 +100,14 @@ export function createCelebration(scene, camera) {
     text(cap.ctx, s, 256, 32, { size: 27, align: 'center', max: 488 });
     cap.t.needsUpdate = true; capT = 2.2;
   }
-  const stop = () => { wait = 0; pk = null; on = null; panel.visible = cap.m.visible = false; };
+  const stop = () => { wait = 0; pk = null; on = null; panel.visible = cap.m.visible = false; panel.userData.at = cap.m.userData.at = null; };
 
   return {
     get active() { return wait > 0 || !!pk || !!on; },
     get picking() { return !!pk; },
     overlays: [panel, cap.m],
+    // (for the tools and the test) what is showing in your view and where the prompt is, degrees
+    get layout() { return { rects: showing(), panel: panel.visible ? lastRect : null }; },
     // how far your eyes are moved up or down by the one playing (m): the page adds it to the rig
     drop(world) { return on ? viewDrop(world.celebrate) : 0; },
     get state() { return { wait, pick: pk && { i: pk.i, t: pk.t }, on, hat }; },
@@ -84,18 +129,18 @@ export function createCelebration(scene, camera) {
       if (pk) {
         if (skip) { stop(); return { kind: null, by: 'skip', hat, bonus: 0, skipped: true }; }
         const id = pk.force || stepPick(pk, dt, raw.nav, gesture(raw));
-        place(panel, 2.1, 0.3, -0.42); panel.visible = true; draw(raw.vr);
+        lastRect = place(panel, PANEL_W, dt, raw.vr); draw(raw.vr);
         if (!id) return null;
         last = CELEBRATIONS.findIndex(c => c.id === id);
         on = { kind: id, by: pk.force ? 'button' : pk.by };
-        pk = null; panel.visible = false;
+        pk = null; panel.visible = false; panel.userData.at = null;
         pickCelebration(world, id);
         if (raw.vr) caption(byKind(id).say);
         return null;
       }
       if (!on) return null;
       capT -= dt; cap.m.visible = capT > 0;
-      if (cap.m.visible) place(cap.m, 2.2, 0.62);
+      if (cap.m.visible) place(cap.m, CAP_W, dt, raw.vr);
       if (skip || celebrationDone(world.celebrate)) {
         const r = { ...on, hat, bonus: hat && !skip ? CELEBRATE.bonus : 0, skipped: !!skip };
         stop();

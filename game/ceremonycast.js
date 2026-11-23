@@ -105,6 +105,56 @@ function partHands(root, bn, drop = 0, need = 0.13) {
   }
 }
 
+// The medal on his chest in the bind pose (game/ps2/medal.js lays it there): the ribbon's V down the front of
+// the shirt and the disc under its point, as a few line segments; it all goes with the chest bone.
+const RIBBON = [[0.088, 1.48, 0.06], [0.072, 1.44, 0.1], [0.05, 1.39, 0.125], [0.027, 1.34, 0.135], [0, 1.293, 0.142]], DISC_DROP = 0.08;
+export const CLEAR = { on: true, z: 0.115, x: 0.13, top: 1.5, under: 0.12, high: 1.37, low: 1.165 };
+const bind = new THREE.Matrix4(), unbind = new THREE.Matrix4(), hp = new THREE.Vector3();
+// model space ↔ the chest's bind space (where the medal's shape is known)
+function chestSpace(c) {
+  const sk = c.m.mesh.skeleton, i = c.medal.mesh.geometry.userData.bone;
+  bind.copy(c.m.root.matrixWorld).invert().multiply(sk.bones[i].matrixWorld).multiply(sk.boneInverses[i]); unbind.copy(bind).invert();
+}
+// Hands stay off the medal: a wrist that the take puts in front of the ribbon or the disc (it claps and holds
+// its hands together right there, at the breastbone) is moved straight out from the chest until the hand clears
+// them (and down under the disc if it was level with it), only as far as it has to be and only while it is in front of them, and the arm bent again to it.
+function clearMedal(c, bn) {
+  if (!c.medal || !CLEAR.on) return;
+  c.m.root.updateMatrixWorld(true); chestSpace(c);
+  for (const n of ['L', 'R']) {
+    c.m.root.worldToLocal(bn['hand' + n].getWorldPosition(wl)); hp.copy(wl).applyMatrix4(unbind);
+    const kx = smooth((CLEAR.x + 0.06 - Math.abs(hp.x)) / 0.06), k = kx * smooth((CLEAR.top + 0.05 - hp.y) / 0.05) * smooth((hp.y - (RIBBON[4][1] - DISC_DROP - CLEAR.under)) / 0.06);
+    // level with the disc they also go down under it (a clap at the belt, the medal in plain sight above the
+    // hands); higher up, in front of the ribbon, they only move out
+    const low = kx * smooth((CLEAR.high - hp.y) / 0.08) * smooth((hp.y - CLEAR.low) / 0.05), down = Math.max(0, hp.y - CLEAR.low) * low;
+    const need = (RIBBON[4][2] + CLEAR.z * (1 - 0.35 * low) - hp.z) * k;
+    if (need <= 0.002 && down <= 0.002) continue;
+    hp.y -= down; if (need > 0) hp.z += need; hp.applyMatrix4(bind);
+    c.m.root.worldToLocal(bn['foreArm' + n].getWorldPosition(el)); c.m.root.worldToLocal(bn['upperArm' + n].getWorldPosition(sh));
+    reachArm(bn, n, hp, pole.copy(el).sub(sh.add(hp).multiplyScalar(0.5)));
+  }
+}
+// (for the tools and the test) how near either hand comes to his medal, metres: the wrist, the palm and the fingertips
+// against the ribbon's front and the disc
+const ha = new THREE.Vector3(), hb = new THREE.Vector3(), seg = new THREE.Line3(), near = new THREE.Vector3(), hq = new THREE.Quaternion();
+export function medalGap(c) {
+  const bn = c.m.bone; c.m.root.updateMatrixWorld(true); chestSpace(c);
+  let best = 9;
+  for (const n of ['L', 'R']) {
+    c.m.root.worldToLocal(bn['hand' + n].getWorldPosition(ha)).applyMatrix4(unbind);
+    bn['hand' + n].getWorldQuaternion(hq); hb.set(0, -1, 0).applyQuaternion(hq).transformDirection(c.m.root.matrixWorld.clone().invert()).transformDirection(unbind);
+    for (const d of [0, 0.09, 0.17]) {
+      hp.copy(ha).addScaledVector(hb, d);
+      for (const sx of [1, -1]) for (let i = 0; i < RIBBON.length; i++) {
+        const a = RIBBON[i], b = RIBBON[i + 1] || [0, a[1] - DISC_DROP, a[2] + 0.008];
+        seg.set(v1.set(a[0] * sx, a[1], a[2]), v2.set(b[0] * sx, b[1], b[2])); seg.closestPointToPoint(hp, true, near);
+        best = Math.min(best, near.distanceTo(hp));
+      }
+    }
+  }
+  return best;
+}
+
 // A boot on the floor stays where it came down: while its toes are within a few centimetres of the floor their
 // spot is kept and the leg bent to it (a take's legs on our skeleton drift otherwise); let go as it lifts, or if
 // the take has gone 14 cm from it (a step), the difference eased away.
@@ -150,7 +200,7 @@ export function createCast(group, team, seed = 1) {
     actPose(a, c.t, c.mirror, PA);
     if (k < 1) mixPose(actPose(b, c.t, c.mirror, PB), PA, k, PA);
     restPose(bn); applyPose(bn, PA, 1, PART.body);
-    pinFeet(c, bn, dt); partHands(c.m.root, bn, c.drop || 0);
+    pinFeet(c, bn, dt); partHands(c.m.root, bn, c.drop || 0); clearMedal(c, bn);
     for (const [act, w] of [[a, k], [b, 1 - k]]) {
       if (!act.fist || w <= 0.01) continue;
       const which = act.fist === 'out' ? (c.x < 0 ? 'L' : 'R') : act.fist;       // (the arm that isn't round his mate)

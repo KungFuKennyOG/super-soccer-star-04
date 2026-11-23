@@ -16,8 +16,10 @@ import * as THREE from 'three';
 import { byId } from '../rules/teams.js';
 import { LIGHT_DIR } from '../game/ps2/player.js';
 import { buildStage, STAGE } from '../game/ps2/stage.js';
-import { createCast } from '../game/ceremonycast.js';
+import { createCast, medalGap, CLEAR } from '../game/ceremonycast.js';
 import { createPress } from '../game/presscast.js';
+import { buildTrophy2, buildPlinth2 } from '../game/ps2/trophies.js';
+import { trophyTime } from '../game/ps2/trophymat.js';
 
 const q = new URLSearchParams(location.search), W = +(q.get('w') || innerWidth), H = +(q.get('h') || innerHeight), night = q.get('time') === 'night';
 const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
@@ -33,6 +35,11 @@ const team = byId(q.get('team') || 'ITA'), kind = q.get('kind') || 'world';
 G.add(buildStage(kind).mesh);
 const cast = createCast(G, team, 3), press = createPress(G);
 const cam = new THREE.PerspectiveCamera(40, W / H, 0.05, 300), cup = new THREE.Vector3(0, STAGE.h + 1.25, -0.6);
+// the cup on its plinth in front of you (as game/trophy.js places them); it follows `cup` once you hold it
+trophyTime(night);
+if (q.get('noclear')) CLEAR.on = false;                    // (before: hands as the takes have them, through the medal)
+const plinth = buildPlinth2(); plinth.position.set(0, STAGE.h, -0.6); G.add(plinth);
+const trophy = buildTrophy2(kind); trophy.rotation.y = Math.PI; G.add(trophy);
 let t = 0;
 window.__look = {
   ready: true, cast, press,
@@ -40,10 +47,12 @@ window.__look = {
   step(secs, s = {}) {
     for (let n = Math.round(secs * 60); n > 0; n--) {
       t += 1 / 60; cup.y += ((s.up ? STAGE.h + 2.25 : s.held ? STAGE.h + 1.4 : STAGE.h + 1.25) - cup.y) * 0.08;
-      G.updateMatrixWorld(true); cast.update(1 / 60, t, { cup, held: !!s.held, up: !!s.up }); press.update(1 / 60, t, cup);
+      trophy.position.set(0, cup.y - 0.23, s.held ? -0.55 : -0.6); G.updateMatrixWorld(true); cast.update(1 / 60, t, { cup, held: !!s.held, up: !!s.up }); press.update(1 / 60, t, cup);
     }
   },
   snap([e, at, fov]) { cam.fov = fov; cam.updateProjectionMatrix(); cam.position.set(...e); cam.lookAt(...at); renderer.render(scene, cam); return renderer.domElement.toDataURL('image/png'); },
+  medals: () => cast.cast.map(c => medalGap(c)),
+  measure: () => press.measure(), acts: () => press.men.map(p => ({ i: p.i, act: p.a.act, chest: p.a.chest, kneel: p.a.kneel, x: p.a.px, z: p.a.pz, over: p.a.over, lean: p.a.lean })),
   info: () => ({ calls: renderer.info.render.calls, tris: renderer.info.render.triangles, press: { tris: press.tris, calls: press.calls } }),
 };
 </script>
