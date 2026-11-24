@@ -107,9 +107,15 @@ Chaos (default) / Total chaos / By the book (the real-rules football above, unch
   cheap: no warning, no counter), Strikers' two-goal shots and cartoon items.
 - Measured, AI v AI, 10 matches each: favours used 6.7 v 6.7 (6 v 6) and 6.0 v 6.0 (11 v 11); shortest
   warning before anything landed 1.9 s; goals 6.7 and 3.1 a match.
-- Short: no dodge animation (he just darts); a supporter is a player body in his side's shirt and jeans-blue
-  shorts, hard to tell from a player in a white kit; the buggy has no driver; no dust or dents where things
-  land; all the new commentary is subtitles only. Not seen on a real GPU, not played by a person.
+- Polish pass (Kenny: polish the items and the rough edges): a toast in the caller's colour says who called
+  what; each side's held favour is named under its meter; running effects show a countdown; furniture has a
+  soft shadow, a falling whistle, dust, a scuffed patch of turf that stays and blood on it if it landed on
+  someone; the buggy has a driver, turning wheels and a bounce; a supporter wears jeans and has a ring in his
+  side's colour under him; the heavy ball is dark as well as big and arrives with a boom; the referee shows a
+  red card before he charges; a dodge has a pose (drop and lean); blood stays on kits; a severed arm has a
+  hand.
+- Short: the buggy's driver and the furniture are plain boxes; the dodge is a pose, not a captured
+  side-step; all the new commentary is subtitles only (the voice tool isn't available here). Not seen on a real GPU, not played by a person.
 
 ## Not done / short
 

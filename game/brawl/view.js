@@ -111,6 +111,12 @@ export function createView(scene, w, models, refModel = null, fx = null) {
         const celebrate = w.phase === 'goal' && p.team === w.scorers && p.state === 'up';
         animate(m, p, dt, t, celebrate, false, w.ball, w.owner === p.id && !p.holding);
         if (m.getUp) { poseGetUp(m, p, m.upT); m.upT += dt; }
+        // a dodge: he drops and throws his weight the way he's going, off the far foot
+        if (p.dodge) {
+          const k = Math.sin(Math.PI * Math.min(1, 1 - p.dodge.t / 0.26)), side = Math.sign(p.fx * p.dodge.z - p.fz * p.dodge.x) || 1;
+          m.bone.hips.position.y -= 0.14 * k; m.bone.hips.rotation.z += side * 0.38 * k; m.bone.spine.rotation.z -= side * 0.2 * k;
+          m.bone.upperArmL.rotation.z -= 0.5 * k; m.bone.upperArmR.rotation.z += 0.5 * k;
+        }
         throwIn(m, p, dt);
       }
       if (refModel && w.ref && refModel.rag) {
@@ -129,7 +135,7 @@ export function createView(scene, w, models, refModel = null, fx = null) {
         card.visible = !!(refModel.sig && cardTransform(refModel, card.position, card.quaternion));
       }
       ball.update(w.ball, dt);
-      if (fx) ball.mesh.scale.setScalar(fx.ballScale(t));
+      if (fx) { ball.mesh.scale.setScalar(fx.ballScale(t)); ball.mesh.material.color.set(fx.heavy() ? '#6a6f78' : '#ffffff'); }
       // the keeper's ball is drawn between his gloves
       const gk = w.owner && w.byId[w.owner];
       if (gk && gk.holding && heldBall(models[gk.id], held)) ball.mesh.position.copy(held);

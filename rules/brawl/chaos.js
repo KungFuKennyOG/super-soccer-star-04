@@ -147,7 +147,9 @@ const START = {
     const r = w.ref, last = w.byId[cx.lastHit[team]], t = last && last.state !== 'off' ? last : mark(w, team);
     if (!r || r.rage || !t) return false;
     r.rage = { id: t.id, t: 0, warn: CHAOS.warn - 0.6, team };
-    r.queue = [{ kind: 'whistle', dir: { x: r.fx, z: r.fz }, t: 0 }];
+    // he blows and shows him a red card. Then he puts it away
+    const l = Math.hypot(t.x - r.x, t.z - r.z) || 1, dir = { x: (t.x - r.x) / l, z: (t.z - r.z) / l };
+    r.sig = null; r.queue = [{ kind: 'whistle', dir, t: 0 }, { kind: 'card', dir, color: 'red', t: 0 }];
     ev.push({ type: 'chaos', what: 'ref', team, stage: 'warn', id: t.id });
     return true;
   },
@@ -218,6 +220,7 @@ function rage(w, cx, dt, ev) {
   if (!r || !r.rage) return;
   const g = r.rage, p = w.byId[g.id];
   g.t += dt;
+  if (g.t > g.warn && !g.off) { g.off = true; r.sig = null; r.queue = []; }
   const dx = p.x - r.x, dz = p.z - r.z, d = Math.hypot(dx, dz) || 1;
   if (g.t > g.warn && isUp(p) && !p.dodge && d < 1.25) {
     launch(w, p, dx / d * 11 / w.chaos, dz / d * 11 / w.chaos, 6, r, ev, 'ref');

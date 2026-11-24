@@ -101,7 +101,24 @@ async function boot() {
     const c = w.cx; $('fav').hidden = !c; if (!c) return;
     for (const [team, id] of [['home', 'fh'], ['away', 'fa']]) { const f = c.fav[team]; $(id).style.width = `${f.item ? 100 : Math.min(100, f.m * 100)}%`; $(id).className = f.item ? 'full' : ''; }
     const mine = c.fav.home.item;
+    $('fhn').textContent = c.fav.home.item ? FAV[c.fav.home.item] : ''; $('fan').textContent = c.fav.away.item ? FAV[c.fav.away.item] : '';
+    const fxs = [];
+    if (c.heavy > 0) fxs.push(`HEAVY BALL (${c.heavyTeam === 'home' ? home.id : away.id}) ${Math.ceil(c.heavy)}s`);
+    for (const m of c.mob) if (m.state !== 'gone' && !m.leaving) fxs.push(`SUPPORTER (${m.side === 'home' ? home.id : away.id}) ${Math.max(0, Math.ceil(m.life))}s`);
+    $('favFx').textContent = fxs.join('   ·   ');
+    if (toastT > 0 && (toastT -= 1 / 60) <= 0) $('toast').classList.remove('on');
     $('favYou').textContent = mine && !S.demo ? `[I / Y]  CALL IN: ${FAV[mine]}   ·   or a full-power shot: SUPER SHOT` : '';
+  }
+  // who has just called what in, in their colour
+  let toastT = 0;
+  function toast(team, text) { $('toast').textContent = `${team === 'home' ? home.id : away.id}: ${text}`; $('toast').style.borderLeftColor = team === 'home' ? home.kit.shirt : matchKit(away, home).shirt; $('toast').classList.add('on'); toastT = 2.6; }
+  // a tone that slides from one pitch to another: something falling (high to low), the heavy ball arriving (a low boom)
+  function slide(from, to, secs, after = 0, vol = 0.07, type = 'sine') {
+    const a = audioOut(); if (!a) return;
+    const { ctx, master } = a, o = ctx.createOscillator(), g = ctx.createGain(), t0 = ctx.currentTime + after;
+    o.type = type; o.frequency.setValueAtTime(from, t0); o.frequency.exponentialRampToValueAtTime(to, t0 + secs);
+    g.gain.setValueAtTime(vol, t0); g.gain.exponentialRampToValueAtTime(0.001, t0 + secs);
+    o.connect(g).connect(master); o.start(t0); o.stop(t0 + secs + 0.05);
   }
   // the buggy's two-tone siren
   function siren(secs) {
@@ -144,11 +161,13 @@ async function boot() {
         }
         case 'tackled': sfx('touch'); break;
         case 'crowd': stadium.cheer(false); sfx('roar'); break;
-        case 'super': slow = 0.9; sfx('rise'); stadium.ooh(); break;
         case 'dodged': sfx('touch'); break;
-        case 'favour': if (!e.used && e.team === 'home' && !S.demo) sfx('rise'); break;
+        case 'favour': if (!e.used && e.team === 'home' && !S.demo) sfx('rise'); if (e.used) toast(e.team, FAV[e.item]); break;
+        case 'super': toast(e.team, 'SUPER SHOT'); slow = 0.9; sfx('rise'); stadium.ooh(); break;
         case 'chaos':
           if (e.stage === 'warn' && e.what === 'buggy') siren(6);
+          if (e.stage === 'warn' && e.what === 'drop') slide(1500, 260, 1.1, Math.max(0, e.t - 1.1));
+          if (e.stage === 'hit' && e.what === 'heavy') { slide(120, 40, 0.7, 0, 0.3, 'triangle'); thud(1); }
           if (e.stage === 'warn' && (e.what === 'ref' || e.what === 'invader')) sfx(e.what === 'ref' ? 'whistle' : 'roar');
           if (e.stage === 'hit' && e.what === 'drop') { thud(1); stadium.ooh(); }
           break;

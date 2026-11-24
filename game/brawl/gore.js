@@ -55,12 +55,34 @@ export function createGore(scene, w, level, modelOf, who) {
   // arms: which are off, the bits lying about, the stumps still going
   const lost = new Map(), bits = [], stumps = [];
   let limbs = 0;
-  const bitGeo = new THREE.CylinderGeometry(0.04, 0.05, 0.42, 8), bitMat = new THREE.MeshPhongMaterial({ color: '#8a3a30', shininess: 6 });
+  // a forearm: tapered, a hand on one end, what's left of the elbow on the other
+  const skin = new THREE.MeshPhongMaterial({ color: '#b98a6a', shininess: 8 }), raw = new THREE.MeshPhongMaterial({ color: '#7d0a0a', shininess: 30 });
+  function buildArm() {
+    const g = new THREE.Group(), fore = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.05, 0.3, 10), skin);
+    const hand = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.12, 0.035), skin); hand.position.y = -0.2;
+    const thumb = new THREE.Mesh(new THREE.BoxGeometry(0.025, 0.06, 0.03), skin); thumb.position.set(0.05, -0.17, 0); thumb.rotation.z = 0.5;
+    const end = new THREE.Mesh(new THREE.SphereGeometry(0.052, 10, 8), raw); end.position.y = 0.15; end.scale.y = 0.5;
+    g.add(fore, hand, thumb, end);
+    return g;
+  }
+  // blood on the kit: blotches painted onto his own kit sheet, and they stay
+  function stainKit(m, n) {
+    const mat = m && m.mesh && Array.isArray(m.mesh.material) ? m.mesh.material[0] : null, img = mat && mat.map && mat.map.image;
+    if (!img || !img.getContext) return;
+    const g = img.getContext('2d');
+    for (let i = 0; i < n; i++) {
+      const x = Math.random() * img.width, y = Math.random() * img.height, r = 5 + Math.random() * 20, gr = g.createRadialGradient(x, y, 0, x, y, r);
+      gr.addColorStop(0, 'rgba(105,6,6,0.85)'); gr.addColorStop(0.7, 'rgba(105,6,6,0.6)'); gr.addColorStop(1, 'rgba(105,6,6,0)');
+      g.fillStyle = gr; g.beginPath(); g.arc(x, y, r, 0, 6.283); g.fill();
+    }
+    mat.map.needsUpdate = true;
+  }
   function loseArm(id, m, at) {
     const had = lost.get(id) || {}, side = !had.L && !had.R ? (Math.random() < 0.5 ? 'L' : 'R') : !had.L ? 'L' : !had.R ? 'R' : null;
     if (!side) return false;
     had[side] = true; lost.set(id, had); limbs++;
-    const bit = new THREE.Mesh(bitGeo, bitMat); bit.position.set(at.x, 1.2, at.z); scene.add(bit);
+    const bit = buildArm(); bit.position.set(at.x, 1.2, at.z); scene.add(bit);
+    stainKit(m, 10);
     bits.push({ mesh: bit, vx: (Math.random() - 0.5) * 8, vy: 5 + Math.random() * 3, vz: (Math.random() - 0.5) * 8, spin: 8 + Math.random() * 8, t: 45 });
     stumps.push({ m, bone: m.bone[`foreArm${side}`], t: 4.5 });
     spray(at.x, 1.3, at.z, 40, 5);
@@ -77,6 +99,7 @@ export function createGore(scene, w, level, modelOf, who) {
         if (e.type === 'launch' && p) {
           const big = e.kind !== 'hit' && e.kind !== 'barge' && e.kind !== 'foul';
           spray(p.x, 1.1, p.z, big ? Math.min(70, 14 + e.power * 4) : 6, big ? 4 + e.power * 0.25 : 2.5);
+          if (big) stainKit(modelOf(e.id), 3);
           if (level > 1 && Math.random() < (LIMB[e.kind] || 0) && modelOf(e.id) && loseArm(e.id, modelOf(e.id), p)) line = GORE_LINES[Math.floor(Math.random() * GORE_LINES.length)];
         } else if (e.type === 'thud' && p) { if (e.hard > 0.35) { stain(p.x, p.z, 0.6 + e.hard * 1.3); spray(p.x, 0.3, p.z, 8, 2.5); } }
         else if (e.type === 'landed' && p) stain(p.x, p.z, 0.9 + Math.random() * 0.7);
@@ -105,7 +128,7 @@ export function createGore(scene, w, level, modelOf, who) {
         if (b.mesh.position.y > 0.06 || b.vy > 0) {
           b.vy -= 9.81 * dt; b.mesh.position.x += b.vx * dt; b.mesh.position.y += b.vy * dt; b.mesh.position.z += b.vz * dt;
           b.mesh.rotation.x += b.spin * dt; b.mesh.rotation.z += b.spin * 0.6 * dt;
-          if (b.mesh.position.y <= 0.06) { b.mesh.position.y = 0.06; b.mesh.rotation.set(Math.PI / 2, 0, Math.random() * 3); stain(b.mesh.position.x, b.mesh.position.z, 0.7); b.vy = 0; }
+          if (b.mesh.position.y <= 0.06) { b.mesh.position.y = 0.05; b.mesh.rotation.set(Math.PI / 2, 0, Math.random() * 6); stain(b.mesh.position.x, b.mesh.position.z, 0.7); b.vy = 0; }
         }
         if (b.t <= 0) scene.remove(b.mesh);
       }
