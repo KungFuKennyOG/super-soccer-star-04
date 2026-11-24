@@ -114,7 +114,14 @@ Chaos (default) / Total chaos / By the book (the real-rules football above, unch
   side's colour under him; the heavy ball is dark as well as big and arrives with a boom; the referee shows a
   red card before he charges; a dodge has a pose (drop and lean); blood stays on kits; a severed arm has a
   hand.
-- Short: the buggy's driver and the furniture are plain boxes; the dodge is a pose, not a captured
+- Props (Kenny: the items "look so blocky", make them as polished as the players): `game/brawl/props.js`.
+  Rounded bodies with smooth normals (`rbox`), parts as their own pieces, surfaces painted in code: a fridge
+  (two doors, chrome handles, a list and magnets), a sofa (cushions, arms, feet, a throw pillow), a vending
+  machine (lit window of cans, keypad, invented KENNY COLA), a portable loo (ribbed walls, door, domed roof,
+  vent pipe), a wardrobe (grain, sunk panels, brass knobs). They land face up (the sofa on its feet). The
+  buggy is a cart cut from its side view with a livery, bench, stretcher, roof, windscreen, lamp bar, tyres
+  with hubs and mudguards, and its driver is a real player body in hi-vis sat at the wheel.
+- Short: the driver's hands aren't quite on the wheel; the dodge is a pose, not a captured
   side-step; all the new commentary is subtitles only (the voice tool isn't available here). Not seen on a real GPU, not played by a person.
 
 ## Not done / short

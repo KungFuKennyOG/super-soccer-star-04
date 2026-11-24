@@ -5,39 +5,9 @@
 // before anything lands.
 import * as THREE from 'three';
 import { buildPlayer2 } from '../ps2/player.js';
+import { buildThing, buildBuggy } from './props.js';
 import { groundTex } from '../ps2/markers.js';
 
-// The things that get thrown on: [w, h, d] in metres, colour, and a second box (a door, a back, a roof).
-const THINGS = {
-  fridge: { size: [0.8, 1.8, 0.75], color: '#e9ebee', extra: [[0.05, 0.5, 0.04], [0.33, 0.3, 0.39], '#9aa0a8'] },
-  sofa: { size: [2.1, 0.5, 0.95], color: '#6b4a34', extra: [[2.1, 0.55, 0.25], [0, 0.5, -0.35], '#5a3d2a'] },
-  vending: { size: [1.0, 1.9, 0.85], color: '#b3261e', extra: [[0.7, 1.1, 0.04], [-0.08, 0.2, 0.44], '#1d2733'] },
-  loo: { size: [1.2, 2.3, 1.2], color: '#2f62b8', extra: [[1.3, 0.12, 1.3], [0, 1.2, 0], '#e9ebee'] },
-  wardrobe: { size: [1.2, 2.0, 0.6], color: '#7a5a3a', extra: [[0.04, 1.8, 0.04], [0, 0, 0.31], '#3a2a1a'] },
-};
-const box = (s, color) => new THREE.Mesh(new THREE.BoxGeometry(...s), new THREE.MeshPhongMaterial({ color, shininess: 18 }));
-function buildThing(kind) {
-  const T = THINGS[kind] || THINGS.fridge, g = new THREE.Group(), body = box(T.size, T.color), ex = box(T.extra[0], T.extra[2]);
-  ex.position.set(...T.extra[1]); g.add(body, ex); g.userData.h = T.size[1];
-  return g;
-}
-function buildBuggy() {
-  const g = new THREE.Group(), body = box([2.6, 0.55, 1.3], '#eef0f2'); body.position.y = 0.6;
-  const roof = box([1.5, 0.06, 1.25], '#eef0f2'); roof.position.set(-0.2, 1.75, 0);
-  const bed = box([1.0, 0.12, 1.1], '#d8322a'); bed.position.set(-0.75, 0.95, 0);
-  const light = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.14, 0.2), new THREE.MeshBasicMaterial({ color: '#ffb020' })); light.position.set(-0.2, 1.86, 0);
-  g.add(body, roof, bed, light);
-  for (const [x, z] of [[0.5, 0.6], [0.5, -0.6], [-0.85, 0.6], [-0.85, -0.6]]) { const p = box([0.06, 1.15, 0.06], '#30343a'); p.position.set(x * 1.1, 1.17, z); g.add(p); }
-  for (const [x, z] of [[0.85, 0.68], [0.85, -0.68], [-0.85, 0.68], [-0.85, -0.68]]) { const wh = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 0.2, 12), new THREE.MeshPhongMaterial({ color: '#17181b' })); wh.rotation.x = Math.PI / 2; wh.position.set(x, 0.3, z); g.add(wh); }
-  // the driver, in hi-vis, leaning into it
-  const torso = box([0.4, 0.55, 0.5], '#c8e61e'); torso.position.set(0.25, 1.2, 0); torso.rotation.z = -0.18;
-  const head = new THREE.Mesh(new THREE.SphereGeometry(0.13, 12, 10), new THREE.MeshPhongMaterial({ color: '#c99a78' })); head.position.set(0.32, 1.62, 0);
-  const arms = box([0.5, 0.1, 0.46], '#c8e61e'); arms.position.set(0.55, 1.25, 0);
-  const wheel = box([0.06, 0.3, 0.3], '#17181b'); wheel.position.set(0.82, 1.2, 0);
-  g.add(torso, head, arms, wheel);
-  g.userData.light = light; g.userData.wheels = g.children.filter(c => c.geometry && c.geometry.type === 'CylinderGeometry');
-  return g;
-}
 // a soft round shadow, and a scuffed patch of turf
 function radial(stops) {
   const c = document.createElement('canvas'); c.width = c.height = 64;
@@ -65,7 +35,7 @@ export function createChaosView(scene, w, kits) {
   // dust and clods thrown up where something lands
   const DN = 240, dpos = new Float32Array(DN * 3).fill(-999), dvel = new Float32Array(DN * 3), dgeo = new THREE.BufferGeometry();
   dgeo.setAttribute('position', new THREE.BufferAttribute(dpos, 3));
-  const dust = new THREE.Points(dgeo, new THREE.PointsMaterial({ color: '#4a3d22', size: 0.16, sizeAttenuation: true })); dust.frustumCulled = false; scene.add(dust);
+  const dust = new THREE.Points(dgeo, new THREE.PointsMaterial({ color: '#5a4a2a', size: 0.14, sizeAttenuation: true, map: radial([[0, 'rgba(255,255,255,1)'], [0.55, 'rgba(255,255,255,0.9)'], [1, 'rgba(255,255,255,0)']]), transparent: true, alphaTest: 0.3 })); dust.frustumCulled = false; scene.add(dust);
   let dn = 0;
   const puff = (x, z, n) => { for (let i = 0; i < n; i++) { const k = dn++ % DN, a = Math.random() * 6.283, s = 2 + Math.random() * 6; dpos[k * 3] = x; dpos[k * 3 + 1] = 0.1; dpos[k * 3 + 2] = z; dvel[k * 3] = Math.cos(a) * s; dvel[k * 3 + 1] = 2 + Math.random() * 6; dvel[k * 3 + 2] = Math.sin(a) * s; } };
   // a ring in his side's colour under each supporter, so you can tell whose he is
@@ -93,13 +63,13 @@ export function createChaosView(scene, w, kits) {
         } else if (e.what === 'drop' && e.stage === 'hit') {
           const d = drops.get(e.id); if (!d) continue;
           scene.remove(d.shadow, d.edge); drops.delete(e.id);
-          d.thing.position.set(d.x, d.thing.userData.h * 0.32, d.z); d.thing.rotation.set(Math.PI / 2 + 0.2, Math.random() * 3, 0.15);
+          d.thing.position.set(d.x, d.thing.userData.rest.y, d.z); d.thing.rotation.set(d.thing.userData.rest.rx, Math.random() * 6, 0.05, 'YXZ'); d.rz = 0.05;
           debris.push({ thing: d.thing, t: 9, land: 0.3 }); shake = 1;
           puff(d.x, d.z, 46);
           // the turf it landed on stays scuffed
           const scar = flat(new THREE.PlaneGeometry(3.4, 3.4), '#ffffff', 0.9); scar.material.map = scarTex; scar.material.needsUpdate = true; scar.position.set(d.x, 0.024, d.z); scar.renderOrder = 3; scene.add(scar);
           // and if it landed on somebody, it shows
-          if (ev.some(x => x.type === 'launch' && x.kind === 'drop')) for (const c of d.thing.children) if (c.material && c.material.color) c.material.color.lerp(new THREE.Color('#6d0c0c'), 0.45);
+          if (ev.some(x => x.type === 'launch' && x.kind === 'drop')) d.thing.userData.stain(0.4);
         } else if (e.what === 'invader' && e.stage === 'warn') {
           const m = fans[`${e.id}-${e.team}`]; m.rag = null; m.getUp = null;
         }
@@ -123,7 +93,7 @@ export function createChaosView(scene, w, kits) {
       for (const d of debris) {
         d.t -= dt;
         // it lands, rocks once and settles
-        if (d.land > 0) { d.land -= dt; d.thing.rotation.z = 0.15 + Math.sin(d.land * 30) * d.land * 0.6; }
+        if (d.land > 0) { d.land -= dt; d.thing.rotation.z = 0.05 + Math.sin(d.land * 30) * d.land * 0.5; }
         if (d.t < 1) d.thing.position.y -= dt * 1.2;
         if (d.t <= 0) scene.remove(d.thing);
       }
@@ -135,7 +105,7 @@ export function createChaosView(scene, w, kits) {
       buggy.visible = lane.visible = !!g;
       if (g) {
         buggy.position.set(g.x, Math.abs(Math.sin(t * 22)) * 0.035, g.z); buggy.rotation.y = g.dir > 0 ? 0 : Math.PI;
-        if (g.t <= 0) for (const wh of buggy.userData.wheels) wh.rotation.y -= dt * 40;
+        if (g.t <= 0) for (const wh of buggy.userData.wheels) wh.rotation.z -= dt * 38;
         buggy.userData.light.visible = Math.sin(t * 20) > 0;
         lane.position.z = g.z; lane.material.opacity = g.t > 0 ? 0.18 + 0.16 * Math.sin(t * 12) : 0.14;
       }

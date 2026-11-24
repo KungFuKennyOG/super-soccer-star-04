@@ -223,7 +223,7 @@ async function boot() {
     if (draw) renderer.render(scene, camera);
   }
   window.brawl = {
-    w, models, camera, stadium, step: (dt, draw) => frame(dt, draw),
+    w, models, camera, stadium, scene, step: (dt, draw) => frame(dt, draw),
     // look from (x, y, z) at (tx, ty, tz) instead of the TV camera (null: back to it), and draw
     look(at, to) { dbgCam = at; if (at) { camera.position.set(...at); camera.lookAt(...to); } renderer.render(scene, camera); },
   };      // for tools/brawlshots.mjs and the console
