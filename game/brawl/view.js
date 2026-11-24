@@ -43,7 +43,11 @@ export function dressRef(scene, kits = []) {
   return m;
 }
 
-export function createView(scene, w, models, refModel = null) {
+// fx: the favours' view (game/brawl/chaosview.js), which owns the supporters' models.
+export function createView(scene, w, models, refModel = null, fx = null) {
+  const modelOf = p => (p ? (p === w.ref ? refModel : models[p.id] || (fx && fx.modelOf(p))) : undefined);
+  const mobById = id => (w.cx ? w.cx.mob.find(q => q.id === id) : undefined);
+  let now = 0;
   const ball = buildBall04(); scene.add(ball.mesh, ball.shadow);
   const arrow = buildArrow04(); arrow.scale.setScalar(2.2); scene.add(arrow);
   const held = new THREE.Vector3();
@@ -73,8 +77,11 @@ export function createView(scene, w, models, refModel = null) {
           if (e.kind === 'card') card.material.color.set(e.color === 'red' ? '#d8261e' : '#f2d22e');
           continue;
         }
-        const p = w.byId[e.id], m = models[e.id];
+        const p = w.byId[e.id] || mobById(e.id) || (e.id === 'ref' ? w.ref : undefined), m = modelOf(p);
         if (!m) continue;
+        // into the crowd: gone until they throw him back, and then he starts from a clean pose at the boards
+        if (e.type === 'crowd') { m.rag = null; m.getUp = null; m.fromCrowd = true; continue; }
+        if (e.type === 'launch' && m.fromCrowd) { m.fromCrowd = false; placeModel(m, p); animate(m, p, 1 / 60, now, false, false, w.ball, false); }
         if (e.type === 'launch') startRagdoll(m, { x: p.air.vx, y: p.air.vy, z: p.air.vz });
         else if (e.type === 'miss' && !e.quiet) startRagdoll(m, { x: p.vx * 1.4, y: 0.5, z: p.vz * 1.4 });
         else if (e.type === 'getup' && m.rag) { startGetUp(m); m.upT = 0; }
@@ -85,11 +92,14 @@ export function createView(scene, w, models, refModel = null) {
       }
     },
     update(dt, t) {
-      for (const p of w.players) {
-        const m = models[p.id];
-        // sent off: gone down the tunnel
-        m.root.visible = m.shadow.visible = p.state !== 'off';
-        if (p.state === 'off') continue;
+      now = t;
+      if (fx) fx.update(dt, t);
+      for (const p of fx ? [...w.players, ...fx.mob()] : w.players) {
+        const m = modelOf(p);
+        // sent off: gone down the tunnel; over the boards: somewhere in the crowd
+        const gone = p.state === 'off' || p.state === 'crowd';
+        m.root.visible = m.shadow.visible = !gone;
+        if (gone) continue;
         if (m.rag) {
           stepRagdoll(m, dt, p.state === 'air' || p.state === 'down' ? { x: p.x, z: p.z } : null);
           poseRagdoll(m);
@@ -103,9 +113,14 @@ export function createView(scene, w, models, refModel = null) {
         if (m.getUp) { poseGetUp(m, p, m.upT); m.upT += dt; }
         throwIn(m, p, dt);
       }
-      if (refModel && w.ref) {
+      if (refModel && w.ref && refModel.rag) {
+        // flattened (rules/brawl/chaos.js): a ragdoll like anyone else
+        stepRagdoll(refModel, dt, { x: w.ref.x, z: w.ref.z }); poseRagdoll(refModel);
+        refModel.sig = refModel.whistle = null; card.visible = false;
+      } else if (refModel && w.ref) {
         placeModel(refModel, w.ref);
         animate(refModel, w.ref, dt, t, false, false, w.ball, false);
+        if (refModel.getUp) { poseGetUp(refModel, w.ref, refModel.upT); refModel.upT += dt; }
         for (const k of ['sig', 'whistle']) {
           const s = refModel[k];
           if (s && !poseRefSignal(refModel, s, s.t)) refModel[k] = null;
@@ -114,6 +129,7 @@ export function createView(scene, w, models, refModel = null) {
         card.visible = !!(refModel.sig && cardTransform(refModel, card.position, card.quaternion));
       }
       ball.update(w.ball, dt);
+      if (fx) ball.mesh.scale.setScalar(fx.ballScale(t));
       // the keeper's ball is drawn between his gloves
       const gk = w.owner && w.byId[w.owner];
       if (gk && gk.holding && heldBall(models[gk.id], held)) ball.mesh.position.copy(held);

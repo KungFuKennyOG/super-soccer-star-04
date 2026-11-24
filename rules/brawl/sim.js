@@ -6,10 +6,10 @@
 // Phases: kickoff → play ⇄ setpiece, goal, half (half time), shootout, full.
 // Events: kickoff, halftime, pass, shot, throw, clear, received, tackled, foul, card, offside, setpiece,
 // ready, taking, taken, launch, landed, thud, boards, miss, getup, saved, claim, post, goal { team, by },
-// out, shootout, pen, fulltime, switch, signal (the referee's: rules/brawl/referee.js).
+// out, shootout, pen, fulltime, switch, crowd, chaos (rules/brawl/chaos.js), signal (the referee's: rules/brawl/referee.js).
 import { RUN, KICK, CLOCK, BRAIN } from './tuning.js';
 import { dirOf, kickoff, other } from './world.js';
-import { stepHits, startLunge, isUp } from './hits.js';
+import { stepHits, startLunge, startDodge, isUp } from './hits.js';
 import { keeperStep } from './keeper.js';
 import { plan, think, toward } from './ai.js';
 import { passTo, bestPass, shoot, kickBall } from './kicks.js';
@@ -18,6 +18,8 @@ import { referee, sendOff } from './fouls.js';
 import { startShootout, stepShootout } from './shootout.js';
 import { ballStep } from './play.js';
 import { createRef, refEvents, stepRef, refSignals } from './referee.js';
+import { stepChaos, dodge, spendOnSuper } from './chaos.js';
+import { CHAOS } from './tuning.js';
 import { strideRate } from '../dribble.js';
 
 const NONE = { move: { x: 0, z: 0 } };
@@ -46,6 +48,7 @@ export function stepBrawl(w, input = NONE, dt = 1 / 60, rnd = Math.random) {
   }
 
   stepHits(w, dt, ev, rnd);
+  if (w.brawl) stepChaos(w, dt, ev, rnd, input);
   if (w.phase === 'play') for (const e of ev) if (e.type === 'foul') { whistle(w, e, ev, rnd); break; }
   const outcome = ballStep(w, dt, ev, rnd);
   if (w.phase === 'shootout') stepShootout(w, dt, ev, outcome);
@@ -90,7 +93,25 @@ function wantOf(w, p, input, dt, ev, rnd, live) {
     if (p.line === 'gk' && w.sp && p.team !== w.sp.team && w.sp.stage === 'flight') { const k = keeperStep(w, p, dt, ev, rnd, -1); return toward(p, k, k.speed, false); }
     return { x: 0, z: 0 };
   }
-  if (!live) return w.phase === 'goal' ? celebrate(w, p) : { x: 0, z: 0 };
+  if (p.dodge) return { x: p.dodge.x * CHAOS.dodge.v, z: p.dodge.z * CHAOS.dodge.v, sprint: true };
+  if (!live) {
+    if (w.phase !== 'goal') return { x: 0, z: 0 };
+    // the brawl: the whistle has gone and it isn't over. You can still move and hit; one of theirs may go
+    // for the scorer
+    if (w.brawl && p.id === w.ctrl && !input.auto && p.line !== 'gk') return yours(w, p, input, dt, ev);
+    if (w.brawl && w.late && w.late.id === p.id) {
+      const sc = w.byId[w.late.on];
+      if (!isUp(sc)) { w.late = null; return { x: 0, z: 0 }; }
+      if (dist(p, sc) < 2.2) { startLunge(p, { x: sc.x - p.x, z: sc.z - p.z }, true); w.late = null; }
+      return toward(p, sc, RUN.sprint, true);
+    }
+    return celebrate(w, p);
+  }
+  // the AI sees a tackle coming, sometimes
+  if (!(p.id === w.ctrl && !input.auto) && p.line !== 'gk' && !p.dodge && (p.dodgeCool || 0) <= 0) {
+    const t = w.players.find(o => o.lunge && o.team !== p.team && dist(o, p) < 2.2 && (p.x - o.x) * o.lunge.x + (p.z - o.z) * o.lunge.z > 0);
+    if (t && rnd() < 0.05) startDodge(p, { x: -t.lunge.z, z: t.lunge.x });
+  }
   const sp = w.phase === 'setpiece' ? setPieceSpot(w, p) : null;
   if (p.line === 'gk') {
     if (sp) return toward(p, sp, RUN.gk, false);
@@ -99,6 +120,8 @@ function wantOf(w, p, input, dt, ev, rnd, live) {
     return toward(p, k, k.speed, false);
   }
   if (p.id === w.ctrl && !input.auto) return yours(w, p, input, dt, ev);
+  const dg = w.brawl && dodge(w, p);
+  if (dg) return dg;
   if (sp) return toward(p, sp, RUN.run, false);
   return think(w, p, dt, ev, rnd);
 }
@@ -108,17 +131,23 @@ function wantOf(w, p, input, dt, ev, rnd, live) {
 // while the other side has a set piece.
 function yours(w, p, it, dt, ev) {
   const mv = it.move || NONE.move, m = Math.min(1, Math.hypot(mv.x, mv.z)), onBall = w.owner === p.id && w.phase === 'play';
-  const top = onBall ? (it.sprint ? RUN.dribbleSprint : RUN.dribble) : (it.sprint ? RUN.sprint : RUN.run);
+  const top = (onBall ? (it.sprint ? RUN.dribbleSprint : RUN.dribble) : (it.sprint ? RUN.sprint : RUN.run)) * (p.boost > 0 ? CHAOS.dodge.by : 1);
   const aim = m > 0.2 ? { x: mv.x, z: mv.z } : { x: p.fx, z: p.fz };
   if (w.phase === 'play') {
     if (onBall && it.pass) { const q = bestPass(w, p, aim); if (q) passTo(w, p, q, ev); else kickBall(w, p, aim.x * 18, 2, aim.z * 18, 'pass', ev, null, 0.6); }
     if (onBall && it.shoot) w.charge = (w.charge || 0) + dt;
     else if (w.charge) {
-      if (onBall) { const held = w.charge; shoot(w, p, Math.min(1, held / KICK.maxHold), mv.x * 1.3, ev, held); }
+      if (onBall) {
+        // let go on a full bar (and before it's overcooked) with a favour in hand: it goes on a super shot
+        const held = w.charge, sup = w.brawl && held >= KICK.maxHold && held <= KICK.overHold && spendOnSuper(w, p.team);
+        shoot(w, p, Math.min(1, held / KICK.maxHold), mv.x * 1.3, ev, held, undefined, sup);
+      }
       w.charge = 0;
     }
     if (it.tackle) { if (onBall) p.barge = true; else startLunge(p, aim, !!it.sprint); }
-  }
+  } else if (w.brawl && w.phase === 'goal' && it.tackle) startLunge(p, aim, !!it.sprint);        // after the whistle
+  if (it.dodge) startDodge(p, m > 0.2 ? { x: mv.x, z: mv.z } : null);
+  if (p.dodge) return { x: p.dodge.x * CHAOS.dodge.v, z: p.dodge.z * CHAOS.dodge.v, sprint: true };
   return { x: mv.x / (m || 1) * top * m, z: mv.z / (m || 1) * top * m, sprint: it.sprint && m > 0.3 };
 }
 

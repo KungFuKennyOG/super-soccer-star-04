@@ -48,7 +48,7 @@ export function refEvents(w, ev) {
       r.queue = []; signal(r, 'whistle'); signal(r, e.type, unit(-r.x, -r.z));
     } else if (e.type === 'kickoff' || e.type === 'taking') {
       if (!r.sig && !r.queue.length) signal(r, 'whistle');
-    } else if (e.type === 'launch' && w.brawl && e.kind !== 'domino' && r.calm <= 0) {
+    } else if (e.type === 'launch' && w.brawl && e.kind !== 'domino' && r.calm <= 0 && !r.rage) {
       // the brawl: nothing to see here, play on
       const b = w.ball; signal(r, 'advantage', unit(b.vx || r.fx, b.vz || r.fz)); r.calm = REF.calm;
     }
@@ -65,6 +65,8 @@ export function refSpot(w) {
   const dx = t.x - b.x, dz = t.z - b.z, d = Math.hypot(dx, dz);
   if (d < REF.near) { const u = d > 0.1 ? unit(dx, dz) : { x: -Math.sign(b.x || 1), z: 0 }; t.x = b.x + u.x * REF.near; t.z = b.z + u.z * REF.near; }
   if (d > REF.far) { const u = unit(dx, dz); t.x = b.x + u.x * REF.far; t.z = b.z + u.z * REF.far; }
+  // his patience has gone (rules/brawl/chaos.js): straight at the man
+  if (r.rage && r.rage.t > r.rage.warn) { const p = w.byId[r.rage.id]; return { x: p.x + p.vx * 0.2, z: p.z + p.vz * 0.2, near: 0.2, rage: true }; }
   if (r.to) return r.to;
   return t;
 }
@@ -72,7 +74,7 @@ export function refSpot(w) {
 // One step: signals play out (he stands for a card), otherwise he moves toward his spot facing play.
 export function stepRef(w, dt) {
   const r = w.ref;
-  if (!r) return;
+  if (!r || r.state !== 'up') return;          // (flat on his back: rules/brawl/chaos.js)
   if (r.calm > 0) r.calm -= dt;
   if (!r.sig && r.queue.length) { r.sig = r.queue.shift(); r.sig.t = 0; }
   let stand = false;
@@ -86,14 +88,16 @@ export function stepRef(w, dt) {
   let vx = 0, vz = 0;
   if (!stand) {
     const dx = t.x - r.x, dz = t.z - r.z, d = Math.hypot(dx, dz), near = t.near || 0.3;
-    if (d > near) { const sp = Math.min(d > 12 ? REF.run : REF.jog, (d - near) * 1.6 + 0.6); vx = dx / d * sp; vz = dz / d * sp; }
+    if (t.rage) { vx = dx / (d || 1) * REF.rage; vz = dz / (d || 1) * REF.rage; }
+    else if (r.rage) { /* staring at him */ }
+    else if (d > near) { const sp = Math.min(d > 12 ? REF.run : REF.jog, (d - near) * 1.6 + 0.6); vx = dx / d * sp; vz = dz / d * sp; }
     else if (r.to) r.to = null;
   }
   const k = Math.min(1, REF.accel * dt);
   r.vx += (vx - r.vx) * k; r.vz += (vz - r.vz) * k;
   r.x += r.vx * dt; r.z += r.vz * dt;
   // he faces the play (the ball), or the man he's booking
-  const look = r.sig && r.sig.kind === 'card' ? r.sig.dir : unit(w.ball.x - r.x, w.ball.z - r.z);
+  const look = r.rage ? unit(w.byId[r.rage.id].x - r.x, w.byId[r.rage.id].z - r.z) : r.sig && r.sig.kind === 'card' ? r.sig.dir : unit(w.ball.x - r.x, w.ball.z - r.z);
   const ft = Math.min(1, 6 * dt);
   r.fx += (look.x - r.fx) * ft; r.fz += (look.z - r.fz) * ft;
   const l = Math.hypot(r.fx, r.fz) || 1; r.fx /= l; r.fz /= l;

@@ -2,7 +2,7 @@
 // nobody else is near, a dive at shots coming at goal (caught, parried or beaten), and the ball thrown or
 // kicked back out. Pure. Sets p.save { id, kind, y, eta } and p.dive (-1 / 0 / 1) the way game/keeperpose.js
 // plays them.
-import { KEEPER, RUN, GOAL2 } from './tuning.js';
+import { KEEPER, RUN, GOAL2, CHAOS } from './tuning.js';
 import { dirOf, ownLine } from './world.js';
 import { predictLine, speed3 } from './ball.js';
 import { isUp } from './hits.js';
@@ -23,7 +23,8 @@ export function keeperStep(w, p, dt, ev, rnd = Math.random, goal = null) {
         // can he get there (his reach plus how far he can dive in the time), and if so, does he keep it out
         const dx = c.x - p.x, sp = speed3(b), can = Math.abs(dx) < KEEPER.reach + KEEPER.dive * Math.max(0, c.t - KEEPER.react) * 0.6 && c.y < KEEPER.reachUp;
         const chance = can ? clamp(1.18 - sp / 75 - Math.abs(dx) / 15 - (c.y > 1.9 ? 0.12 : 0), 0.15, 0.9) : 0;
-        const ok = rnd() < chance;
+        const sup = w.super && w.super.kick === w.lastKick;
+        const ok = rnd() < chance * (sup ? CHAOS.superKeeper : 1);
         p.save = { id: w.lastKick, kind: ok ? (sp < KEEPER.catchBelow && Math.abs(dx) < 1.6 ? 'catch' : 'parry') : 'beaten', y: c.y, eta: c.t, ok, x: c.x };
         p.dive = Math.abs(dx) > 0.9 ? Math.sign(dx) : 0;      // (game/keepersave.js turns it his way from where the ball really is)
       }

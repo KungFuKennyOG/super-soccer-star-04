@@ -12,7 +12,7 @@ export function readSettings() {
   if (away === home) away = home === 'GER' ? 'BRA' : 'GER';
   return {
     n: q.get('n') === '6' ? 6 : 11, home, away,
-    chaos: Math.max(0, Math.min(2.5, +(q.get('chaos') || 0))),      // 0: plain football; above it the brawl
+    chaos: Math.max(0, Math.min(2.5, +(q.get('chaos') ?? 1))),      // 0: by the book; above it the brawl with its favours (the default)
     len: Math.max(30, +(q.get('len') || 240)),
     wx: ['rain', 'snow'].includes(q.get('wx')) ? q.get('wx') : 'clear',
     play: q.has('play') || q.has('demo'), demo: q.has('demo'), film: q.has('film'), cup: q.has('cup'),
@@ -39,7 +39,7 @@ export function showMenu(s) {
   };
   fill($('mHome'), s.home); fill($('mAway'), s.away);
   $('mN').value = String(s.n); $('mChaos').value = String(s.chaos); $('mLen').value = String(s.len); $('mWx').value = s.wx;
-  if (![...$('mChaos').options].some(o => o.value === String(s.chaos))) $('mChaos').value = '0';
+  if (![...$('mChaos').options].some(o => o.value === String(s.chaos))) $('mChaos').value = '1';
   if (![...$('mLen').options].some(o => o.value === String(s.len))) $('mLen').value = '240';
   const pick = () => ({ n: +$('mN').value, home: $('mHome').value, away: $('mAway').value, chaos: +$('mChaos').value, len: +$('mLen').value, wx: $('mWx').value });
   $('mGo').onclick = () => restart({ ...pick(), demo: false });

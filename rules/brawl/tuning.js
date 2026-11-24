@@ -69,9 +69,30 @@ export const KEEPER = { line: 1.2, track: 0.1, reach: 2.4, reachUp: 2.6, react: 
 // half-width at the goal lines, between near and far m from the ball; how long each signal lasts (s); calm:
 // how long he leaves it before waving the brawl on again.
 export const REF = {
-  behind: 8, diag: 0.55, near: 10, far: 20, run: 6.5, jog: 3.8, accel: 6, calm: 4,
+  behind: 8, diag: 0.55, near: 10, far: 20, run: 6.5, jog: 3.8, accel: 6, calm: 4, rage: 8.6,
   sig: { whistle: 0.5, free: 2, indirect: 2, penalty: 2, card: 2.2, advantage: 1.2, halftime: 2, fulltime: 2 },
 };
+
+// Chaos (rules/brawl/chaos.js; only in the brawl). earn: what fills a side's favour meter (1 = a favour):
+// per second of play, a pass, a shot, a save, a hit given (a big one), a hit taken, a goal conceded; behind:
+// extra per goal behind (up to two). aiCall: how long the AI holds a favour before calling it. ramp: how far
+// hits send men, early → late (x the setting). warn: every favour is announced this long before it can
+// touch anyone; react: how late the AI moves; keepOff: drops land no nearer a goal line than this. The
+// Borrowed from the games that do this well: a full meter can go on a SUPER SHOT instead (RedCard's boost
+// meter: hold shoot to full and let go in time; superSpeed m/s, takes their men with it, the keeper's odds
+// x superKeeper); a DODGE (Mario Strikers: dodge.t s at dodge.v m/s, the tackler falls, you get dodge.boost s
+// at x dodge.by pace); LATE HITS after a goal (NFL Blitz: the AI does it `late` of the time, and it feeds the
+// victims' meter); and flattening the REFEREE (Mutant Football League's ref attack: it stops him, and feeds
+// the other side's meter).
+// referee chases for `rage` s at REF.rage m/s. CROWD: a man over the boards faster than `over` m/s is held
+// `hold` s and thrown back at `back` m/s.
+export const CHAOS = {
+  earn: { tick: 0.006, pass: 0.03, shot: 0.08, save: 0.1, hit: 0.03, big: 0.08, taken: 0.05, conceded: 0.35, behind: 0.25, dodged: 0.06, late: 0.15, refhit: 0.25 },
+  aiSuper: 0.35, superSpeed: 34, superKeeper: 0.5, late: 0.35, dodge: { t: 0.26, v: 9.5, cool: 1.1, boost: 1.5, by: 1.2 },
+  aiCall: [1.5, 6], ramp: [0.8, 1.3], warn: 2.4, react: 1.1, keepOff: 12,
+  dropR: 2.6, buggy: 14, mobRun: 7.0, mobLife: 13, mobCool: 1.6, heavyT: 16, heavyAt: 11, rage: 8,
+};
+export const CROWD = { over: 11, hold: 1.8, back: 7.5 };
 
 // The clock: a match lasts `real` seconds and the scoreboard shows 90 minutes over it.
 export const CLOCK = { real: 240, kickoff: 1.2, goal: 3.2, restart: 1.4, half: 3 };

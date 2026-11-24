@@ -2,7 +2,7 @@
 // Pure. A man in the air is p.state 'air' with p.air = { x, y, z, vx, vy, vz } (his middle, about hip height);
 // he lands, slides, lies there ('down') and gets up ('getup', then 'up'). The page draws him as a ragdoll
 // (game/brawl/ragdoll.js) and only reads this to know where he ends up.
-import { HIT, BODY, FOUL } from './tuning.js';
+import { HIT, BODY, FOUL, CROWD, CHAOS } from './tuning.js';
 import { judgeTackle } from './fouls.js';
 
 const up = p => p.state === 'up';
@@ -14,6 +14,15 @@ export function startLunge(p, dir = null, big = false) {
   const d = dir || { x: p.fx, z: p.fz }, l = Math.hypot(d.x, d.z) || 1;
   p.lunge = { t: HIT.t, x: d.x / l, z: d.z / l, big, hit: false };
   p.cool = HIT.cool;
+  return true;
+}
+
+// A dodge: a short dart (the way given, or to his right) that tackles, supporters and the referee go
+// straight past. The tackler ends up on the floor, and the dodger gets a burst of pace.
+export function startDodge(p, dir = null) {
+  if (!up(p) || p.lunge || p.dodge || p.dodgeCool > 0) return false;
+  const d = dir && Math.hypot(dir.x, dir.z) > 0.2 ? dir : { x: -p.fz, z: p.fx }, l = Math.hypot(d.x, d.z) || 1;
+  p.dodge = { t: CHAOS.dodge.t, x: d.x / l, z: d.z / l }; p.dodgeCool = CHAOS.dodge.cool;
   return true;
 }
 
@@ -48,6 +57,9 @@ function hitVel(h, v, big, rnd) {
 export function stepHits(w, dt, ev, rnd = Math.random) {
   for (const p of w.players) {
     if (p.cool > 0) p.cool -= dt;
+    if (p.dodgeCool > 0) p.dodgeCool -= dt;
+    if (p.boost > 0) p.boost -= dt;
+    if (p.dodge && (p.dodge.t -= dt) <= 0) p.dodge = null;
     if (p.lunge) {
       const L = p.lunge;
       L.t -= dt;
@@ -55,6 +67,7 @@ export function stepHits(w, dt, ev, rnd = Math.random) {
       p.vx = L.x * sp; p.vz = L.z * sp; p.fx = L.x; p.fz = L.z;
       for (const v of w.players) {
         if (v === p || !up(v) || Math.hypot(v.x - p.x, v.z - p.z) > HIT.reach) continue;
+        if (v.dodge) { if (!v.dodge.won) { v.dodge.won = true; v.boost = CHAOS.dodge.boost; ev.push({ type: 'dodged', id: v.id, by: p.id }); } continue; }
         // plain football: only the man on the ball can be tackled, and the tackler comes away with it
         if (!w.brawl) {
           if (v.id === w.owner && !v.holding && !L.tried) {
@@ -92,6 +105,7 @@ export function stepHits(w, dt, ev, rnd = Math.random) {
       }
     }
     if (p.state === 'air') fly(w, p, dt, ev);
+    else if (p.state === 'crowd') { if ((p.crowdT -= dt) <= 0) throwBack(w, p, ev, rnd); }
     else if (p.state === 'down') {
       p.vx *= Math.exp(-8 * dt); p.vz *= Math.exp(-8 * dt);
       if ((p.downT -= dt) <= 0) { p.state = 'getup'; p.getT = BODY.getup; ev.push({ type: 'getup', id: p.id }); }
@@ -118,7 +132,25 @@ function tackle(w, p, v, big, ev) {
   ev.push({ type: 'tackled', id: v.id, by: p.id, slide: big });
 }
 
-function fly(w, p, dt, ev) {
+// The brawl: a man who clears the boards at speed lands in the crowd, who pass him along and throw him back
+// on a few metres away (a supporter who goes over just stays there).
+function intoCrowd(w, p, ev) {
+  const a = p.air, flown = Math.hypot(a.x - a.x0, a.z - a.z0);
+  w.stats.longest = Math.max(w.stats.longest, flown); w.stats.flown += flown; w.stats.crowd = (w.stats.crowd || 0) + 1;
+  p.from = Math.abs(a.x) > w.W + 3 ? { axis: 'x', s: Math.sign(a.x) } : { axis: 'z', s: Math.sign(a.z) };
+  p.air = null; p.vx = p.vz = 0;
+  if (p.mob) { p.state = 'gone'; ev.push({ type: 'chaos', what: 'invader', stage: 'end', id: p.id, crowd: true }); return; }
+  p.state = 'crowd'; p.crowdT = CROWD.hold;
+  ev.push({ type: 'crowd', id: p.id });
+}
+function throwBack(w, p, ev, rnd) {
+  const f = p.from, off = (rnd() - 0.5) * 14, side = (rnd() - 0.5) * 4, k = 1 / w.chaos;
+  p.state = 'up';
+  if (f.axis === 'x') { p.x = f.s * (w.W + 3); p.z = Math.max(-w.L + 2, Math.min(w.L - 2, p.z + off)); launch(w, p, -f.s * CROWD.back * k, side * k, 6, null, ev, 'thrown'); }
+  else { p.z = f.s * (w.L + 4); p.x = Math.max(-w.W + 2, Math.min(w.W - 2, p.x + off)); launch(w, p, side * k, -f.s * CROWD.back * k, 6, null, ev, 'thrown'); }
+}
+
+export function fly(w, p, dt, ev) {
   const a = p.air;
   a.vy -= 9.81 * dt;
   a.x += a.vx * dt; a.y += a.vy * dt; a.z += a.vz * dt;
@@ -132,6 +164,7 @@ function fly(w, p, dt, ev) {
   }
   // the boards: bodies stop at the advertising hoardings a little outside the lines (and bounce off them)
   const bx = w.W + 3, bz = w.L + 4;
+  if (w.brawl && !p.stay && (Math.abs(a.x) > bx || Math.abs(a.z) > bz) && Math.hypot(a.vx, a.vz) > CROWD.over) { p.x = a.x; p.z = a.z; return intoCrowd(w, p, ev); }
   if (Math.abs(a.x) > bx) { a.x = Math.sign(a.x) * bx; a.vx = -a.vx * 0.3; ev.push({ type: 'boards', id: p.id }); }
   if (Math.abs(a.z) > bz) { a.z = Math.sign(a.z) * bz; a.vz = -a.vz * 0.3; ev.push({ type: 'boards', id: p.id }); }
   p.x = a.x; p.z = a.z; p.vx = a.vx; p.vz = a.vz;

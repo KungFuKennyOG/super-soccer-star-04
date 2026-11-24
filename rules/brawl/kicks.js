@@ -1,5 +1,5 @@
 // Passing and shooting in the brawl, for you and the AI alike. Pure.
-import { KICK, BALL2, GOAL2 } from './tuning.js';
+import { KICK, BALL2, GOAL2, CHAOS } from './tuning.js';
 import { dirOf } from './world.js';
 import { isUp } from './hits.js';
 import { snapshot, offsideLine } from './offside.js';
@@ -74,12 +74,15 @@ export function shotTarget(w, p, power, aimX, held = 0, end = dirOf(w, p.team)) 
   return { x: tx, y: h, z: end * w.L, speed: KICK.shot[0] + KICK.shot[1] * power };
 }
 
-// A shot at goal (the one his side attacks, or end).
-export function shoot(w, p, power, aimX, ev, held = 0, end = dirOf(w, p.team)) {
+// A shot at goal (the one his side attacks, or end). sup: a super shot (rules/brawl/chaos.js): flat, very
+// hard, and it goes through people.
+export function shoot(w, p, power, aimX, ev, held = 0, end = dirOf(w, p.team), sup = false) {
   const t = shotTarget(w, p, power, aimX, held, end), from = w.restart ? w.ball : p;
+  if (sup) { t.speed = CHAOS.superSpeed; t.y = 0.5 + 1.2 * Math.abs(aimX % 1); }
   const dx = t.x - from.x, dz = t.z - from.z, d = Math.hypot(dx, dz) || 1, T = d / t.speed;
   const vy = (t.y - BALL2.r) / T + 9.81 * T / 2;
   kickBall(w, p, dx / d * t.speed, Math.min(vy, 14), dz / d * t.speed, 'shot', ev, null, power);
+  if (sup) { w.super = { team: p.team, kick: w.lastKick, id: p.id }; ev.push({ type: 'super', id: p.id, team: p.team }); }
 }
 
 // How good a chance it is to shoot from where p is: 0 (no) to 1.

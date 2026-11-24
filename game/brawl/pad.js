@@ -21,11 +21,12 @@ export function readInput() {
   const l = Math.hypot(sx, sy);
   if (l > 1) { sx /= l; sy /= l; }
   const pass = !!keys.KeyJ || b(0), shoot = !!keys.KeyK || b(1), tackle = !!keys.KeyL || b(2), sw = !!keys.Space || b(4);
+  const call = !!keys.KeyI || b(3), dg = !!keys.KeyU || b(5);
   const pause = !!keys.KeyP || !!keys.Escape || b(9);
   return {
     move: { x: -sy, z: -sx },
-    sprint: !!(keys.ShiftLeft || keys.ShiftRight) || b(7) || b(5),
-    pass: edge('pass', pass), shoot, tackle: edge('tackle', tackle), switch: edge('switch', sw), pause: edge('pause', pause),
+    sprint: !!(keys.ShiftLeft || keys.ShiftRight) || b(7),
+    pass: edge('pass', pass), shoot, tackle: edge('tackle', tackle), switch: edge('switch', sw), call: edge('call', call), dodge: edge('dodge', dg), pause: edge('pause', pause),
     pad: !!gp,
   };
 }

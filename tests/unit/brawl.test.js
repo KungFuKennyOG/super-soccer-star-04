@@ -234,11 +234,13 @@ test('offside: a pass to a man beyond the second-last defender, and he is caught
 
 test('half time: the clock stops at 45, the sides change ends, the other side kicks off', () => {
   const w = createBrawl({ n: 6, real: 20 }); toPlay(w);
-  const ev = play(w, 14, { auto: true });
+  const ev = [];
+  let k = null;
+  for (let i = 0; i < 60 * 16 && !k; i++) { const e = stepBrawl(w, { auto: true }, 1 / 60); ev.push(...e); k = e.find(x => x.type === 'kickoff' && x.half === 2); }
   assert.ok(ev.some(e => e.type === 'halftime'));
   assert.equal(w.half, 2);
   assert.equal(dirOf(w, 'home'), 1);
-  assert.equal(w.kickoffTeam, 'away');
+  assert.equal(k && k.team, 'away');
 });
 
 test('a knockout level at full time goes to penalties, and the shoot-out is decided properly', () => {

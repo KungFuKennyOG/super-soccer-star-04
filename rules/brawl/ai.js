@@ -2,7 +2,8 @@
 // The side on the ball keeps its shape pushed up, the man on it dribbles at goal, passes when pressed and
 // shoots when he sees it; the other side presses the ball with its nearest two, who go in hard, and
 // everyone else slides across with the ball. A loose ball is chased by the nearest man of each side.
-import { BRAIN, RUN, HIT, FOUL } from './tuning.js';
+import { BRAIN, RUN, HIT, FOUL, CHAOS } from './tuning.js';
+import { spendOnSuper } from './chaos.js';
 import { inBox } from './fouls.js';
 import { offsideLine } from './offside.js';
 import { dirOf, shapeSpot } from './world.js';
@@ -81,7 +82,9 @@ function carry(w, p, dt, ev, rnd) {
     if (ch > 0.42 || (ch > 0.2 && rnd() < 0.25)) {
       const gk = w.players.find(o => o.team !== p.team && o.line === 'gk');
       const aim = (gk && gk.x > 0 ? -1 : 1) * (rnd() * 1.2 - 0.25);      // mostly away from the keeper, now and then at him
-      shoot(w, p, 0.45 + rnd() * 0.55, aim, ev);
+      // with a favour in hand, sometimes it goes on a super shot
+      const sup = w.brawl && rnd() < CHAOS.aiSuper && spendOnSuper(w, p.team);
+      shoot(w, p, sup ? 1 : 0.45 + rnd() * 0.55, aim, ev, 0, undefined, sup);
       return { x: p.vx, z: p.vz };
     }
     if (near < BRAIN.pressured) {

@@ -19,8 +19,8 @@ else boot();
 async function boot() {
   // the stadium is built round a whole pitch of this size: set it before any of the ground's modules load
   setFullPitch(SIZES[S.n].halfW, SIZES[S.n].halfL);
-  const [{ buildStadium }, { venueFor }, { createWeather }, { dressSides, dressRef, createView, createTvCamera }, { startAudio, sfx, audioOut }, { createAim }] = await Promise.all([
-    import('../ps2/stadium.js'), import('../grounds.js'), import('../ps2/weather.js'), import('./view.js'), import('../audio.js'), import('./aim.js'),
+  const [{ buildStadium }, { venueFor }, { createWeather }, { dressSides, dressRef, createView, createTvCamera }, { startAudio, sfx, audioOut }, { createAim }, { createChaosView }] = await Promise.all([
+    import('../ps2/stadium.js'), import('../grounds.js'), import('../ps2/weather.js'), import('./view.js'), import('../audio.js'), import('./aim.js'), import('./chaosview.js'),
   ]);
   const home = byId(S.home), away = byId(S.away);
   const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -42,7 +42,8 @@ async function boot() {
   w.demo = S.demo;
   const models = dressSides(scene, w, home, away);
   const refModel = dressRef(scene, [home.kit, matchKit(away, home)]);
-  const view = createView(scene, w, models, refModel), tv = createTvCamera(camera, w, ground.plan), aim = createAim(scene, w);
+  const fx = w.brawl ? createChaosView(scene, w, { home: home.kit, away: matchKit(away, home) }) : null;
+  const view = createView(scene, w, models, refModel, fx), tv = createTvCamera(camera, w, ground.plan), aim = createAim(scene, w);
   if (cm) { $('stage').hidden = false; $('stage').textContent = cm.label; }
   tv.snap();
 
@@ -93,8 +94,26 @@ async function boot() {
   const unlock = () => { startAudio(); removeEventListener('keydown', unlock); removeEventListener('pointerdown', unlock); };
   addEventListener('keydown', unlock); addEventListener('pointerdown', unlock);
 
+  // favours (rules/brawl/chaos.js): each side's meter under the score, and the one you're holding
+  const FAV = { drop: 'FURNITURE', buggy: 'MEDICAL BUGGY', invader: 'A SUPPORTER', heavy: 'THE HEAVY BALL', ref: 'A WORD FROM THE REF' };
+  function favHud() {
+    const c = w.cx; $('fav').hidden = !c; if (!c) return;
+    for (const [team, id] of [['home', 'fh'], ['away', 'fa']]) { const f = c.fav[team]; $(id).style.width = `${f.item ? 100 : Math.min(100, f.m * 100)}%`; $(id).className = f.item ? 'full' : ''; }
+    const mine = c.fav.home.item;
+    $('favYou').textContent = mine && !S.demo ? `[I / Y]  CALL IN: ${FAV[mine]}   ·   or a full-power shot: SUPER SHOT` : '';
+  }
+  // the buggy's two-tone siren
+  function siren(secs) {
+    const a = audioOut(); if (!a) return;
+    const { ctx, master } = a, o = ctx.createOscillator(), g = ctx.createGain(), t0 = ctx.currentTime;
+    o.type = 'square'; g.gain.value = 0.05;
+    for (let i = 0; i < secs * 2; i++) o.frequency.setValueAtTime(i % 2 ? 660 : 880, t0 + i * 0.5);
+    o.connect(g).connect(master); o.start(t0); o.stop(t0 + secs);
+  }
+
   function onEvents(ev) {
     view.events(ev);
+    if (fx) fx.events(ev);
     for (const e of ev) {
       say(pickLine(e, w));
       switch (e.type) {
@@ -121,11 +140,20 @@ async function boot() {
           break;
         }
         case 'tackled': sfx('touch'); break;
+        case 'crowd': stadium.cheer(false); sfx('roar'); break;
+        case 'super': slow = 0.9; sfx('rise'); stadium.ooh(); break;
+        case 'dodged': sfx('touch'); break;
+        case 'favour': if (!e.used && e.team === 'home' && !S.demo) sfx('rise'); break;
+        case 'chaos':
+          if (e.stage === 'warn' && e.what === 'buggy') siren(6);
+          if (e.stage === 'warn' && (e.what === 'ref' || e.what === 'invader')) sfx(e.what === 'ref' ? 'whistle' : 'roar');
+          if (e.stage === 'hit' && e.what === 'drop') { thud(1); stadium.ooh(); }
+          break;
         case 'fulltime': {
           done = true; sfx('whistle');
           const s = w.stats, pens = e.pens ? ` (${e.pens.home} - ${e.pens.away} on penalties)` : '';
           let stats = !w.brawl ? `Fouls: ${w.fouls.home} - ${w.fouls.away}` :
-            `Men sent flying: <b>${s.hits}</b><br>Longest flight: <b>${s.longest.toFixed(1)} m</b><br>Total distance flown: <b>${Math.round(s.flown)} m</b><br><i>A competitive game, played in good spirits.</i>`;
+            `Favours called in: <b>${w.cx ? w.cx.fav.home.used : 0} - ${w.cx ? w.cx.fav.away.used : 0}</b><br>Men sent flying: <b>${s.hits}</b><br>Men returned by the crowd: <b>${s.crowd || 0}</b><br>Longest flight: <b>${s.longest.toFixed(1)} m</b><br>Total distance flown: <b>${Math.round(s.flown)} m</b><br><i>A competitive game, played in good spirits.</i>`;
           const cr = cm && cupResult(w.score.home, w.score.away, e.pens ? e.winner === 'home' : null);
           if (cr) stats = `${cr.text}<br><br>${stats}`;
           ui.full(`${home.name} ${w.score.home} - ${w.score.away} ${away.name}${pens}`, stats, cr && cr.next);
@@ -136,8 +164,11 @@ async function boot() {
     }
   }
 
-  let t = 0, last = performance.now(), dbgCam = null;
+  let t = 0, last = performance.now(), dbgCam = null, slow = 0;
   function frame(dt, draw = true) {
+    // a super shot: a second of slow motion and the camera pushed in
+    if (slow > 0) { slow -= dt; dt *= 0.3; camera.fov += ((w.n === 6 ? 22 : 20) - camera.fov) * 0.2; } else camera.fov += ((w.n === 6 ? 30 : 27) - camera.fov) * 0.1;
+    camera.updateProjectionMatrix();
     t += dt;
     const inp = readInput();
     if (inp.pause && !done) setPause(!paused);
@@ -149,12 +180,14 @@ async function boot() {
       view.update(dt, t);
       aim.update(inp, camera, t);
       if (!dbgCam) tv.update(dt);
+      if (fx && fx.shake > 0 && !dbgCam) { camera.position.y += (Math.random() - 0.5) * fx.shake * 0.5; camera.position.z += (Math.random() - 0.5) * fx.shake * 0.5; }
       stadium.update(dt, t, w.ball);
       weather.update(t, camera.position);
     }
     view.faceArrow(camera);
     // HUD
     $('sc').textContent = `${w.score.home} - ${w.score.away}`;
+    favHud();
     $('clk').textContent = clockText(w);
     const you = w.byId[w.ctrl];
     $('who').hidden = !you || S.demo;

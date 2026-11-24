@@ -73,6 +73,43 @@ Open `brawl.html` (`npm run serve`, then `/brawl.html`). The VR game (`index.htm
 - Stills of moments in a real match: `UNTIL="w.sp && w.sp.kind === 'throw' && w.sp.stage === 'ready'"
   FOLLOW="w.byId[w.sp.taker]" node tools/brawlshots.mjs out/t 0.2 0.8 1.4` (`PRE=` changes the match first).
 
+## Chaos (23 Nov 2026, evening): the default mode
+
+Kenny: integrate violent, absurd elements, keep the realistic look, fun and not unfair; "it has to be
+triggered by the player to give an advantage"; look at how the games that do this well do it. Menu: Rules =
+Chaos (default) / Total chaos / By the book (the real-rules football above, unchanged). `rules/brawl/chaos.js`,
+`game/brawl/chaosview.js`, `tests/unit/chaos.test.js`. Nothing happens by itself.
+
+- **Favours.** Each side has a meter (under the score) filled by playing: passes, shots, saves, hits given
+  and taken, conceding; a side that's behind fills quicker (`CHAOS.earn`). A full meter is a favour, held
+  until you call it in (I / pad Y); the AI calls its own after a moment. About 6 a side in a 4-minute match.
+  - FURNITURE: three things from the upper tier (fridge, sofa, vending machine, portable loo, wardrobe)
+    land round their man on the ball. A shadow and ring 2.4 s before; flattens anyone under it, yours too.
+  - MEDICAL BUGGY: crosses the pitch level with the ball, through whoever is in its lane (shown first).
+  - A SUPPORTER: one of yours runs on and goes for their men; a tackle from them removes him.
+  - THE HEAVY BALL: for 16 s your side's hard passes and shots flatten their men.
+  - A WORD FROM THE REF: the referee blows, stares, then sprints at their last man to flatten one of
+    yours (a ring under him). He gives up after 8 s.
+  Never near a goalmouth (drops 12 m off the goal line, the buggy outside the boxes), never cancels a goal.
+- **Super shot** (RedCard 2003's boost meter: spend the bar on a slow-motion super kick): with a favour
+  in hand, hold shoot to a full bar and let go before it's overcooked. 34 m/s, through their men, the
+  keeper's odds halved. It costs the favour. The AI does it 35% of the time it shoots with one.
+- **Dodge** (Mario Strikers: a timed dodge beats a tackle and gives a burst): U / pad RB. Tackles,
+  supporters and the referee go past; the tackler falls; 1.5 s of extra pace. The AI dodges now and then.
+- **Late hits** (NFL Blitz): you can still flatten people while a goal is celebrated; 35% of the time one
+  of theirs goes for your scorer. A late hit feeds the victims' meter.
+- **The referee can be flattened** (Mutant Football League's ref attack): it stops him coming for your
+  man, feeds the other side's meter, and he gets up and carries on.
+- **The crowd**: a man knocked over the boards at speed disappears into the stand and is thrown back on.
+- **It builds**: hits send men 0.8x as far early and 1.3x late (`CHAOS.ramp`).
+- What was deliberately not copied: Mutant Football League's bribed referee and erased plays (reviewed as
+  cheap: no warning, no counter), Strikers' two-goal shots and cartoon items.
+- Measured, AI v AI, 10 matches each: favours used 6.7 v 6.7 (6 v 6) and 6.0 v 6.0 (11 v 11); shortest
+  warning before anything landed 1.9 s; goals 6.7 and 3.1 a match.
+- Short: no dodge animation (he just darts); a supporter is a player body in his side's shirt and jeans-blue
+  shorts, hard to tell from a player in a white kit; the buggy has no driver; no dust or dents where things
+  land; all the new commentary is subtitles only. Not seen on a real GPU, not played by a person.
+
 ## Not done / short
 
 - Nothing measured on a real GPU (headless software GL only). 23 '04 bodies take about 7 to 10 s to build.

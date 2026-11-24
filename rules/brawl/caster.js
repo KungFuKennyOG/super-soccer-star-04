@@ -53,6 +53,23 @@ export const DRY = {
   barge: ['Shrugged off.', "He's just gone straight through him.", 'Strength on the ball there.'],
 };
 
+// The favours (rules/brawl/chaos.js). He has seen all of this before.
+export const ODD = {
+  drop: ["Something's come out of the upper tier.", "The supporters are making their feelings known.", "Heads up down there."],
+  fridge: ["That's a fridge.", 'A fridge-freezer, I think. Frost-free.'], sofa: ["And that is a sofa. On the pitch.", 'A three-seater, that.'],
+  vending: ['A vending machine. Still stocked, by the look of it.'], loo: ["That's come from the concourse. Hopefully vacant."], wardrobe: ['A wardrobe. Flat-pack, you can tell.'],
+  buggy: ['The medical team are on. At some speed.', "Here comes the physio. He's not slowing down."],
+  buggyHit: ["He's been seen by the physio there.", 'Treated at the scene.'],
+  invader: ["We've got a supporter on the pitch. We don't show these.", "One of the fans has come on to help."],
+  invaderHit: ["And he's got involved.", 'The stewards are in no hurry.'], mobhit: ["And the stewards won't be needed.", "He's dealt with that himself."],
+  heavy: ["They've changed the match ball. That one looks heavier.", "A new ball. I'm told it's regulation."],
+  ref: ['The referee wants a word.', "The referee's seen enough."], refHit: ["And he's had it.", "A stern talking-to, that."], refEnd: ["He's got away with it. The referee's out of breath."],
+  late: ['After the whistle, that.', 'The celebration has been cut short.', "He's congratulated him there. Firmly."],
+  refhit: ["The referee's gone down. He'll be fine.", 'And the referee has been spoken to.', "That's the official. Play continues, apparently."],
+  super: ["He's caught that.", "He's hit that with everything.", "That's got some venom on it."], dodged: ['Lovely feet.', 'Sold him completely.'],
+  crowd: ["He's in row F.", "He's gone in with the away fans.", "That's him in the family enclosure."], thrown: ['And the supporters have returned him.', 'Back on. Good of them.'],
+};
+
 const pick = (a, rnd) => a[Math.floor(rnd() * a.length) % a.length];
 const clip = (k, rnd, pri) => { const id = pick(CLIPS[k], rnd); return { id, text: CLIP_TEXT[id] || '', pri }; };
 
@@ -74,7 +91,23 @@ export function pickLine(e, w, rnd = Math.random) {
     case 'shootout': return { text: pick(CALLS.shootout, rnd), pri: 5 };
     case 'pen': return { text: pick(e.scored ? CALLS.scored : CALLS.missed, rnd), pri: 4 };
     case 'taking': return e.kind === 'corner' ? clip('cross', rnd, 1) : null;
+    case 'crowd': return { text: pick(ODD.crowd, rnd), pri: 3 };
+    case 'super': return { text: pick(ODD.super, rnd), pri: 4 };
+    case 'dodged': return rnd() < 0.6 ? { text: pick(ODD.dodged, rnd), pri: 2 } : null;
+    case 'chaos':
+      if (e.stage === 'warn') return e.what === 'drop' ? (e.id.endsWith('-0') ? { text: pick(ODD.drop, rnd), pri: 3 } : null) : { text: pick(ODD[e.what], rnd), pri: 3 };
+      if (e.stage === 'hit' && e.what === 'drop') return { text: pick(ODD[e.thing] || ODD.fridge, rnd), pri: 3 };
+      if (e.stage === 'hit' && e.what === 'buggy') return { text: pick(ODD.buggyHit, rnd), pri: 3 };
+      if (e.stage === 'hit' && e.what === 'ref') return { text: pick(ODD.refHit, rnd), pri: 4 };
+      if (e.stage === 'end' && e.what === 'ref') return { text: pick(ODD.refEnd, rnd), pri: 2 };
+      return null;
     case 'launch':
+      if (e.kind === 'refhit') return { text: pick(ODD.refhit, rnd), pri: 4 };
+      if (w.phase === 'goal' && e.by) return { text: pick(ODD.late, rnd), pri: 4 };
+      if (e.kind === 'thrown') return { text: pick(ODD.thrown, rnd), pri: 2 };
+      if (e.kind === 'invader') return { text: pick(ODD.invaderHit, rnd), pri: 2 };
+      if (e.kind === 'mobhit') return { text: pick(ODD.mobhit, rnd), pri: 3 };
+      if (e.kind === 'drop' || e.kind === 'buggy' || e.kind === 'ref') return null;
       if (e.kind === 'domino') return { text: pick(DRY.domino, rnd), pri: 2 };
       if (e.kind === 'shot') return { text: pick(DRY.shot, rnd), pri: 3 };
       if (e.kind === 'barge') return rnd() < 0.5 ? { text: pick(DRY.barge, rnd), pri: 1 } : null;
