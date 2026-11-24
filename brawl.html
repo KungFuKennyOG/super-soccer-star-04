@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Super Soccer Star '04</title>
 <!-- The flat-screen 11 v 11 (or 6 v 6) brawl: a straight-faced football sim where tackles send people flying.
-     game/brawl/main.js runs it, rules/brawl/ is the match. ?n=6|11 &home=ID &away=ID &chaos=0|1|1.6 (0, the default: plain football; above it tackles send people flying) &len=secs &wx=clear|rain|snow
+     game/brawl/main.js runs it, rules/brawl/ is the match. ?n=6|11 &home=ID &away=ID &chaos=0|1|1.6 (0, the default: plain football; above it tackles send people flying) &len=secs &wx=clear|rain|snow &gore=0|1|2
      &play=1 (straight in) &demo=1 (the AI plays your side too) &film=1 (frame by frame, for tools/brawlshots.mjs). -->
 <style>
 html,body{margin:0;height:100%;background:#0b1020;overflow:hidden;font-family:'Trebuchet MS',Arial,sans-serif;color:#fff}
@@ -66,6 +66,7 @@ button{cursor:pointer;background:#f2c94c;padding:10px 22px;margin-top:14px;width
   <div class="row"><label>Rules</label><select id="mChaos"><option value="1">Chaos</option><option value="1.6">Total chaos</option><option value="0">By the book</option></select></div>
   <div class="row"><label>Match length</label><select id="mLen"><option value="150">Short</option><option value="240" selected>Normal</option><option value="420">Long</option></select></div>
   <div class="row"><label>Weather</label><select id="mWx"><option value="clear">Clear</option><option value="rain">Rain</option><option value="snow">Snow</option></select></div>
+  <div class="row"><label>Blood (Chaos)</label><select id="mGore"><option value="2">Blood and limbs</option><option value="1">Blood</option><option value="0">None</option></select></div>
   <button id="mGo">KICK OFF</button><button class="alt" id="mCup">START A CUP</button><button class="alt" id="mCupGo" hidden>CONTINUE THE CUP</button><button class="alt" id="mDemo">WATCH A MATCH</button>
   <div class="keys">WASD / arrows run · Shift sprint · J pass · K shoot (hold for power) · L tackle (on the ball: barge) · U dodge · I call in a favour (Chaos) · Space switch man · P pause<br>Gamepad: left stick · RT sprint · A pass · B shoot · X tackle · RB dodge · Y favour · LB switch · Start pause<br>Chaos: play fills your meter. A full meter is a favour to call in on them (they see it coming), or spend it on a super shot: hold shoot to a full bar and let go.<br>Set pieces wait for you: pass or shoot to take them. Against a penalty, hold the stick the way you want the keeper to dive.</div>
 </div></div>

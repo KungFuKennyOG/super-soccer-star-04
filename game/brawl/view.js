@@ -140,6 +140,9 @@ export function createView(scene, w, models, refModel = null, fx = null) {
       if (arrow.visible) arrow.position.set(you.x, 2.75 + Math.sin(t * 6) * 0.08, you.z);
     },
     faceArrow(camera) { arrow.quaternion.copy(camera.quaternion); },
+    // anyone on the pitch by id: his sim object, and his model
+    who: id => w.byId[id] || mobById(id) || (id === 'ref' ? w.ref : undefined),
+    modelOf: id => modelOf(w.byId[id] || mobById(id) || (id === 'ref' ? w.ref : undefined)),
   };
 }
 

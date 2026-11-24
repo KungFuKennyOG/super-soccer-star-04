@@ -15,12 +15,13 @@ export function readSettings() {
     chaos: Math.max(0, Math.min(2.5, +(q.get('chaos') ?? 1))),      // 0: by the book; above it the brawl with its favours (the default)
     len: Math.max(30, +(q.get('len') || 240)),
     wx: ['rain', 'snow'].includes(q.get('wx')) ? q.get('wx') : 'clear',
+    gore: Math.max(0, Math.min(2, Math.round(+(q.get('gore') ?? 2)))),      // Chaos only. 0 none, 1 blood, 2 blood and arms
     play: q.has('play') || q.has('demo'), demo: q.has('demo'), film: q.has('film'), cup: q.has('cup'),
   };
 }
 
 const urlFor = (s, extra = {}) => {
-  const q = new URLSearchParams({ n: s.n, home: s.home, away: s.away, chaos: s.chaos, len: s.len, wx: s.wx, ...extra });
+  const q = new URLSearchParams({ n: s.n, home: s.home, away: s.away, chaos: s.chaos, len: s.len, wx: s.wx, gore: s.gore ?? 2, ...extra });
   return `${location.pathname}?${q}`;
 };
 export const restart = s => { location.href = urlFor(s, s.demo ? { demo: 1 } : s.cup ? { play: 1, cup: 1 } : { play: 1 }); };
@@ -38,10 +39,10 @@ export function showMenu(s) {
     sel.value = val;
   };
   fill($('mHome'), s.home); fill($('mAway'), s.away);
-  $('mN').value = String(s.n); $('mChaos').value = String(s.chaos); $('mLen').value = String(s.len); $('mWx').value = s.wx;
+  $('mN').value = String(s.n); $('mChaos').value = String(s.chaos); $('mLen').value = String(s.len); $('mWx').value = s.wx; $('mGore').value = String(s.gore);
   if (![...$('mChaos').options].some(o => o.value === String(s.chaos))) $('mChaos').value = '1';
   if (![...$('mLen').options].some(o => o.value === String(s.len))) $('mLen').value = '240';
-  const pick = () => ({ n: +$('mN').value, home: $('mHome').value, away: $('mAway').value, chaos: +$('mChaos').value, len: +$('mLen').value, wx: $('mWx').value });
+  const pick = () => ({ n: +$('mN').value, home: $('mHome').value, away: $('mAway').value, chaos: +$('mChaos').value, len: +$('mLen').value, wx: $('mWx').value, gore: +$('mGore').value });
   $('mGo').onclick = () => restart({ ...pick(), demo: false });
   // a cup: the World Cup for a nation, the Champions Cup for a club (rules/cup.js), saved between matches
   $('mCup').onclick = () => { const s2 = pick(); newCup(s2); goCup(); };

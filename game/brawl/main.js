@@ -19,8 +19,8 @@ else boot();
 async function boot() {
   // the stadium is built round a whole pitch of this size: set it before any of the ground's modules load
   setFullPitch(SIZES[S.n].halfW, SIZES[S.n].halfL);
-  const [{ buildStadium }, { venueFor }, { createWeather }, { dressSides, dressRef, createView, createTvCamera }, { startAudio, sfx, audioOut }, { createAim }, { createChaosView }] = await Promise.all([
-    import('../ps2/stadium.js'), import('../grounds.js'), import('../ps2/weather.js'), import('./view.js'), import('../audio.js'), import('./aim.js'), import('./chaosview.js'),
+  const [{ buildStadium }, { venueFor }, { createWeather }, { dressSides, dressRef, createView, createTvCamera }, { startAudio, sfx, audioOut }, { createAim }, { createChaosView }, { createGore }] = await Promise.all([
+    import('../ps2/stadium.js'), import('../grounds.js'), import('../ps2/weather.js'), import('./view.js'), import('../audio.js'), import('./aim.js'), import('./chaosview.js'), import('./gore.js'),
   ]);
   const home = byId(S.home), away = byId(S.away);
   const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -44,6 +44,7 @@ async function boot() {
   const refModel = dressRef(scene, [home.kit, matchKit(away, home)]);
   const fx = w.brawl ? createChaosView(scene, w, { home: home.kit, away: matchKit(away, home) }) : null;
   const view = createView(scene, w, models, refModel, fx), tv = createTvCamera(camera, w, ground.plan), aim = createAim(scene, w);
+  const gore = w.brawl && S.gore ? createGore(scene, w, S.gore, view.modelOf, view.who) : null;
   if (cm) { $('stage').hidden = false; $('stage').textContent = cm.label; }
   tv.snap();
 
@@ -114,6 +115,8 @@ async function boot() {
   function onEvents(ev) {
     view.events(ev);
     if (fx) fx.events(ev);
+    const lost = gore && gore.events(ev);
+    if (lost) say({ text: lost, pri: 4 });
     for (const e of ev) {
       say(pickLine(e, w));
       switch (e.type) {
@@ -153,7 +156,7 @@ async function boot() {
           done = true; sfx('whistle');
           const s = w.stats, pens = e.pens ? ` (${e.pens.home} - ${e.pens.away} on penalties)` : '';
           let stats = !w.brawl ? `Fouls: ${w.fouls.home} - ${w.fouls.away}` :
-            `Favours called in: <b>${w.cx ? w.cx.fav.home.used : 0} - ${w.cx ? w.cx.fav.away.used : 0}</b><br>Men sent flying: <b>${s.hits}</b><br>Men returned by the crowd: <b>${s.crowd || 0}</b><br>Longest flight: <b>${s.longest.toFixed(1)} m</b><br>Total distance flown: <b>${Math.round(s.flown)} m</b><br><i>A competitive game, played in good spirits.</i>`;
+            `Favours called in: <b>${w.cx ? w.cx.fav.home.used : 0} - ${w.cx ? w.cx.fav.away.used : 0}</b><br>Men sent flying: <b>${s.hits}</b><br>Men returned by the crowd: <b>${s.crowd || 0}</b><br>${gore && S.gore > 1 ? `Arms mislaid: <b>${gore.limbs}</b><br>` : ''}Longest flight: <b>${s.longest.toFixed(1)} m</b><br>Total distance flown: <b>${Math.round(s.flown)} m</b><br><i>A competitive game, played in good spirits.</i>`;
           const cr = cm && cupResult(w.score.home, w.score.away, e.pens ? e.winner === 'home' : null);
           if (cr) stats = `${cr.text}<br><br>${stats}`;
           ui.full(`${home.name} ${w.score.home} - ${w.score.away} ${away.name}${pens}`, stats, cr && cr.next);
@@ -178,6 +181,7 @@ async function boot() {
       const n = Math.ceil(dt / (1 / 60) - 1e-6), h = dt / n;
       for (let i = 0; i < n; i++) onEvents(stepBrawl(w, inp, h));
       view.update(dt, t);
+      if (gore) gore.update(dt);
       aim.update(inp, camera, t);
       if (!dbgCam) tv.update(dt);
       if (fx && fx.shake > 0 && !dbgCam) { camera.position.y += (Math.random() - 0.5) * fx.shake * 0.5; camera.position.z += (Math.random() - 0.5) * fx.shake * 0.5; }

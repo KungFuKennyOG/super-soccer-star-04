@@ -102,6 +102,7 @@ Chaos (default) / Total chaos / By the book (the real-rules football above, unch
   man, feeds the other side's meter, and he gets up and carries on.
 - **The crowd**: a man knocked over the boards at speed disappears into the stand and is thrown back on.
 - **It builds**: hits send men 0.8x as far early and 1.3x late (`CHAOS.ramp`).
+- **Blood** (Kenny: "I want blood and gore too"; `game/brawl/gore.js`, menu Blood (Chaos): Blood and limbs (default) / Blood / None, `&gore=2|1|0`). Cosmetic only. Hits spray, bodies leave a pool where they land and a smear where they slide, and the stains stay all match (420 at most). With limbs on, the biggest hits (furniture, the buggy, a super or heavy shot, the referee) can take an arm off at the elbow: it lies on the pitch, the stump spurts for a few seconds, he plays on, and it's back after half time. Short: no blood on kits or on the furniture, the severed arm is a plain bloody cylinder, legs and heads never come off.
 - What was deliberately not copied: Mutant Football League's bribed referee and erased plays (reviewed as
   cheap: no warning, no counter), Strikers' two-goal shots and cartoon items.
 - Measured, AI v AI, 10 matches each: favours used 6.7 v 6.7 (6 v 6) and 6.0 v 6.0 (11 v 11); shortest
